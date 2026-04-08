@@ -1,0 +1,49 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.35201.131
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.Core", "SallamPathFinder4.Core\SallamPathFinder4.Core.csproj", "{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.Services", "SallamPathFinder4.Services\SallamPathFinder4.Services.csproj", "{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.ML", "SallamPathFinder4.ML\SallamPathFinder4.ML.csproj", "{14B89073-EAA3-40C7-928C-37362704A64F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.WinForms", "SallamPathFinder4.WinForms\SallamPathFinder4.WinForms.csproj", "{C385675D-BC8E-4F48-BC68-FAF69CEF6179}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.Tests", "SallamPathFinder4.Tests\SallamPathFinder4.Tests.csproj", "{14AF7038-502D-4549-B046-F7C3697B7E67}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14B89073-EAA3-40C7-928C-37362704A64F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14B89073-EAA3-40C7-928C-37362704A64F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14B89073-EAA3-40C7-928C-37362704A64F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14B89073-EAA3-40C7-928C-37362704A64F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C385675D-BC8E-4F48-BC68-FAF69CEF6179}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C385675D-BC8E-4F48-BC68-FAF69CEF6179}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C385675D-BC8E-4F48-BC68-FAF69CEF6179}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C385675D-BC8E-4F48-BC68-FAF69CEF6179}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14AF7038-502D-4549-B046-F7C3697B7E67}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14AF7038-502D-4549-B046-F7C3697B7E67}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14AF7038-502D-4549-B046-F7C3697B7E67}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14AF7038-502D-4549-B046-F7C3697B7E67}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {45E59479-0A12-4A40-9E1E-3B2A0EBB8FAA}
+	EndGlobalSection
+EndGlobal
