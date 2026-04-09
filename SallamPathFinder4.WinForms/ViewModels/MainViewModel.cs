@@ -8,16 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Drawing;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
-using SallamPathFinder4.WinForms.Forms.Experiments;
-using SallamPathFinder4.Services.Pathfinding;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Services;
 using SallamPathFinder4.Core.Models.Experiments;
@@ -27,10 +17,14 @@ using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
 using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.Services.Battery;
+using SallamPathFinder4.Services.Pathfinding;
 using SallamPathFinder4.Services.Simulation;
 using SallamPathFinder4.WinForms.Controls;
 using SallamPathFinder4.WinForms.Forms;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentViewer;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 #endregion
 
 namespace SallamPathFinder4.WinForms.ViewModels
@@ -61,7 +55,6 @@ namespace SallamPathFinder4.WinForms.ViewModels
         private List<ColoredPath> _coloredSegments;
         private object _batteryLock = new object();
         private readonly frmEnvironment mainForm; 
-        private readonly frmEnvironmentCopy mainForm1;
         private List<bool> _visitedGoals;
         private List<Point> _traveledPath;
         private CancellationTokenSource _searchCts;
@@ -98,43 +91,6 @@ namespace SallamPathFinder4.WinForms.ViewModels
             HeuristicWeight = 2;
             SearchLimit = 10000;  // بدلاً من 50000
             mainForm = form;
-            _simulationService.RobotMoved += OnRobotMoved;
-            _simulationService.ObstacleCollision += OnObstacleCollision;
-            _batteryService.BatteryChanged += OnBatteryChanged;
-            _simulationService.BatteryEmpty += OnBatteryEmpty;
-            _simulationService.GoalReached += OnGoalReached;
-        }
-
-        public MainViewModel(
-      IPathfindingService pathfindingService,
-      ISimulationService simulationService,
-      IBatteryService batteryService,
-      IFileService fileService,
-      IExperimentService experimentService,
-      MapGrid mapGrid,
-      MapControl mapControl,
-      frmEnvironmentCopy form)
-        {
-            _pathfindingService = pathfindingService;
-            _simulationService = simulationService;
-            _batteryService = batteryService;
-            _fileService = fileService;
-            _experimentService = experimentService;
-            _mapGrid = mapGrid;
-            _mapControl = mapControl;
-
-            RobotState = new ObservableRobotState();
-            Goals = new ObservableCollection<GoalPoint>();
-            ParkingPoints = new ObservableCollection<ParkingPoint>();
-            ObstacleLog = new ObservableCollection<CollisionRecord>();
-
-            SelectedAlgorithm = AlgorithmType.AStar;
-            SelectedMetric = DistanceMetric.Manhattan;
-            AllowDiagonals = true;
-            HeavyDiagonals = false;
-            HeuristicWeight = 2;
-            SearchLimit = 10000;  // بدلاً من 50000
-            mainForm1 = form;
             _simulationService.RobotMoved += OnRobotMoved;
             _simulationService.ObstacleCollision += OnObstacleCollision;
             _batteryService.BatteryChanged += OnBatteryChanged;

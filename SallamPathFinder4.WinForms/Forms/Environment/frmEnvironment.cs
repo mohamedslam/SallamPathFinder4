@@ -3,32 +3,24 @@
 /// File: frmEnvironment.cs
 /// Description: Main environment form for robot pathfinding simulation
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-08
+/// Date: 2026-04-04
 /// </summary>
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Drawing;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 using SallamPathFinder4.Core.Enums;
-using SallamPathFinder4.Core.Models.Map;
-using SallamPathFinder4.Core.Models.Goals;
-using SallamPathFinder4.Core.Models.Path;
-using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.Core.Interfaces.Services;
+using SallamPathFinder4.Core.Models.Goals;
+using SallamPathFinder4.Core.Models.Map;
+using SallamPathFinder4.Services.Simulation;
 using SallamPathFinder4.WinForms.Container;
 using SallamPathFinder4.WinForms.Controls;
-using SallamPathFinder4.WinForms.Panels;
-using SallamPathFinder4.WinForms.ViewModels;
-using SallamPathFinder4.Services.Simulation;
-using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner;
 using SallamPathFinder4.WinForms.Forms.Dashboard.frmRobotDashboard;
+using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner;
 using SallamPathFinder4.WinForms.Forms.Settings.frmMapSettings;
 using SallamPathFinder4.WinForms.Forms.Settings.frmObstacleSettings;
-using SallamPathFinder4.WinForms.Forms.Environment;
+using SallamPathFinder4.WinForms.Panels;
+using SallamPathFinder4.WinForms.ViewModels;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms
@@ -44,33 +36,23 @@ namespace SallamPathFinder4.WinForms.Forms
         #region Private Fields
         private MainViewModel _viewModel;
         private System.Windows.Forms.Timer _detectionZoneTimer;
+        private bool _isAddingGoal;
+        private bool _isAddingParking;
+        private GoalPoint _movingGoal;
+        private ParkingPoint _movingParking;
+        private bool _isMovingGoal;
+        private bool _isMovingParking;
         private Random _random;
         private ISimulationService _simulationService;
-        private EnvironmentLogic _logic;
-        private EnvironmentUI _ui;
-        private EnvironmentInitializer _initializer;
-        private EnvironmentEventHandlers _handlers;
-        private EnvironmentMapOperations _mapOps;
-        private EnvironmentDialogs _dialogs;
-        //internal  ToolStripMenuItem robotToolbarDashboardMenuItem;
-        //internal  ToolStripMenuItem robotToolbarCreateMenuItem;
-        //internal System.Windows.Forms.ToolStripMenuItem robotToolbarManageMenuItem;
         #endregion
 
         #region Constructor
-
-
         public frmEnvironment()
         {
             try
-            { 
+            {
                 InitializeComponent();
-                IntialMapControl();
-                CreatMenuWeight();                
                 InitializeCustomComponents();
-                InitializeEnvironmentModules();
-                 WireAllEvents();
-                StartDetectionZoneUpdater();
             }
             catch (Exception ex)
             {
@@ -78,60 +60,20 @@ namespace SallamPathFinder4.WinForms.Forms
                     "Initialization Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        internal void CreatMenuWeight() { 
-            //robotToolbarDashboardMenuItem=new ToolStripMenuItem();
-            //robotToolbarCreateMenuItem=new ToolStripMenuItem();
-            //robotToolbarManageMenuItem=new ToolStripMenuItem();
-        for (int weight = 0; weight <= 100; weight += 10)
-                {
-                    var item = new ToolStripMenuItem($"{weight}%");
-                    int intensity = 255 - (int)((weight / 100.0) * 255);
-                    item.BackColor = Color.FromArgb(intensity, intensity, intensity);
-                    weightMenu.DropDownItems.Add(item);
-                } 
-        }
-        internal void IntialMapControl()
-        {
-
-            mapControl = new MapControl();
-            tlpMapArea.Controls.Add(mapControl, 1, 1);
-
-            mapControl.BackColor = Color.White;
-            mapControl.CellSize = DEFAULT_CELL_SIZE;
-            mapControl.Dock = DockStyle.Fill;
-            mapControl.RobotAngle = 0F;
-            mapControl.RobotPosition = new Point(10, 10);
-            mapControl.ShowCoordinates = false;
-            mapControl.ShowGrid = true;
-            mapControl.ShowRobot = true;
-            mapControl.ZoomLevel = 1F;
-
-        }
         #endregion
 
-        #region Initialization Methods
+        #region Initialization
         private void InitializeCustomComponents()
         {
             _random = new Random();
+
             ConfigureForm();
             InitializeMapGrid();
             InitializeServicesAndViewModel();
             InitializePanels();
+            WireEvents();
             BindViewModel();
-        }
-
-        private void InitializeEnvironmentModules()
-        {
-            _logic = new EnvironmentLogic();
-            _initializer = new EnvironmentInitializer(this, mapControl, _logic);
-            _initializer.Initialize();
-
-            _ui = new EnvironmentUI(this, mapControl, _initializer.ViewModel, _logic);
-            _mapOps = new EnvironmentMapOperations(this, mapControl, _initializer.ViewModel,
-                _initializer.SimulationService, _logic, _ui);
-            _dialogs = new EnvironmentDialogs(this, mapControl, _initializer.ViewModel, _logic, _ui);
-            _handlers = new EnvironmentEventHandlers(this, mapControl, _initializer.ViewModel,
-                _initializer.SimulationService, _logic, _ui);
+            StartDetectionZoneUpdater();
         }
 
         private void ConfigureForm()
@@ -150,7 +92,6 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.MapGrid = mapGrid;
             mapControl.RobotPosition = new Point(10, 10);
             mapControl.RobotAngle = 0;
-            mapControl.ScaleCmPerCell = 10.0;
         }
 
         private void InitializeServicesAndViewModel()
@@ -184,33 +125,97 @@ namespace SallamPathFinder4.WinForms.Forms
 
         private void InitializePanels()
         {
-            if (goalsPanel != null && _viewModel.Goals != null)
+            if (robotPanel == null) robotPanel = new RobotPanel();
+            if (algorithmSettingsPanel == null) algorithmSettingsPanel = new AlgorithmSettingsPanel();
+            if (goalsPanel == null) goalsPanel = new GoalsPanel(_viewModel.Goals);
+            if (parkingPanel == null) parkingPanel = new ParkingPanel(_viewModel.ParkingPoints);
+            if (pathDisplayPanel == null) pathDisplayPanel = new PathDisplayPanel();
+            if (obstacleLogPanel == null) obstacleLogPanel = new ObstacleLogPanel(_viewModel.ObstacleLog);
+
+            var algoLayout = new TableLayoutPanel
             {
-                goalsPanel = new GoalsPanel(_viewModel.Goals);
-                tabGoalsParking.Controls.Add(goalsPanel);
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(5)
+            };
+            algoLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+            algoLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 60));
+            algoLayout.Controls.Add(robotPanel, 0, 0);
+            algoLayout.Controls.Add(algorithmSettingsPanel, 0, 1);
+            tabAlgorithmRobot.Controls.Clear();
+            tabAlgorithmRobot.Controls.Add(algoLayout);
+
+            var goalsLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(5)
+            };
+            goalsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            goalsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            goalsLayout.Controls.Add(goalsPanel, 0, 0);
+            goalsLayout.Controls.Add(parkingPanel, 0, 1);
+            tabGoalsParking.Controls.Clear();
+            tabGoalsParking.Controls.Add(goalsLayout);
+
+            tabPathResults.Controls.Clear();
+            tabPathResults.Controls.Add(pathDisplayPanel);
+
+            tabObstacleLog.Controls.Clear();
+            tabObstacleLog.Controls.Add(obstacleLogPanel);
+        }
+        #endregion
+
+        #region Event Wiring
+        private void WireEvents()
+        {
+            if (goalsPanel != null)
+            {
+                goalsPanel.GoalAddRequested += (s, loc) => StartAddingGoal();
+                goalsPanel.GoalRemoveRequested += (s, goal) => RemoveGoal(goal);
+                goalsPanel.GoalMoveRequested += (s, goal) => StartMovingGoal(goal);
             }
 
-            if (parkingPanel != null && _viewModel.ParkingPoints != null)
+            if (parkingPanel != null)
             {
-                parkingPanel = new ParkingPanel(_viewModel.ParkingPoints);
-                tabGoalsParking.Controls.Add(parkingPanel);
+                parkingPanel.ParkingAddRequested += (s, loc) => StartAddingParking();
+                parkingPanel.ParkingRemoveRequested += (s, parking) => RemoveParking(parking);
+                parkingPanel.ParkingMoveRequested += (s, parking) => StartMovingParking(parking);
             }
 
-            if (obstacleLogPanel != null && _viewModel.ObstacleLog != null)
+            if (robotPanel != null)
             {
-                obstacleLogPanel = new ObstacleLogPanel(_viewModel.ObstacleLog);
-                tabObstacleLog.Controls.Add(obstacleLogPanel);
+                robotPanel.SimulateClick += (s, e) => _viewModel.StartSimulation();
+                robotPanel.PauseClick += (s, e) => _viewModel.TogglePause();
+                robotPanel.StopClick += (s, e) => _viewModel.StopSimulation();
             }
 
-            // Set panel docks
-            if (robotPanel != null) robotPanel.Dock = DockStyle.Top;
-            if (algorithmSettingsPanel != null) algorithmSettingsPanel.Dock = DockStyle.Fill;
-            if (goalsPanel != null) goalsPanel.Dock = DockStyle.Top;
-            if (parkingPanel != null) parkingPanel.Dock = DockStyle.Fill;
-            if (pathDisplayPanel != null) pathDisplayPanel.Dock = DockStyle.Fill;
-            if (obstacleLogPanel != null) obstacleLogPanel.Dock = DockStyle.Fill;
+            if (algorithmSettingsPanel != null)
+            {
+                algorithmSettingsPanel.FindPathRequested += (s, e) => _viewModel.FindPathAsync();
+                algorithmSettingsPanel.SettingsChanged += (s, e) => UpdateAlgorithmSettings();
+            }
+
+            mapControl.MouseClick += MapControl_MouseClick;
+            mapControl.MouseMove += MapControl_MouseMove;
+            robotPanel.BatteryLevelChanged += (s, e) => UpdateBatteryFromPanel();
         }
 
+        private void UpdateAlgorithmSettings()
+        {
+            if (_viewModel == null || algorithmSettingsPanel == null) return;
+
+            _viewModel.SelectedAlgorithm = algorithmSettingsPanel.CurrentAlgorithm;
+            _viewModel.AllowDiagonals = algorithmSettingsPanel.AllowDiagonals;
+            _viewModel.HeavyDiagonals = algorithmSettingsPanel.HeavyDiagonals;
+            _viewModel.HeuristicWeight = algorithmSettingsPanel.HeuristicWeight;
+            _viewModel.SearchLimit = algorithmSettingsPanel.SearchLimit;
+        }
+        #endregion
+
+        #region ViewModel Binding
         private void BindViewModel()
         {
             if (_viewModel == null) return;
@@ -245,106 +250,7 @@ namespace SallamPathFinder4.WinForms.Forms
                 }
             };
         }
-        #endregion
 
-        #region Event Wiring 
-        private void WireAllEvents()
-        {
-             
-
-            // File Menu
-            if (newMapMenuItem != null) newMapMenuItem.Click += (s, e) => _mapOps.NewMap();
-            if (openMapMenuItem != null) openMapMenuItem.Click += async (s, e) => await _mapOps.OpenMap();
-            if (saveMapMenuItem != null) saveMapMenuItem.Click += async (s, e) => await _mapOps.SaveMap();
-            if (exitMenuItem != null) exitMenuItem.Click += (s, e) => Application.Exit();
-
-            // View Menu
-            if (zoomInMenuItem != null) zoomInMenuItem.Click += (s, e) => { mapControl.ZoomLevel += 0.1f; _ui.UpdateRulers(mapControl.CellSize, mapControl.ZoomLevel); };
-            if (zoomOutMenuItem != null) zoomOutMenuItem.Click += (s, e) => { mapControl.ZoomLevel -= 0.1f; _ui.UpdateRulers(mapControl.CellSize, mapControl.ZoomLevel); };
-            if (zoomResetMenuItem != null) zoomResetMenuItem.Click += (s, e) => _mapOps.ResetView();
-            if (mapSettingsMenuItem != null) mapSettingsMenuItem.Click += (s, e) => _mapOps.ShowMapSettings();
-            if (showGridItem != null) showGridItem.Click += (s, e) => _mapOps.ToggleGrid();
-            if (showCoordsItem != null) showCoordsItem.Click += (s, e) => _mapOps.ToggleCoordinates();
-
-            // Robot Menu
-            if (robotDashboardMenuItem != null) robotDashboardMenuItem.Click += (s, e) => _dialogs.ShowRobotDashboard();
-            if (createRobotMenuItem != null) createRobotMenuItem.Click += (s, e) => _dialogs.ShowRobotCreator();
-            if (manageRobotsMenuItem != null) manageRobotsMenuItem.Click += (s, e) => _dialogs.ShowRobotManager();
-            if (robotSettingsMenuItem != null) robotSettingsMenuItem.Click += (s, e) => _dialogs.ShowRobotSettings();
-            if (exportRobotMenuItem != null) exportRobotMenuItem.Click += (s, e) => _dialogs.ExportRobotProfile();
-
-            // Experiments Menu
-            if (experimentDesignerMenuItem != null) experimentDesignerMenuItem.Click += (s, e) => _dialogs.ShowExperimentDesigner();
-            if (experimentResultsMenuItem != null) experimentResultsMenuItem.Click += (s, e) => _dialogs.ShowExperimentViewer();
-
-            // Help Menu
-            if (helpContentMenuItem != null) helpContentMenuItem.Click += (s, e) => _dialogs.ShowHelp();
-            if (keyboardShortcutsMenuItem != null) keyboardShortcutsMenuItem.Click += (s, e) => _dialogs.ShowKeyboardShortcuts();
-            if (documentationMenuItem != null) documentationMenuItem.Click += (s, e) => _dialogs.ShowDocumentation();
-            if (checkUpdatesMenuItem != null) checkUpdatesMenuItem.Click += (s, e) => _dialogs.CheckForUpdates();
-            if (aboutMenuItem != null) aboutMenuItem.Click += (s, e) => _dialogs.ShowAboutDialog();
-
-            // Toolbar
-            if (btnFindPath != null) btnFindPath.Click += async (s, e) => await _initializer.ViewModel.FindPathAsync();
-
-            // Test Menu
-            if (testAllMenuItem != null) testAllMenuItem.Click += async (s, e) => await TestAllAlgorithmsAsync();
-            if (testAStarMenuItem != null) testAStarMenuItem.Click += async (s, e) => await TestSingleAlgorithmAsync(AlgorithmType.AStar);
-            if (testSPPAMenuItem != null) testSPPAMenuItem.Click += async (s, e) => await TestSingleAlgorithmAsync(AlgorithmType.SPPA);
-            if (testSPPA_DLMenuItem != null) testSPPA_DLMenuItem.Click += async (s, e) => await TestSingleAlgorithmAsync(AlgorithmType.SPPA_DL);
-            if (clearTestResultsMenuItem != null) clearTestResultsMenuItem.Click += (s, e) => ClearTestResults();
-
-            // Obstacle Menu
-            if (wallMenuItem != null) wallMenuItem.Click += (s, e) => SetStaticElement(MapElementType.Wall);
-            if (rampMenuItem != null) rampMenuItem.Click += (s, e) => SetStaticElement(MapElementType.Ramp);
-            if (doorMenuItem != null) doorMenuItem.Click += (s, e) => SetStaticElement(MapElementType.Door);
-            if (windowMenuItem != null) windowMenuItem.Click += (s, e) => SetStaticElement(MapElementType.Window);
-            if (adultMenuItem != null) adultMenuItem.Click += (s, e) => SetDynamicObstacleType(ObstacleType.Adult);
-            if (childMenuItem != null) childMenuItem.Click += (s, e) => SetDynamicObstacleType(ObstacleType.Child);
-            if (animalMenuItem != null) animalMenuItem.Click += (s, e) => SetDynamicObstacleType(ObstacleType.Animal);
-             
-            if (equipmentMenuItem != null) equipmentMenuItem.Click += (s, e) => SetDynamicObstacleType(ObstacleType.Equipment);
-            if (clearAllObstaclesMenuItem != null) clearAllObstaclesMenuItem.Click += (s, e) => _mapOps.ClearAllObstacles();
-            if (obstacleSettingsMenuItem != null) obstacleSettingsMenuItem.Click += (s, e) => _dialogs.ShowObstacleSettings();
-
-            // Surface Weights
-            if (weightMenu != null)
-            {
-                for (int i = 0; i < weightMenu.DropDownItems.Count; i++)
-                {
-                    int weight = i * 10;
-                    weightMenu.DropDownItems[i].Click += (s, e) => SetSurfaceWeight((byte)weight);
-                }
-            }
-
-            // Robot Toolbar Menu
-            //if (robotToolbarDashboardMenuItem != null) robotToolbarDashboardMenuItem.Click += (s, e) => _dialogs.ShowRobotDashboard();
-            //if (robotToolbarCreateMenuItem != null) robotToolbarCreateMenuItem.Click += (s, e) => _dialogs.ShowRobotCreator();
-            //if (robotToolbarManageMenuItem != null) robotToolbarManageMenuItem.Click += (s, e) => _dialogs.ShowRobotManager();
- 
-            // Panels
-            if (robotPanel != null)
-            {
-                robotPanel.SimulateClick += (s, e) => _initializer.ViewModel.StartSimulation();
-                robotPanel.PauseClick += (s, e) => _initializer.ViewModel.TogglePause();
-                robotPanel.StopClick += (s, e) => _initializer.ViewModel.StopSimulation();
-            }
-
-            if (algorithmSettingsPanel != null)
-            {
-                algorithmSettingsPanel.FindPathRequested += (s, e) => _initializer.ViewModel.FindPathAsync();
-            }
-
-            // Map Events
-            if (mapControl != null)
-            {
-                mapControl.MouseClick += MapControl_MouseClick;
-                mapControl.MouseMove += MapControl_MouseMove;
-            }
-        }
-        #endregion
-
-        #region Update Methods
         private void UpdateRobotPositionDisplay()
         {
             if (InvokeRequired)
@@ -352,14 +258,8 @@ namespace SallamPathFinder4.WinForms.Forms
                 Invoke(new Action(UpdateRobotPositionDisplay));
                 return;
             }
-            if (lblRobotPos != null && _viewModel != null)
-            {
-                lblRobotPos.Text = $"Robot: ({_viewModel.RobotState.Position.X},{_viewModel.RobotState.Position.Y}) {_viewModel.RobotState.Angle:F0}°";
-            }
-            if (mapControl != null && _viewModel != null)
-            {
-                mapControl.UpdateRobotPosition(_viewModel.RobotState.Position, _viewModel.RobotState.Angle);
-            }
+            lblRobotPos.Text = $"Robot: ({_viewModel.RobotState.Position.X},{_viewModel.RobotState.Position.Y}) {_viewModel.RobotState.Angle:F0}°";
+            mapControl.UpdateRobotPosition(_viewModel.RobotState.Position, _viewModel.RobotState.Angle);
         }
 
         private void UpdateBatteryDisplay()
@@ -369,11 +269,8 @@ namespace SallamPathFinder4.WinForms.Forms
                 Invoke(new Action(UpdateBatteryDisplay));
                 return;
             }
-            if (lblBattery != null && _viewModel != null)
-            {
-                lblBattery.Text = $"🔋 Battery: {_viewModel.RobotState.BatteryLevel:F1}%";
-            }
-            robotPanel?.UpdateBattery(_viewModel?.RobotState.BatteryLevel ?? 100);
+            lblBattery.Text = $"🔋 Battery: {_viewModel.RobotState.BatteryLevel:F1}%";
+            robotPanel?.UpdateBattery(_viewModel.RobotState.BatteryLevel);
         }
 
         private void DisplayPath()
@@ -384,7 +281,7 @@ namespace SallamPathFinder4.WinForms.Forms
                 return;
             }
 
-            var path = _viewModel?.CurrentPathResult?.Path;
+            var path = _viewModel.CurrentPathResult?.Path;
             if (path == null || path.Count == 0) return;
 
             pathDisplayPanel?.ClearPath();
@@ -394,76 +291,246 @@ namespace SallamPathFinder4.WinForms.Forms
                 pathDisplayPanel?.AddPathStep(step++, node.X, node.Y, "Main", Color.Gold);
             }
             pathDisplayPanel?.UpdateStats(path.Count, _viewModel.CurrentPathResult.ComputationTimeSeconds * 1000, path.Count * 10.0);
-            if (lblAlgoTime != null) lblAlgoTime.Text = $"⏱️ Algo: {_viewModel.CurrentPathResult.ComputationTimeSeconds * 1000:F2}ms";
-            mapControl?.DrawPath(path.ToList(), Color.Gold);
-            if (lblStatus != null) lblStatus.Text = $"🟢 Path found! Length: {path.Count} cells";
-        }
-        #endregion
-
-        #region Drawing Mode Methods
-        private void SetStaticElement(MapElementType element)
-        {
-            CancelCurrentDrawMode();
-            if (mapControl != null)
-            {
-                mapControl.CurrentDrawMode = MapControl.DrawMode.SetElement;
-                mapControl.CurrentElement = element;
-            }
-            if (lblStatus != null) lblStatus.Text = $"🟡 Click on map to add {element} (Press ESC to cancel)";
-        }
-
-        private void SetDynamicObstacleType(ObstacleType type)
-        {
-            CancelCurrentDrawMode();
-            if (mapControl != null)
-            {
-                mapControl.CurrentDrawMode = MapControl.DrawMode.SetDynamicObstacle;
-                mapControl.CurrentObstacleType = type;
-            }
-            if (lblStatus != null) lblStatus.Text = $"🟡 Click on map to add {type} obstacle (Press ESC to cancel)";
-        }
-
-        private void SetSurfaceWeight(byte weight)
-        {
-            CancelCurrentDrawMode();
-            if (mapControl != null)
-            {
-                mapControl.CurrentDrawMode = MapControl.DrawMode.SetWeight;
-                mapControl.CurrentWeight = weight;
-            }
-            if (lblStatus != null) lblStatus.Text = $"📊 Click on map to set {weight}% surface weight (Press ESC to cancel)";
-        }
-
-        private void CancelCurrentDrawMode()
-        {
-            SetAddingGoal(false);
-            SetAddingParking(false);
-            ClearMovingGoal();
-            ClearMovingParking();
-
-            if (mapControl != null)
-            {
-                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
-                mapControl.Cursor = Cursors.Default;
-            }
-
-            if (lblStatus != null) lblStatus.Text = "🟢 Operation cancelled. Ready";
+            lblAlgoTime.Text = $"⏱️ Algo: {_viewModel.CurrentPathResult.ComputationTimeSeconds * 1000:F2}ms";
+            mapControl.DrawPath(path.ToList(), Color.Gold);
+            lblStatus.Text = $"🟢 Path found! Length: {path.Count} cells";
         }
         #endregion
 
         #region Goals and Parking Methods
+        private void StartAddingGoal()
+        {
+            CancelCurrentDrawMode();
+            _isAddingGoal = true;
+            mapControl.Cursor = Cursors.Cross;
+            lblStatus.Text = "🟡 Click on map to add Goal point (Press ESC to cancel)";
+        }
+
+        private void StartAddingParking()
+        {
+            CancelCurrentDrawMode();
+            _isAddingParking = true;
+            mapControl.Cursor = Cursors.Cross;
+            lblStatus.Text = "🟡 Click on map to add Parking point (Press ESC to cancel)";
+        }
+
+        private void StartMovingGoal(GoalPoint goal)
+        {
+            _isMovingGoal = true;
+            _movingGoal = goal;
+            mapControl.Cursor = Cursors.Cross;
+            lblStatus.Text = $"🟡 Click on map to move {goal.Name}";
+        }
+
+        private void StartMovingParking(ParkingPoint parking)
+        {
+            _isMovingParking = true;
+            _movingParking = parking;
+            mapControl.Cursor = Cursors.Cross;
+            lblStatus.Text = $"🟡 Click on map to move {parking.Name}";
+        }
+
+        private void RemoveGoal(GoalPoint goal)
+        {
+            mapControl.RemoveGoalAt(goal.Location);
+            RefreshGoalsList();
+            lblStatus.Text = $"❌ Goal {goal.Name} removed";
+        }
+
+        private void RemoveParking(ParkingPoint parking)
+        {
+            mapControl.RemoveParkingAt(parking.Location);
+            RefreshParkingList();
+            lblStatus.Text = $"❌ Parking {parking.Name} removed";
+        }
+
         private void RefreshGoalsList()
         {
-            _ui?.RefreshGoalsList();
+            _viewModel.Goals.Clear();
+            foreach (var goal in mapControl.Goals)
+                _viewModel.Goals.Add(goal);
+            goalsPanel?.RefreshList();
+            _viewModel.RefreshHasGoals();
+
+            if (_simulationService != null)
+            {
+                var goalsList = _viewModel.Goals.Select(g => g.Location).ToList();
+                _simulationService.SetGoals(goalsList);
+            }
         }
 
         private void RefreshParkingList()
         {
-            _ui?.RefreshParkingList();
+            _viewModel.ParkingPoints.Clear();
+            foreach (var parking in mapControl.ParkingPoints)
+                _viewModel.ParkingPoints.Add(parking);
+            parkingPanel?.RefreshList();
+        }
+
+        private void UpdateBatteryFromPanel()
+        {
+            if (_viewModel != null && robotPanel != null)
+            {
+                double newBatteryLevel = robotPanel.SetBatteryLevel;
+                _viewModel.RobotState.BatteryLevel = newBatteryLevel;
+                _viewModel.SetBatteryLevel(newBatteryLevel);
+            }
         }
         #endregion
 
-        #region Detection Zone Methods
+        #region Map Event Handlers
+        private void MapControl_MouseClick(object sender, MouseEventArgs e)
+        {
+            var cell = mapControl.GetGridCellAtPoint(e.Location);
+            if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
+
+            if (_isAddingGoal)
+            {
+                var color = Color.FromArgb(_random.Next(100, 255), _random.Next(100, 255), _random.Next(100, 255));
+                mapControl.AddGoalAt(cell, color);
+                RefreshGoalsList();
+                _isAddingGoal = false;
+                mapControl.Cursor = Cursors.Default;
+                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+                lblStatus.Text = "🟢 Ready";
+                return;
+            }
+
+            if (_isAddingParking)
+            {
+                mapControl.AddParkingAt(cell);
+                RefreshParkingList();
+                _isAddingParking = false;
+                mapControl.Cursor = Cursors.Default;
+                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+                lblStatus.Text = "🟢 Ready";
+                return;
+            }
+
+            if (_isMovingGoal && _movingGoal != null)
+            {
+                mapControl.RemoveGoalAt(_movingGoal.Location);
+                _movingGoal.Location = cell;
+                mapControl.AddGoalAt(cell, _movingGoal.Color);
+                RefreshGoalsList();
+                _isMovingGoal = false;
+                _movingGoal = null;
+                mapControl.Cursor = Cursors.Default;
+                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+                lblStatus.Text = "🟢 Ready";
+                return;
+            }
+
+            if (_isMovingParking && _movingParking != null)
+            {
+                mapControl.RemoveParkingAt(_movingParking.Location);
+                _movingParking.Location = cell;
+                mapControl.AddParkingAt(cell);
+                RefreshParkingList();
+                _isMovingParking = false;
+                _movingParking = null;
+                mapControl.Cursor = Cursors.Default;
+                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+                lblStatus.Text = "🟢 Ready";
+                return;
+            }
+
+            if (mapControl.CurrentDrawMode == MapControl.DrawMode.SetDynamicObstacle)
+            {
+                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+                mapControl.Cursor = Cursors.Default;
+                lblStatus.Text = "🟢 Dynamic obstacle added. Ready";
+                return;
+            }
+
+            lblCellPos.Text = $"Cell: ({cell.X},{cell.Y})";
+            lblStatus.Text = $"Cell ({cell.X},{cell.Y}) | Walkable: {mapControl.MapGrid[cell.X, cell.Y].IsWalkable}";
+        }
+
+        private void MapControl_MouseMove(object sender, MouseEventArgs e)
+        {
+            var cell = mapControl.GetGridCellAtPoint(e.Location);
+            if (mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y))
+            {
+                lblMousePos.Text = $"Mouse: ({e.X},{e.Y})";
+                lblCellPos.Text = $"Cell: ({cell.X},{cell.Y})";
+                double realX = cell.X * mapControl.ScaleCmPerCell;
+                double realY = cell.Y * mapControl.ScaleCmPerCell;
+                lblRealPos.Text = $"Real: ({realX:F1}cm, {realY:F1}cm)";
+            }
+        }
+        #endregion
+
+        #region Map Operations
+        private void NewMap()
+        {
+            mapControl.ClearPaths();
+            mapControl.ClearGoals();
+            mapControl.ClearParkingPoints();
+            mapControl.ResetStartPoints();
+            mapControl.AddStartPoint(new Point(10, 10));
+
+            if (_simulationService is SimulationService simSvc)
+            {
+                simSvc.ReinitializeDoorGroups();
+            }
+
+            pathDisplayPanel?.ClearPath();
+            lblStatus.Text = "🟢 New map created";
+        }
+
+        private async void OpenMap()
+        {
+            using var ofd = new OpenFileDialog();
+            ofd.Filter = "Sallam Map (*.smap)|*.smap";
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                await _viewModel.LoadMapAsync(ofd.FileName);
+
+                if (_simulationService is SimulationService simSvc)
+                {
+                    simSvc.ReinitializeDoorGroups();
+                }
+
+                RefreshGoalsList();
+                RefreshParkingList();
+                lblStatus.Text = $"✅ Map loaded: {System.IO.Path.GetFileName(ofd.FileName)}";
+            }
+        }
+
+        private async void SaveMap()
+        {
+            using var sfd = new SaveFileDialog();
+            sfd.Filter = "Sallam Map (*.smap)|*.smap";
+            sfd.DefaultExt = "smap";
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                await _viewModel.SaveMapAsync(sfd.FileName);
+                lblStatus.Text = $"💾 Map saved: {System.IO.Path.GetFileName(sfd.FileName)}";
+            }
+        }
+
+        private void ResetView()
+        {
+            mapControl.ZoomLevel = 1.0f;
+            mapControl.CellSize = 30;
+            lblStatus.Text = "View reset";
+        }
+
+        private void ToggleGrid()
+        {
+            mapControl.ShowGrid = !mapControl.ShowGrid;
+            showGridItem.Checked = mapControl.ShowGrid;
+        }
+
+        private void ToggleCoordinates()
+        {
+            mapControl.ShowCoordinates = !mapControl.ShowCoordinates;
+            showCoordsItem.Checked = mapControl.ShowCoordinates;
+        }
+        #endregion
+
+        #region Detection Zone
         private void StartDetectionZoneUpdater()
         {
             _detectionZoneTimer = new System.Windows.Forms.Timer();
@@ -486,15 +553,13 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         #endregion
 
-        #region Testing Methods
-        private async Task TestAllAlgorithmsAsync()
+        #region Test Methods
+        private async Task TestAllAlgorithms()
         {
-            if (mapControl == null || _viewModel == null) return;
-
             var start = mapControl.RobotPosition;
             var end = _viewModel.Goals.Count > 0 ? _viewModel.Goals[0].Location : new Point(50, 50);
 
-            if (lblStatus != null) lblStatus.Text = "🧪 Testing all algorithms...";
+            lblStatus.Text = "🧪 Testing all algorithms...";
             Application.DoEvents();
 
             var results = await _viewModel.TestAllAlgorithmsAsync(start, end);
@@ -516,17 +581,15 @@ namespace SallamPathFinder4.WinForms.Forms
             }
 
             MessageBox.Show(resultMessage, "Algorithm Test Results", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            if (lblStatus != null) lblStatus.Text = "✅ Algorithm testing completed";
+            lblStatus.Text = "✅ Algorithm testing completed";
         }
 
-        private async Task TestSingleAlgorithmAsync(AlgorithmType type)
+        private async Task TestSingleAlgorithm(AlgorithmType type)
         {
-            if (mapControl == null || _viewModel == null) return;
-
             var start = mapControl.RobotPosition;
             var end = _viewModel.Goals.Count > 0 ? _viewModel.Goals[0].Location : new Point(50, 50);
 
-            if (lblStatus != null) lblStatus.Text = $"🧪 Testing {type}...";
+            lblStatus.Text = $"🧪 Testing {type}...";
             Application.DoEvents();
 
             var result = await _viewModel.TestAlgorithmAsync(type, start, end);
@@ -550,120 +613,71 @@ namespace SallamPathFinder4.WinForms.Forms
             MessageBox.Show(message, $"{type} Test Results", MessageBoxButtons.OK,
                 result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
 
-            if (lblStatus != null) lblStatus.Text = $"✅ {type} testing completed";
+            lblStatus.Text = $"✅ {type} testing completed";
         }
 
         private void ClearTestResults()
         {
-            mapControl?.ClearPaths();
+            mapControl.ClearPaths();
             pathDisplayPanel?.ClearPath();
-            if (lblStatus != null) lblStatus.Text = "Test results cleared";
+            lblStatus.Text = "Test results cleared";
         }
         #endregion
 
-        #region Map Event Handlers
-        private void MapControl_MouseClick(object sender, MouseEventArgs e)
+        #region Dialog Methods
+        private void ShowRobotDashboard()
         {
-            if (mapControl == null || mapControl.MapGrid == null) return;
-
-            var cell = mapControl.GetGridCellAtPoint(e.Location);
-            if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
-
-            if (IsAddingGoal)
-            {
-                var color = Color.FromArgb(_random.Next(100, 255), _random.Next(100, 255), _random.Next(100, 255));
-                mapControl.AddGoalAt(cell, color);
-                RefreshGoalsList();
-                SetAddingGoal(false);
-                mapControl.Cursor = Cursors.Default;
-                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
-                if (lblStatus != null) lblStatus.Text = "🟢 Ready";
-                return;
-            }
-
-            if (IsAddingParking)
-            {
-                mapControl.AddParkingAt(cell);
-                RefreshParkingList();
-                SetAddingParking(false);
-                mapControl.Cursor = Cursors.Default;
-                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
-                if (lblStatus != null) lblStatus.Text = "🟢 Ready";
-                return;
-            }
-
-            if (IsMovingGoal && MovingGoal != null)
-            {
-                mapControl.RemoveGoalAt(MovingGoal.Location);
-                MovingGoal.Location = cell;
-                mapControl.AddGoalAt(cell, MovingGoal.Color);
-                RefreshGoalsList();
-                ClearMovingGoal();
-                mapControl.Cursor = Cursors.Default;
-                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
-                if (lblStatus != null) lblStatus.Text = "🟢 Ready";
-                return;
-            }
-
-            if (IsMovingParking && MovingParking != null)
-            {
-                mapControl.RemoveParkingAt(MovingParking.Location);
-                MovingParking.Location = cell;
-                mapControl.AddParkingAt(cell);
-                RefreshParkingList();
-                ClearMovingParking();
-                mapControl.Cursor = Cursors.Default;
-                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
-                if (lblStatus != null) lblStatus.Text = "🟢 Ready";
-                return;
-            }
-
-            if (mapControl.CurrentDrawMode == MapControl.DrawMode.SetDynamicObstacle)
-            {
-                mapControl.CurrentDrawMode = MapControl.DrawMode.None;
-                mapControl.Cursor = Cursors.Default;
-                if (lblStatus != null) lblStatus.Text = "🟢 Dynamic obstacle added. Ready";
-                return;
-            }
-
-            if (lblCellPos != null) lblCellPos.Text = $"Cell: ({cell.X},{cell.Y})";
-            if (lblStatus != null) lblStatus.Text = $"Cell ({cell.X},{cell.Y}) | Walkable: {mapControl.MapGrid[cell.X, cell.Y].IsWalkable}";
+            var dashboard = new frmRobotDashboard();
+            dashboard.Show();
         }
 
-        private void MapControl_MouseMove(object sender, MouseEventArgs e)
+        private void ShowExperimentDesigner()
         {
-            if (mapControl == null || mapControl.MapGrid == null) return;
+            var designer = new frmExperimentDesigner(mapControl.MapGrid, mapControl, _viewModel);
+            designer.ShowDialog();
+        }
 
-            var cell = mapControl.GetGridCellAtPoint(e.Location);
-            if (mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y))
+        private void ShowMapSettings()
+        {
+            double currentScale = mapControl.ScaleCmPerCell;
+            var settingsForm = new frmMapSettings(mapControl.MapGrid, mapControl.CellSize, currentScale);
+            if (settingsForm.ShowDialog() == DialogResult.OK)
             {
-                if (lblMousePos != null) lblMousePos.Text = $"Mouse: ({e.X},{e.Y})";
-                if (lblCellPos != null) lblCellPos.Text = $"Cell: ({cell.X},{cell.Y})";
-                if (lblRealPos != null)
+                mapControl.CellSize = settingsForm.CellSize;
+                mapControl.ScaleCmPerCell = settingsForm.Scale;
+                mapControl.Invalidate();
+                mapControl.Refresh();
+
+                if (rulerTop != null)
                 {
-                    double realX = cell.X * mapControl.ScaleCmPerCell;
-                    double realY = cell.Y * mapControl.ScaleCmPerCell;
-                    lblRealPos.Text = $"Real: ({realX:F1}cm, {realY:F1}cm)";
+                    rulerTop.CellSize = settingsForm.CellSize;
+                    rulerTop.Scale = (float)settingsForm.Scale;
+                    rulerTop.Invalidate();
                 }
+                if (rulerLeft != null)
+                {
+                    rulerLeft.CellSize = settingsForm.CellSize;
+                    rulerLeft.Scale = (float)settingsForm.Scale;
+                    rulerLeft.Invalidate();
+                }
+
+                lblStatus.Text = $"Map updated: Cell size = {settingsForm.CellSize}px, Scale = {settingsForm.Scale}cm/cell";
             }
+        }
+
+        private void ShowObstacleSettings()
+        {
+            var settingsService = ServiceContainer.Resolve<IObstacleSettingsService>();
+            var viewModel = new ObstacleSettingsViewModel(settingsService);
+            var settingsForm = new frmObstacleSettings(viewModel);
+            settingsForm.ShowDialog();
         }
         #endregion
 
         #region Form Events
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            try
-            {
-                StopDetectionZoneUpdater();
-                if (_initializer != null && _initializer.SimulationService != null)
-                {
-                    _initializer.SimulationService.Stop();
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"OnFormClosing error: {ex.Message}");
-            }
+            StopDetectionZoneUpdater();
             base.OnFormClosing(e);
         }
 
@@ -683,15 +697,81 @@ namespace SallamPathFinder4.WinForms.Forms
                 case Keys.D:
                 case Keys.Q:
                 case Keys.E:
-                    if (mapControl != null && _viewModel != null)
-                    {
-                        mapControl.MoveRobotManually(keyData);
-                        _viewModel.RobotState.Position = mapControl.RobotPosition;
-                        _viewModel.RobotState.Angle = mapControl.RobotAngle;
-                    }
+                    mapControl.MoveRobotManually(keyData);
+                    _viewModel.RobotState.Position = mapControl.RobotPosition;
+                    _viewModel.RobotState.Angle = mapControl.RobotAngle;
                     return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void CancelCurrentDrawMode()
+        {
+            _isAddingGoal = false;
+            _isAddingParking = false;
+            _isMovingGoal = false;
+            _isMovingParking = false;
+            _movingGoal = null;
+            _movingParking = null;
+
+            mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+            mapControl.Cursor = Cursors.Default;
+            lblStatus.Text = "🟢 Operation cancelled. Ready";
+        }
+        #endregion
+        #region Obstacle Menu Methods
+        private void SetStaticElement(MapElementType element)
+        {
+            CancelCurrentDrawMode();
+            mapControl.CurrentDrawMode = MapControl.DrawMode.SetElement;
+            mapControl.CurrentElement = element;
+            lblStatus.Text = $"🟡 Click on map to add {element} (Press ESC to cancel)";
+        }
+
+        private void SetDynamicObstacleType(ObstacleType type)
+        {
+            CancelCurrentDrawMode();
+            mapControl.CurrentDrawMode = MapControl.DrawMode.SetDynamicObstacle;
+            mapControl.CurrentObstacleType = type;
+            lblStatus.Text = $"🟡 Click on map to add {type} obstacle (Press ESC to cancel)";
+        }
+
+        private void SetSurfaceWeight(byte weight)
+        {
+            CancelCurrentDrawMode();
+            mapControl.CurrentDrawMode = MapControl.DrawMode.SetWeight;
+            mapControl.CurrentWeight = weight;
+            lblStatus.Text = $"📊 Click on map to set {weight}% surface weight (Press ESC to cancel)";
+        }
+
+        private void ClearAllObstacles()
+        {
+            mapControl.DynamicObstacles.Clear();
+            if (mapControl.MapGrid != null)
+            {
+                for (int x = 0; x < mapControl.MapGrid.Width; x++)
+                {
+                    for (int y = 0; y < mapControl.MapGrid.Height; y++)
+                    {
+                        var cell = mapControl.MapGrid[x, y];
+                        cell.OccupyingObstacle = null;
+                        cell.IsWalkable = true;
+                        if (cell.ElementType == MapElementType.Empty)
+                        {
+                            cell.IsWalkable = true;
+                        }
+                    }
+                }
+                mapControl.MapGrid.UpdateAllCellProperties();
+            }
+            mapControl.Invalidate();
+            lblStatus.Text = "All obstacles cleared";
+        }
+
+        private void ShowDashboard()
+        {
+            var dashboard = new frmRobotDashboard();
+            dashboard.Show();
         }
         #endregion
     }
