@@ -18,7 +18,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using SallamPathFinder4.Core.Algorithms.Base;
 using SallamPathFinder4.Core.Enums;
-using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
@@ -26,8 +25,14 @@ using SallamPathFinder4.ML.Prediction;
 using SallamPathFinder4.ML.Training;
 #endregion
 
-namespace SallamPathFinder4.Services.Pathfinding
+namespace SallamPathFinder4.Core.Algorithms.Implementations
 {
+    #region Class Documentation
+    /// <summary>
+    /// SPPA-DL (SPPA with Dynamic Learning) algorithm
+    /// Extended cost function: f(n) = g(n) + h(n) + λ·o(n) + α·m(n) + β·p(n)
+    /// </summary>
+    #endregion
     public sealed class SPPA_DLFinder : BasePathFinder
     {
         #region Constants
@@ -80,6 +85,8 @@ namespace SallamPathFinder4.Services.Pathfinding
         private bool _useNeuralNetwork;
         private bool _collectTrainingData;
         private ObstacleDataCollector _dataCollector;
+        private Dictionary<int, double> _obstacleCoefficientCache;
+        private Dictionary<int, double> _learningMemoryCache;
         #endregion
 
         #region Constructor
@@ -94,6 +101,8 @@ namespace SallamPathFinder4.Services.Pathfinding
             _collectTrainingData = false;
             _dynamicObstacles = new List<DynamicObstacle>();
             _dataCollector = new ObstacleDataCollector();
+            _obstacleCoefficientCache = new Dictionary<int, double>();
+            _learningMemoryCache = new Dictionary<int, double>();
         }
 
         /// <summary>
@@ -111,6 +120,8 @@ namespace SallamPathFinder4.Services.Pathfinding
             _useNeuralNetwork = useNeuralNetwork;
             _collectTrainingData = collectTrainingData;
             _dataCollector = new ObstacleDataCollector();
+            _obstacleCoefficientCache = new Dictionary<int, double>();
+            _learningMemoryCache = new Dictionary<int, double>();
 
             if (_useNeuralNetwork)
             {
@@ -178,15 +189,30 @@ namespace SallamPathFinder4.Services.Pathfinding
         #region Public Methods - Pathfinding
         public override PathResult FindPath(Point start, Point end)
         {
+            // Clear caches before each pathfinding
+            _obstacleCoefficientCache.Clear();
+            _learningMemoryCache.Clear();
+
             // Validation
             if (!_grid.IsValidCoordinate(start.X, start.Y))
+            {
                 return PathResult.Fail("Start position invalid");
+            }
+
             if (!_grid.IsValidCoordinate(end.X, end.Y))
+            {
                 return PathResult.Fail("End position invalid");
+            }
+
             if (!_grid[start.X, start.Y].IsWalkable)
+            {
                 return PathResult.Fail("Start not walkable");
+            }
+
             if (!_grid[end.X, end.Y].IsWalkable)
+            {
                 return PathResult.Fail("End not walkable");
+            }
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -198,6 +224,7 @@ namespace SallamPathFinder4.Services.Pathfinding
             var openHeap = new SortedSet<Tuple<int, int, int>>();
 
             var nodes = new SPPA_DLNode[width, height];
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < height; y++)
@@ -222,19 +249,23 @@ namespace SallamPathFinder4.Services.Pathfinding
             SPPA_DLNode currentNode = null;
             bool found = false;
 
-            while (openHeap.Count > 0 && iterations < SearchLimit)
+            while (openHeap.Count > 0 && iterations < SearchLimit && !ShouldStop())
             {
                 var top = openHeap.Min;
                 openHeap.Remove(top);
                 int key = (top.Item3 << 16) + top.Item2;
 
                 if (!openDict.TryGetValue(key, out currentNode))
+                {
                     continue;
+                }
 
                 openDict.Remove(key);
 
                 if (currentNode.IsClosed)
+                {
                     continue;
+                }
 
                 if (currentNode.X == end.X && currentNode.Y == end.Y)
                 {
@@ -252,9 +283,18 @@ namespace SallamPathFinder4.Services.Pathfinding
                     int ny = currentNode.Y + dy[i];
 
                     if (nx < 0 || ny < 0 || nx >= width || ny >= height)
+                    {
                         continue;
+                    }
 
                     var neighborCell = _grid[nx, ny];
+
+                    // Block path through windows for SPPA-DL
+                    if (neighborCell.ElementType == MapElementType.Window)
+                    {
+                        continue;
+                    }
+
                     if (!neighborCell.IsWalkable)
                     {
                         RecordInvalidMove(new Point(nx, ny));
@@ -262,19 +302,30 @@ namespace SallamPathFinder4.Services.Pathfinding
                     }
 
                     double stepCost = neighborCell.SurfaceWeight;
-                    if (stepCost <= 0) stepCost = 1;
+
+                    if (stepCost <= 0)
+                    {
+                        stepCost = 1;
+                    }
+
                     if (IsDiagonalMove(currentNode.X, currentNode.Y, nx, ny) && HeavyDiagonals)
+                    {
                         stepCost *= SQRT2;
+                    }
 
                     int newG = currentNode.G + (int)stepCost;
                     var neighbor = nodes[nx, ny];
                     int neighborKey = (ny << 16) + nx;
 
                     if (closedDict.ContainsKey(neighborKey) && newG >= neighbor.G)
+                    {
                         continue;
+                    }
 
                     if (openDict.ContainsKey(neighborKey) && newG >= neighbor.G)
+                    {
                         continue;
+                    }
 
                     double obstacleCoeff = CalculateObstacleCoefficient(new Point(nx, ny));
                     double learningMemory = GetLearningMemory(new Point(nx, ny));
@@ -327,11 +378,13 @@ namespace SallamPathFinder4.Services.Pathfinding
         {
             var path = new List<PathNode>();
             var current = endNode;
+
             while (current != null)
             {
                 path.Insert(0, new PathNode(current.X, current.Y));
                 current = current.Parent;
             }
+
             return path;
         }
 
@@ -345,12 +398,16 @@ namespace SallamPathFinder4.Services.Pathfinding
             {
                 case DistanceMetric.Manhattan:
                     return weight * (dx + dy);
+
                 case DistanceMetric.MaxDXDY:
                     return weight * Math.Max(dx, dy);
+
                 case DistanceMetric.DiagonalShortcut:
                     return (weight * 2) * Math.Min(dx, dy) + weight * Math.Abs(dx - dy);
+
                 case DistanceMetric.Euclidean:
                     return (int)(weight * Math.Sqrt(dx * dx + dy * dy));
+
                 default:
                     return weight * (dx + dy);
             }
@@ -358,29 +415,49 @@ namespace SallamPathFinder4.Services.Pathfinding
 
         private double CalculateObstacleCoefficient(Point position)
         {
+            int cacheKey = (position.Y << 16) + position.X;
+
+            // Check cache first for performance
+            if (_obstacleCoefficientCache.TryGetValue(cacheKey, out double cachedValue))
+            {
+                return cachedValue;
+            }
+
             var cell = _grid[position.X, position.Y];
 
+            // Static obstacle coefficient
             double staticCoeff = 0.0;
-            if (cell.ElementType == MapElementType.Wall)
-                staticCoeff = 1.0;
-            else if (cell.ElementType == MapElementType.Door && !cell.IsDoorOpen)
-                staticCoeff = 1.0;
 
+            if (cell.ElementType == MapElementType.Wall)
+            {
+                staticCoeff = 1.0;
+            }
+            else if (cell.ElementType == MapElementType.Door && !cell.IsDoorOpen)
+            {
+                staticCoeff = 1.0;
+            }
+            else if (cell.ElementType == MapElementType.Window)
+            {
+                staticCoeff = 1.0;
+            }
+
+            // Semi-static obstacle coefficient
             double semiStaticCoeff = 0.0;
+
             switch (cell.ElementType)
             {
-                case MapElementType.Window:
-                    semiStaticCoeff = 0.3;
-                    break;
                 case MapElementType.Ramp:
                     semiStaticCoeff = cell.RampDifficulty / 100.0;
                     break;
+
                 default:
                     semiStaticCoeff = 0.0;
                     break;
             }
 
+            // Dynamic obstacle proximity coefficient
             double dynamicCoeff = 0.0;
+
             if (cell.OccupyingObstacle != null)
             {
                 dynamicCoeff = 1.0;
@@ -394,7 +471,12 @@ namespace SallamPathFinder4.Services.Pathfinding
             double weightedSemiStatic = ALPHA_SS * semiStaticCoeff;
             double weightedDynamic = ALPHA_D * dynamicCoeff;
 
-            return Math.Max(weightedStatic, Math.Max(weightedSemiStatic, weightedDynamic));
+            double result = Math.Max(weightedStatic, Math.Max(weightedSemiStatic, weightedDynamic));
+
+            // Store in cache
+            _obstacleCoefficientCache[cacheKey] = result;
+
+            return result;
         }
 
         private double CheckNearbyDynamicObstacles(Point position)
@@ -409,9 +491,12 @@ namespace SallamPathFinder4.Services.Pathfinding
                     int ny = position.Y + dy;
 
                     if (!_grid.IsValidCoordinate(nx, ny))
+                    {
                         continue;
+                    }
 
                     var cell = _grid[nx, ny];
+
                     if (cell.OccupyingObstacle != null)
                     {
                         double distance = Math.Sqrt(dx * dx + dy * dy);
@@ -426,19 +511,40 @@ namespace SallamPathFinder4.Services.Pathfinding
 
         private double GetLearningMemory(Point position)
         {
-            if (_obstacleMemory == null) return 0;
-            return _obstacleMemory.GetObstacleCoefficient(position.X, position.Y, _learningRate);
+            int cacheKey = (position.Y << 16) + position.X;
+
+            // Check cache first for performance
+            if (_learningMemoryCache.TryGetValue(cacheKey, out double cachedValue))
+            {
+                return cachedValue;
+            }
+
+            if (_obstacleMemory == null)
+            {
+                return 0;
+            }
+
+            double value = _obstacleMemory.GetObstacleCoefficient(position.X, position.Y, _learningRate);
+
+            // Store in cache
+            _learningMemoryCache[cacheKey] = value;
+
+            return value;
         }
 
         private double GetPredictionRisk(Point position)
         {
             if (!_useNeuralNetwork || _predictor == null || _dynamicObstacles == null)
+            {
                 return 0;
+            }
 
             double maxRisk = 0;
+
             foreach (var obstacle in _dynamicObstacles)
             {
                 var prediction = _predictor.PredictNextPosition(obstacle, 1.0);
+
                 if (prediction.Success)
                 {
                     double distance = Math.Sqrt(
@@ -452,6 +558,7 @@ namespace SallamPathFinder4.Services.Pathfinding
                     }
                 }
             }
+
             return maxRisk * _predictionWeight;
         }
 
@@ -464,13 +571,17 @@ namespace SallamPathFinder4.Services.Pathfinding
         {
             if (AllowDiagonals)
             {
-                return (new int[] { 0, 1, 0, -1, 1, 1, -1, -1 },
-                        new int[] { -1, 0, 1, 0, -1, 1, 1, -1 });
+                return (
+                    new int[] { 0, 1, 0, -1, 1, 1, -1, -1 },
+                    new int[] { -1, 0, 1, 0, -1, 1, 1, -1 }
+                );
             }
             else
             {
-                return (new int[] { 0, 1, 0, -1 },
-                        new int[] { -1, 0, 1, 0 });
+                return (
+                    new int[] { 0, 1, 0, -1 },
+                    new int[] { -1, 0, 1, 0 }
+                );
             }
         }
         #endregion

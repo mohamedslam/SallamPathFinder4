@@ -2,9 +2,10 @@
 /// <summary>
 /// File: SPPAFinder.cs
 /// Description: SPPA (Shortest Path with Precautionary Avoidance) algorithm implementation
-/// Extended cost function: f(n) = g(n) + h(n) + λ * o(n)
+/// Extended cost function: f(n) = g(n) + h(n) + λ·o(n)
+/// Optimized with caching and window blocking
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-06
+/// Date: 2026-04-09
 /// Reference: Makarovskikh T., Sallam M. (2024-2025)
 /// </summary>
 #endregion
@@ -21,6 +22,12 @@ using SallamPathFinder4.Core.Models.Path;
 
 namespace SallamPathFinder4.Core.Algorithms.Implementations
 {
+    #region Class Documentation
+    /// <summary>
+    /// SPPA (Shortest Path with Precautionary Avoidance) algorithm
+    /// Extended cost function: f(n) = g(n) + h(n) + λ·o(n)
+    /// </summary>
+    #endregion
     public sealed class SPPAFinder : BasePathFinder
     {
         #region Constants
@@ -57,23 +64,31 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         }
         #endregion
 
+        #region Private Fields
+        private Dictionary<int, double> _obstacleCoefficientCache;
+        #endregion
+
         #region Constructor
         public SPPAFinder(MapGrid grid) : base(grid)
         {
             SearchLimit = DEFAULT_SEARCH_LIMIT;
             HeuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
+            _obstacleCoefficientCache = new Dictionary<int, double>();
         }
         #endregion
 
         #region Public Methods
         public override PathResult FindPath(Point start, Point end)
         {
+            // Clear cache before each pathfinding
+            _obstacleCoefficientCache.Clear();
+
             // Validation
-            if (!_grid.IsValidCoordinate(start.X, start.Y))
-                return PathResult.Fail("Start position invalid");
-            if (!_grid.IsValidCoordinate(end.X, end.Y))
-                return PathResult.Fail("End position invalid");
-            if (!_grid[start.X, start.Y].IsWalkable)
+            if (!_grid.IsValidCoordinate(start.X, start.Y))            
+                return PathResult.Fail("Start position invalid");            
+            if (!_grid.IsValidCoordinate(end.X, end.Y))           
+                return PathResult.Fail("End position invalid"); 
+            if (!_grid[start.X, start.Y].IsWalkable)           
                 return PathResult.Fail("Start not walkable");
             if (!_grid[end.X, end.Y].IsWalkable)
                 return PathResult.Fail("End not walkable");
@@ -86,8 +101,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             var openDict = new Dictionary<int, SPPANode>();
             var closedDict = new Dictionary<int, SPPANode>();
             var openHeap = new SortedSet<Tuple<int, int, int>>();
-
             var nodes = new SPPANode[width, height];
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < height; y++)
@@ -110,7 +125,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             SPPANode currentNode = null;
             bool found = false;
 
-            while (openHeap.Count > 0 && iterations < SearchLimit)
+            while (openHeap.Count > 0 && iterations < SearchLimit && !ShouldStop())
             {
                 var top = openHeap.Min;
                 openHeap.Remove(top);
@@ -143,11 +158,18 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         continue;
 
                     var neighborCell = _grid[nx, ny];
+
+                    // Block path through windows for SPPA
+                    if (neighborCell.ElementType == MapElementType.Window)
+                        continue;
                     if (!neighborCell.IsWalkable)
                         continue;
 
                     double stepCost = neighborCell.SurfaceWeight;
-                    if (stepCost <= 0) stepCost = 1;
+
+                    if (stepCost <= 0)
+                        stepCost = 1;
+
                     if (IsDiagonalMove(currentNode.X, currentNode.Y, nx, ny) && HeavyDiagonals)
                         stepCost *= SQRT2;
 
@@ -194,6 +216,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         {
             var path = new List<PathNode>();
             var current = endNode;
+
             while (current != null)
             {
                 path.Insert(0, new PathNode(current.X, current.Y));
@@ -225,6 +248,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
         private double CalculateObstacleCoefficient(Point position)
         {
+            int cacheKey = (position.Y << 16) + position.X;
+
+            // Check cache first for performance
+            if (_obstacleCoefficientCache.TryGetValue(cacheKey, out double cachedValue))
+                return cachedValue;
+
             var cell = _grid[position.X, position.Y];
 
             // Static obstacle coefficient
@@ -233,14 +262,13 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 staticCoeff = 1.0;
             else if (cell.ElementType == MapElementType.Door && !cell.IsDoorOpen)
                 staticCoeff = 1.0;
+            else if (cell.ElementType == MapElementType.Window)
+                staticCoeff = 1.0;
 
             // Semi-static obstacle coefficient
             double semiStaticCoeff = 0.0;
             switch (cell.ElementType)
             {
-                case MapElementType.Window:
-                    semiStaticCoeff = 0.3;
-                    break;
                 case MapElementType.Ramp:
                     semiStaticCoeff = cell.RampDifficulty / 100.0;
                     break;
@@ -264,7 +292,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             double weightedSemiStatic = ALPHA_SS * semiStaticCoeff;
             double weightedDynamic = ALPHA_D * dynamicCoeff;
 
-            return Math.Max(weightedStatic, Math.Max(weightedSemiStatic, weightedDynamic));
+            double result = Math.Max(weightedStatic, Math.Max(weightedSemiStatic, weightedDynamic));
+
+            // Store in cache
+            _obstacleCoefficientCache[cacheKey] = result;
+
+            return result;
         }
 
         private double CheckNearbyDynamicObstacles(Point position)
@@ -304,12 +337,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             if (AllowDiagonals)
             {
                 return (new int[] { 0, 1, 0, -1, 1, 1, -1, -1 },
-                        new int[] { -1, 0, 1, 0, -1, 1, 1, -1 });
+                    new int[] { -1, 0, 1, 0, -1, 1, 1, -1 });
             }
             else
             {
                 return (new int[] { 0, 1, 0, -1 },
-                        new int[] { -1, 0, 1, 0 });
+                    new int[] { -1, 0, 1, 0 });
             }
         }
         #endregion
