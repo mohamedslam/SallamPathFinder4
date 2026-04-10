@@ -16,6 +16,7 @@ using SallamPathFinder4.Services.Simulation;
 using SallamPathFinder4.WinForms.Container;
 using SallamPathFinder4.WinForms.Controls;
 using SallamPathFinder4.WinForms.Forms.Dashboard.frmRobotDashboard;
+using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentBrowser;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner;
 using SallamPathFinder4.WinForms.Forms.Settings.frmMapSettings;
 using SallamPathFinder4.WinForms.Forms.Settings.frmObstacleSettings;
@@ -719,6 +720,7 @@ namespace SallamPathFinder4.WinForms.Forms
             lblStatus.Text = "🟢 Operation cancelled. Ready";
         }
         #endregion
+
         #region Obstacle Menu Methods
         private void SetStaticElement(MapElementType element)
         {
@@ -772,6 +774,25 @@ namespace SallamPathFinder4.WinForms.Forms
         {
             var dashboard = new frmRobotDashboard();
             dashboard.Show();
+        }
+        #endregion
+
+        #region Dialog Methods
+        /// <summary>
+        /// Shows the experiment browser form
+        /// </summary>
+        private void ShowExperimentBrowser()
+        {
+            try
+            {
+                var browser = new frmExperimentBrowser();
+                browser.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening Experiment Browser: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
         #endregion
     }

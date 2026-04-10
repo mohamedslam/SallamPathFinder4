@@ -155,6 +155,7 @@ namespace SallamPathFinder4.WinForms.Forms
 
             var experimentsMenu = new ToolStripDropDownButton("📊 Experiments");
             experimentsMenu.DropDownItems.Add("Experiment Designer...", null, (s, e) => ShowExperimentDesigner());
+            experimentsMenu.DropDownItems.Add("Browse Experiments...", null, (s, e) => ShowExperimentBrowser());
             experimentsMenu.DropDownItems.Add("View Results...", null, (s, e) => _viewModel.ShowExperimentViewer());
 
             var testMenu = new ToolStripDropDownButton("🧪 Test");
