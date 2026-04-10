@@ -4,24 +4,27 @@
 /// Description: Abstract base class for all pathfinding algorithms
 /// Implements common functionality following DRY principle
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-06
+/// Date: 2026-04-10
 /// </summary>
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Threading;
-using System.Threading.Tasks;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
+using System.Drawing;
 #endregion
 
 namespace SallamPathFinder4.Core.Algorithms.Base
 {
+    #region Class Documentation
+    /// <summary>
+    /// Abstract base class for all pathfinding algorithms
+    /// Provides common functionality for pathfinding operations
+    /// Implements IDisposable for resource management
+    /// </summary>
+    #endregion
     public abstract class BasePathFinder : IPathFinder
     {
         #region Constants
@@ -45,45 +48,83 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #endregion
 
         #region Constructor
+        /// <summary>
+        /// Initializes a new instance of the BasePathFinder
+        /// </summary>
+        /// <param name="grid">Map grid for pathfinding</param>
         protected BasePathFinder(MapGrid grid)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
             _cts = new CancellationTokenSource();
             _invalidPathCells = new HashSet<Point>();
 
-            Metric = DistanceMetric.Manhattan;
-            AllowDiagonals = true;
-            HeavyDiagonals = false;
-            HeuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
-            SearchLimit = DEFAULT_SEARCH_LIMIT;
-            ShowDebugProgress = false;
+            this.Metric = DistanceMetric.Manhattan;
+            this.AllowDiagonals = true;
+            this.HeavyDiagonals = false;
+            this.HeuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
+            this.SearchLimit = DEFAULT_SEARCH_LIMIT;
+            this.ShowDebugProgress = false;
         }
         #endregion
 
         #region Public Properties - Configuration
+        /// <inheritdoc/>
         public DistanceMetric Metric { get; set; }
+
+        /// <inheritdoc/>
         public bool AllowDiagonals { get; set; }
+
+        /// <inheritdoc/>
         public bool HeavyDiagonals { get; set; }
+
+        /// <inheritdoc/>
         public int HeuristicWeight { get; set; }
+
+        /// <inheritdoc/>
         public int SearchLimit { get; set; }
+
+        /// <inheritdoc/>
         public bool ShowDebugProgress { get; set; }
-        public bool IsStopped => _isStopped;
+
+        /// <inheritdoc/>
+        public bool IsStopped
+        {
+            get
+            {
+                lock (_lockObject)
+                {
+                    return _isStopped;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets the collection of invalid path cells (attempted to walk through walls)
         /// </summary>
-        public IReadOnlyCollection<Point> InvalidPathCells => _invalidPathCells;
+        public IReadOnlyCollection<Point> InvalidPathCells
+        {
+            get
+            {
+                lock (_lockObject)
+                {
+                    return _invalidPathCells;
+                }
+            }
+        }
         #endregion
 
         #region Public Properties - Metrics
+        /// <inheritdoc/>
         public double LastComputationTimeSeconds { get; protected set; }
         #endregion
 
         #region Events
+        /// <inheritdoc/>
         public event PathFinderDebugHandler DebugUpdate;
         #endregion
 
         #region Public Methods - Control
+        /// <inheritdoc/>
         public virtual void Stop()
         {
             lock (_lockObject)
@@ -93,6 +134,7 @@ namespace SallamPathFinder4.Core.Algorithms.Base
             }
         }
 
+        /// <inheritdoc/>
         public virtual void Pause()
         {
             lock (_lockObject)
@@ -101,6 +143,7 @@ namespace SallamPathFinder4.Core.Algorithms.Base
             }
         }
 
+        /// <inheritdoc/>
         public virtual void Resume()
         {
             lock (_lockObject)
@@ -112,6 +155,7 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         /// <summary>
         /// Records an invalid move attempt (trying to walk through a wall)
         /// </summary>
+        /// <param name="cell">The cell that was attempted</param>
         protected void RecordInvalidMove(Point cell)
         {
             lock (_lockObject)
@@ -133,24 +177,46 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #endregion
 
         #region Protected Methods - Heuristic
+        /// <summary>
+        /// Calculates heuristic distance between two points
+        /// </summary>
+        /// <param name="a">First point</param>
+        /// <param name="b">Second point</param>
+        /// <returns>Heuristic distance value</returns>
         protected int CalculateHeuristic(Point a, Point b)
         {
             int dx = Math.Abs(a.X - b.X);
             int dy = Math.Abs(a.Y - b.Y);
-            int weight = HeuristicWeight;
+            int weight = this.HeuristicWeight;
 
-            return Metric switch
+            switch (this.Metric)
             {
-                DistanceMetric.Manhattan => weight * (dx + dy),
-                DistanceMetric.MaxDXDY => weight * Math.Max(dx, dy),
-                DistanceMetric.DiagonalShortcut => (weight * 2) * Math.Min(dx, dy) + weight * Math.Abs(dx - dy),
-                DistanceMetric.Euclidean => (int)(weight * Math.Sqrt(dx * dx + dy * dy)),
-                DistanceMetric.EuclideanNoSQR => weight * (dx * dx + dy * dy),
-                DistanceMetric.Custom => CalculateCustomHeuristic(dx, dy, weight),
-                _ => weight * (dx + dy)
-            };
+                case DistanceMetric.Manhattan:
+                    return weight * (dx + dy);
+
+                case DistanceMetric.MaxDXDY:
+                    return weight * Math.Max(dx, dy);
+
+                case DistanceMetric.DiagonalShortcut:
+                    return (weight * 2) * Math.Min(dx, dy) + weight * Math.Abs(dx - dy);
+
+                case DistanceMetric.Euclidean:
+                    return (int)(weight * Math.Sqrt(dx * dx + dy * dy));
+
+                case DistanceMetric.EuclideanNoSQR:
+                    return weight * (dx * dx + dy * dy);
+
+                case DistanceMetric.Custom:
+                    return CalculateCustomHeuristic(dx, dy, weight);
+
+                default:
+                    return weight * (dx + dy);
+            }
         }
 
+        /// <summary>
+        /// Calculates custom heuristic - can be overridden for specialized needs
+        /// </summary>
         protected virtual int CalculateCustomHeuristic(int dx, int dy, int weight)
         {
             return (int)(weight * Math.Sqrt(dx * dx + dy * dy));
@@ -158,25 +224,35 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #endregion
 
         #region Protected Methods - Cost Calculation
+        /// <summary>
+        /// Calculates step cost between two cells
+        /// </summary>
+        /// <param name="from">Source cell</param>
+        /// <param name="to">Destination cell</param>
+        /// <returns>Cost value</returns>
         protected double CalculateStepCost(Point from, Point to)
         {
             if (!_grid.IsValidCoordinate(to.X, to.Y))
+            {
                 return double.MaxValue;
+            }
 
             var cell = _grid[to.X, to.Y];
 
             if (!cell.IsWalkable)
             {
-                RecordInvalidMove(to);
+                this.RecordInvalidMove(to);
                 return double.MaxValue;
             }
 
             double cost = cell.Cost;
 
             if (cost <= 0 || double.IsInfinity(cost))
+            {
                 cost = 1.0;
+            }
 
-            if (HeavyDiagonals && IsDiagonalMove(from, to))
+            if (this.HeavyDiagonals && IsDiagonalMove(from, to))
             {
                 cost *= SQRT2;
             }
@@ -184,14 +260,20 @@ namespace SallamPathFinder4.Core.Algorithms.Base
             return Math.Max(0.1, Math.Min(1000, cost));
         }
 
+        /// <summary>
+        /// Checks if movement is diagonal
+        /// </summary>
         protected static bool IsDiagonalMove(Point from, Point to)
         {
             return Math.Abs(from.X - to.X) == 1 && Math.Abs(from.Y - to.Y) == 1;
         }
 
+        /// <summary>
+        /// Gets movement directions based on diagonal settings
+        /// </summary>
         protected (int[] dx, int[] dy) GetMovementDirections()
         {
-            if (AllowDiagonals)
+            if (this.AllowDiagonals)
             {
                 return (
                     new int[] { 0, 1, 0, -1, 1, 1, -1, -1 },
@@ -209,6 +291,9 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #endregion
 
         #region Protected Methods - Path Reconstruction
+        /// <summary>
+        /// Reconstructs path from end node to start node
+        /// </summary>
         protected List<PathNode> ReconstructPath<T>(T endNode, Func<T, T> getParent, Func<T, Point> getPosition)
             where T : class
         {
@@ -227,14 +312,21 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #endregion
 
         #region Protected Methods - Debug
+        /// <summary>
+        /// Raises debug event for visualization
+        /// </summary>
         protected void RaiseDebugEvent(int fromX, int fromY, int x, int y, PathFinderNodeType type, int totalCost, int cost)
         {
-            if (ShowDebugProgress)
+            if (this.ShowDebugProgress)
             {
-                DebugUpdate?.Invoke(fromX, fromY, x, y, type, totalCost, cost);
+                var handler = this.DebugUpdate;
+                handler?.Invoke(fromX, fromY, x, y, type, totalCost, cost);
             }
         }
 
+        /// <summary>
+        /// Checks if algorithm should stop (stopped or paused)
+        /// </summary>
         protected bool ShouldStop()
         {
             lock (_lockObject)
@@ -243,6 +335,9 @@ namespace SallamPathFinder4.Core.Algorithms.Base
             }
         }
 
+        /// <summary>
+        /// Checks if cancellation was requested
+        /// </summary>
         protected bool IsCancellationRequested()
         {
             return _cts?.IsCancellationRequested == true;
@@ -250,16 +345,21 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #endregion
 
         #region Abstract Method
+        /// <inheritdoc/>
         public abstract PathResult FindPath(Point start, Point end);
         #endregion
 
         #region IDisposable Implementation
+        /// <inheritdoc/>
         public void Dispose()
         {
-            Dispose(true);
+            this.Dispose(true);
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Disposes resources
+        /// </summary>
         protected virtual void Dispose(bool disposing)
         {
             if (disposing)

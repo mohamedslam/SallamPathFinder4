@@ -8,10 +8,7 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Windows.Forms;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Controls

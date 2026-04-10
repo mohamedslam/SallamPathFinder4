@@ -8,9 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Drawing;
-using System.Windows.Forms;
 using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.WinForms.Forms.Dashboard.frmRobotDashboard.Core;
 using SallamPathFinder4.WinForms.ViewModels;

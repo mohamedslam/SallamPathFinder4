@@ -8,8 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Threading.Tasks;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Splash

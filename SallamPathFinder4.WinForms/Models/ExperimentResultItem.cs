@@ -8,8 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System.Collections.Generic;
-using System.Drawing;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Models

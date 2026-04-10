@@ -8,13 +8,7 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.ML;
-using Microsoft.ML.Data;
 using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.ML.Models;
 #endregion

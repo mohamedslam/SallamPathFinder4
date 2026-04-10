@@ -8,14 +8,11 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using SallamPathFinder4.Core.Algorithms.Base;
 using SallamPathFinder4.Core.Algorithms.Implementations;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Obstacles;
-using SallamPathFinder4.Services.Pathfinding;
 #endregion
 
 namespace SallamPathFinder4.Services.Pathfinding

@@ -8,14 +8,9 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Threading.Tasks;
 using SallamPathFinder4.Core.Helpers;
 using SallamPathFinder4.Core.Interfaces.Services;
-using SallamPathFinder4.Core.Models.Path;
+using System.Drawing;
 #endregion
 
 namespace SallamPathFinder4.Services.Battery

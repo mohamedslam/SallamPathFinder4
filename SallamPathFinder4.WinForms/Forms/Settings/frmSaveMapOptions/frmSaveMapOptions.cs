@@ -8,8 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Windows.Forms;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Settings.frmSaveMapOptions

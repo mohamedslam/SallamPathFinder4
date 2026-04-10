@@ -8,7 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using SallamPathFinder4.Services.Pathfinding;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Interfaces.Services;

@@ -8,11 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Drawing;
-using System.IO;
-using System.Windows.Forms;
-using SallamPathFinder4.Core.Models.Path;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Panels

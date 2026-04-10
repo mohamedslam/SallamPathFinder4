@@ -8,9 +8,8 @@
 #endregion
 
 #region Namespace Imports
-using System.Drawing;
-using System.Threading.Tasks;
 using SallamPathFinder4.Core.Models.Map;
+using System.Drawing;
 #endregion
 
 namespace SallamPathFinder4.Core.Interfaces.Services

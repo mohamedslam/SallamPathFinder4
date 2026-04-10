@@ -8,14 +8,9 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using System.Windows.Forms.DataVisualization.Charting;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmStatisticsViewer.Core;
 using SallamPathFinder4.WinForms.Models;
+using System.Windows.Forms.DataVisualization.Charting;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Experiments.frmStatisticsViewer

@@ -8,16 +8,11 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Threading.Tasks;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.ML.Models;
+using System.Drawing;
+using System.Text.Json;
 #endregion
 
 namespace SallamPathFinder4.ML.Training

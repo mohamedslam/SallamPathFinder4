@@ -8,13 +8,9 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
+using System.Drawing;
 #endregion
 
 namespace SallamPathFinder4.Core.Helpers

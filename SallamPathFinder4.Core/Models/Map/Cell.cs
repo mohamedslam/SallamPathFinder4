@@ -8,7 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Obstacles;
 #endregion

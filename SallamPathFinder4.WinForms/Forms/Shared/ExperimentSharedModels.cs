@@ -8,7 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System.Collections.Generic;
 using SallamPathFinder4.Core.Models.Robot;
 #endregion
 

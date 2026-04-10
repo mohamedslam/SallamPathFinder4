@@ -9,7 +9,6 @@
 
 #region Namespace Imports
 using System.ComponentModel;
-using System.Drawing;
 using System.Runtime.CompilerServices;
 #endregion
 

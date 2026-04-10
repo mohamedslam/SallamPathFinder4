@@ -8,8 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Windows.Forms;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmSaveExperimentSettings.Core;
 using SallamPathFinder4.WinForms.Forms.Shared;
 #endregion

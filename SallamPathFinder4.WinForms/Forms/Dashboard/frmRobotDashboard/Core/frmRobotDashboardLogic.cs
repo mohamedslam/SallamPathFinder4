@@ -8,7 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
 using System.Text.RegularExpressions;
 #endregion
 

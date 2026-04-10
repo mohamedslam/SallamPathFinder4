@@ -8,14 +8,6 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Models.Map;
@@ -24,6 +16,7 @@ using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.Services.Pathfinding;
 using SallamPathFinder4.WinForms.Forms.Shared;
 using SallamPathFinder4.WinForms.ViewModels;
+using System.Text.Json;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Core

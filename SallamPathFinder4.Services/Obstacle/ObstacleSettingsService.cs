@@ -8,12 +8,9 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.IO;
-using System.Text.Json;
-using System.Threading.Tasks;
 using SallamPathFinder4.Core.Interfaces.Services;
 using SallamPathFinder4.Core.Models.Obstacles;
+using System.Text.Json;
 #endregion
 
 namespace SallamPathFinder4.Services.Obstacle
