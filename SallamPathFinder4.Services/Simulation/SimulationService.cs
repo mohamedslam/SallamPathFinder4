@@ -25,6 +25,8 @@ namespace SallamPathFinder4.Services.Simulation
         #region Constants
         private const double DEFAULT_STEP_DELAY_SECONDS = 1.0;
         private const double SQRT2 = 1.4142135623730951;
+        private const int DEFAULT_DETECTION_RANGE = 2;
+        private const double BATTERY_CHECK_INTERVAL_SECONDS = 1.0;  // كل ثانية
         #endregion
 
         #region Private Fields
@@ -68,6 +70,12 @@ namespace SallamPathFinder4.Services.Simulation
         private DoorGroupManager _doorGroupManager;
         private bool _isWaitingForDoor;
         private Point _waitingDoorCell;
+        private bool _isChargingMode;
+        private Point _chargingTargetPoint;
+        private List<PathNode> _originalPath;
+        private int _originalPathIndex;
+        private List<Point> _parkingPoints;
+        private double _lastBatteryCheckTime;
         #endregion
 
         #region Constructor
@@ -114,6 +122,21 @@ namespace SallamPathFinder4.Services.Simulation
         public double TotalDistance => _totalDistance;
         public double TotalWeightedTime => _totalWeightedTime;
         public ObstacleDataCollector DataCollector => _dataCollector;
+        #region Public Properties - Charging
+        /// <summary>
+        /// Indicates whether robot is currently in charging mode (going to/from charging station)
+        /// </summary>
+        public bool IsChargingMode => _isChargingMode;
+
+        /// <summary>
+        /// Gets or sets the parking points list for charging calculation
+        /// </summary>
+        public List<Point> ParkingPoints
+        {
+            get => _parkingPoints;
+            set => _parkingPoints = value ?? new List<Point>();
+        }
+        #endregion
         #endregion
 
         #region Events
@@ -123,6 +146,12 @@ namespace SallamPathFinder4.Services.Simulation
         public event Action<double> BatteryChanged;
         public event Action BatteryEmpty;
         public event Action<int> GoalReached;
+        #region Events - Charging
+        /// <summary>
+        /// Event raised when robot needs to go to charging station
+        /// </summary>
+        public event Action<Point, int> ChargingNeeded;  // Point = nearest parking, int = charging time seconds
+        #endregion
         #endregion
 
         #region Public Methods - Control
@@ -359,6 +388,69 @@ namespace SallamPathFinder4.Services.Simulation
         }
         #endregion
 
+        #region Public Methods - Charging
+
+        /// <summary>
+        /// Sets the original path and current position for later resumption after charging
+        /// </summary>
+        public void SetOriginalPath(IReadOnlyList<PathNode> path, int currentStep)
+        {
+            _originalPath = path?.ToList();
+            _originalPathIndex = currentStep;
+        }
+
+        /// <summary>
+        /// Finds the nearest parking point to the current robot position
+        /// </summary>
+        public Point FindNearestParking()
+        {
+            if (_parkingPoints == null || _parkingPoints.Count == 0)
+            {
+                return Point.Empty;
+            }
+
+            Point currentPos = this.CurrentRobotPosition;
+            Point nearest = _parkingPoints
+                .OrderBy(p => Math.Abs(p.X - currentPos.X) + Math.Abs(p.Y - currentPos.Y))
+                .FirstOrDefault();
+
+            System.Diagnostics.Debug.WriteLine($"[SimulationService] Nearest parking: ({nearest.X},{nearest.Y}) from ({currentPos.X},{currentPos.Y})");
+
+            return nearest;
+        }
+
+        /// <summary>
+        /// Calculates Manhattan distance to nearest parking
+        /// </summary>
+        public int GetDistanceToNearestParking()
+        {
+            Point nearest = FindNearestParking();
+            if (nearest == Point.Empty)
+            {
+                return int.MaxValue;
+            }
+
+            Point currentPos = this.CurrentRobotPosition;
+            return Math.Abs(currentPos.X - nearest.X) + Math.Abs(currentPos.Y - nearest.Y);
+        }
+
+        /// <summary>
+        /// Resumes the original path after charging is complete
+        /// </summary>
+        public void ResumeOriginalPath()
+        {
+            if (_originalPath != null && _originalPathIndex < _originalPath.Count)
+            {
+                var remainingPath = _originalPath.Skip(_originalPathIndex).ToList();
+                this.Start(remainingPath);
+                _isChargingMode = false;
+
+                System.Diagnostics.Debug.WriteLine($"[SimulationService] Resumed original path from step {_originalPathIndex}, remaining {remainingPath.Count} cells");
+            }
+        }
+
+        #endregion
+
         #region Private Methods
         private void CheckAndRaiseGoalReached(Point position)
         {
@@ -524,6 +616,21 @@ namespace SallamPathFinder4.Services.Simulation
         }
         #endregion
 
+        #region Private Methods - Charging Helpers
+
+        /// <summary>
+        /// Calculates average surface weight around a path to a target
+        /// Note: This is a simplified estimation. For production, calculate from actual path.
+        /// </summary>
+        private double EstimateAverageSurfaceWeightToTarget(Point target)
+        {
+            // Simplified estimation - assumes average surface weight of 50%
+            // In production, you would calculate based on actual path
+            return 50.0;
+        }
+
+        #endregion
+
         #region IDisposable Implementation
         public void Dispose()
         {
@@ -609,6 +716,20 @@ namespace SallamPathFinder4.Services.Simulation
             _doorGroupManager.DoorStateChanged += OnDoorStateChanged;
             System.Diagnostics.Debug.WriteLine($"Reinitialized door groups: Found {_doorGroupManager.DoorGroups.Count} groups");
         }
+        #endregion
+
+        #region Private Methods - Thread Safety
+        //private void ExecuteOnUIThread(Action action)
+        //{
+        //    if (mainForm.InvokeRequired)
+        //    {
+        //        mainForm.Invoke(action);
+        //    }
+        //    else
+        //    {
+        //        action();
+        //    }
+        //}
         #endregion
     }
 }

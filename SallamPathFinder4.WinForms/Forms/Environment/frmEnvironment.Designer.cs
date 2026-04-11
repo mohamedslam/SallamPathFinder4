@@ -33,7 +33,7 @@ namespace SallamPathFinder4.WinForms.Forms
         private SallamPathFinder4.WinForms.Controls.MapControl mapControl;
         private SallamPathFinder4.WinForms.Controls.RulerControl rulerTop;
         private SallamPathFinder4.WinForms.Controls.RulerControl rulerLeft;
-        private SallamPathFinder4.WinForms.Panels.RobotPanel robotPanel;
+        public  SallamPathFinder4.WinForms.Panels.RobotPanel robotPanel;
         private SallamPathFinder4.WinForms.Panels.AlgorithmSettingsPanel algorithmSettingsPanel;
         private SallamPathFinder4.WinForms.Panels.GoalsPanel goalsPanel;
         private SallamPathFinder4.WinForms.Panels.ParkingPanel parkingPanel;
@@ -51,7 +51,7 @@ namespace SallamPathFinder4.WinForms.Forms
         #endregion
 
         #region Private Fields - Status Strip Items
-        private System.Windows.Forms.ToolStripStatusLabel lblStatus;
+        public  System.Windows.Forms.ToolStripStatusLabel lblStatus;
         private System.Windows.Forms.ToolStripStatusLabel lblMousePos;
         private System.Windows.Forms.ToolStripStatusLabel lblCellPos;
         private System.Windows.Forms.ToolStripStatusLabel lblRealPos;
@@ -76,8 +76,7 @@ namespace SallamPathFinder4.WinForms.Forms
         private System.Windows.Forms.ToolStripButton btnFindPath;
         private System.Windows.Forms.ToolStripDropDownButton mapMenu;
         #endregion
-
-        #region Constants
+         #region Constants
         private const int RIGHT_PANEL_WIDTH = 340;
         private const int RULER_SIZE = 30;
         private const int DEFAULT_CELL_SIZE = 30;
@@ -229,7 +228,7 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         private void InitializeComponent()
         {
-            CreateMenuAndToolbar();
+   
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(frmEnvironment));
             tlpMapArea = new TableLayoutPanel();
             mapControl = new Controls.MapControl();

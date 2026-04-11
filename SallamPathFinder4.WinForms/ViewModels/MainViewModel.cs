@@ -34,6 +34,8 @@ namespace SallamPathFinder4.WinForms.ViewModels
         #region Constants
         private const int SEARCH_TIMEOUT_MS = 30000;
         private const int SEGMENT_TIMEOUT_MS = 30000;
+        private const double BATTERY_CHECK_INTERVAL_SECONDS = 2.0;  // فحص البطارية كل 2 ثانية
+        private const double AVERAGE_SURFACE_WEIGHT_ESTIMATE = 50.0;  // تقدير متوسط وزن السطح
         #endregion
 
         #region Private Fields
@@ -58,6 +60,17 @@ namespace SallamPathFinder4.WinForms.ViewModels
         private List<bool> _visitedGoals;
         private List<Point> _traveledPath;
         private CancellationTokenSource _searchCts;
+        
+        #region Private Fields - Dynamic Charging
+        private System.Windows.Forms.Timer _batteryCheckTimer;
+        private bool _isChargingInProgress;
+        private Point _chargingParkingPoint;
+        private List<PathNode> _originalFullPath;
+        private int _originalPathStepWhenChargingStarted;
+        private List<Point> _cachedParkingPoints;
+        private DateTime _chargingStartTime;
+        private bool _isWaitingForCharging;
+        #endregion
         #endregion
 
         #region Constructor
@@ -174,6 +187,13 @@ namespace SallamPathFinder4.WinForms.ViewModels
             get => _lastExperimentData;
             set { _lastExperimentData = value; OnPropertyChanged(); }
         }
+        #endregion
+
+        #region Public Properties - Dynamic Charging
+        public bool IsDynamicChargingEnabled { get; private set; }
+        public int ChargingTimeSeconds { get; private set; }
+        public double SafetyMarginPercent { get; private set; }
+        public bool IsChargingInProgress => _isChargingInProgress;
         #endregion
 
         #region Nested Class - Pathfinding Result
@@ -440,7 +460,17 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
             var goalsList = Goals.Select(g => g.Location).ToList();
             _simulationService.SetGoals(goalsList);
-            System.Diagnostics.Debug.WriteLine($"StartSimulation: SetGoals called with {goalsList.Count} goals"); 
+            System.Diagnostics.Debug.WriteLine($"StartSimulation: SetGoals called with {goalsList.Count} goals");
+
+
+            // Load charging settings and start monitoring
+            LoadChargingSettings();
+            UpdateParkingPointsForCharging();
+
+            if (this.IsDynamicChargingEnabled)
+            {
+                StartBatteryMonitoring();
+            }
 
             if (RobotState.BatteryLevel <= 0)
             {
@@ -473,6 +503,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
         public void StopSimulation()
         {
+            StopBatteryMonitoring();
             _simulationService.Stop();
             IsSimulating = false;
             IsPaused = false;
@@ -1021,6 +1052,506 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 batteryService.SetCharge(clampedLevel);
             }
         }
+        #endregion
+
+        #region Private Methods - Charging Settings
+
+        /// <summary>
+        /// Loads dynamic charging settings from robot panel
+        /// </summary>
+        private void LoadChargingSettings()
+        {
+            if (mainForm?.robotPanel != null)
+            {
+                this.IsDynamicChargingEnabled = mainForm.robotPanel.IsDynamicChargingEnabled;
+                this.ChargingTimeSeconds = mainForm.robotPanel.ChargingTimeSeconds;
+                this.SafetyMarginPercent = mainForm.robotPanel.SafetyMarginPercent;
+
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging Settings: Enabled={this.IsDynamicChargingEnabled}, " +
+                    $"Time={this.ChargingTimeSeconds}s, Safety={this.SafetyMarginPercent}%");
+            }
+        }
+
+        /// <summary>
+        /// Updates parking points list for charging calculation
+        /// </summary>
+        private void UpdateParkingPointsForCharging()
+        {
+            _cachedParkingPoints = this.ParkingPoints?.Select(p => p.Location).ToList() ?? new List<Point>();
+
+            if (_simulationService != null && _simulationService is SimulationService simSvc)
+            {
+                simSvc.ParkingPoints = _cachedParkingPoints;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Parking points updated: {_cachedParkingPoints.Count} points");
+        }
+
+        #endregion
+
+        #region Private Methods - Battery Monitoring
+
+        /// <summary>
+        /// Starts the battery monitoring timer for dynamic charging
+        /// </summary>
+        private void StartBatteryMonitoring()
+        {
+            if (_batteryCheckTimer != null)
+            {
+                _batteryCheckTimer.Dispose();
+            }
+
+            _batteryCheckTimer = new System.Windows.Forms.Timer();
+            _batteryCheckTimer.Interval = (int)(BATTERY_CHECK_INTERVAL_SECONDS * 1000);
+            _batteryCheckTimer.Tick += OnBatteryCheckTimerTick;
+            _batteryCheckTimer.Start();
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Battery monitoring started");
+        }
+
+        /// <summary>
+        /// Stops the battery monitoring timer
+        /// </summary>
+        private void StopBatteryMonitoring()
+        {
+            if (_batteryCheckTimer != null)
+            {
+                _batteryCheckTimer.Stop();
+                _batteryCheckTimer.Dispose();
+                _batteryCheckTimer = null;
+            }
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Battery monitoring stopped");
+        }
+
+        /// <summary>
+        /// Timer tick event - checks if battery needs charging
+        /// </summary>
+        private void OnBatteryCheckTimerTick(object sender, EventArgs e)
+        {
+            // Only check if:
+            // 1. Dynamic charging is enabled
+            // 2. Simulation is running
+            // 3. Not already in charging mode
+            // 4. Not waiting for charging to complete
+            // 5. Has a valid path
+            // 6. Has parking points available
+
+            if (!this.IsDynamicChargingEnabled)
+            {
+                return;
+            }
+
+            if (!this.IsSimulating)
+            {
+                return;
+            }
+
+            if (_isChargingInProgress)
+            {
+                return;
+            }
+
+            if (_isWaitingForCharging)
+            {
+                return;
+            }
+
+            if (_currentPathResult?.Path == null || _currentPathResult.Path.Count == 0)
+            {
+                return;
+            }
+
+            if (_cachedParkingPoints == null || _cachedParkingPoints.Count == 0)
+            {
+                return;
+            }
+
+            CheckBatteryAndChargeIfNeeded();
+        }
+
+        #endregion
+
+        #region Private Methods - Charging Decision
+
+        /// <summary>
+        /// Checks if battery is sufficient to continue or needs charging
+        /// </summary>
+        private void CheckBatteryAndChargeIfNeeded()
+        {
+            double currentBattery = this.RobotState.BatteryLevel;
+
+            // Calculate distance to nearest parking
+            int distanceToParking = GetDistanceToNearestParking();
+
+            if (distanceToParking == int.MaxValue)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] No parking points available for charging");
+                return;
+            }
+
+            // Calculate battery needed to reach parking
+            double neededBattery = _batteryService.CalculateBatteryNeededForDistance(
+                distanceToParking,
+                AVERAGE_SURFACE_WEIGHT_ESTIMATE,
+                this.RobotState.Speed);
+
+            double requiredBattery = neededBattery + this.SafetyMarginPercent;
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Battery Check: Current={currentBattery:F1}%, " +
+                $"Needed={neededBattery:F1}%, Required={requiredBattery:F1}%, " +
+                $"Distance={distanceToParking} cells");
+
+            // Check if battery is too low to continue safely
+            if (currentBattery <= requiredBattery)
+            {
+                // Need to charge now
+                InitiateChargingProcess();
+            }
+        }
+
+        /// <summary>
+        /// Gets Manhattan distance to nearest parking point
+        /// </summary>
+        private int GetDistanceToNearestParking()
+        {
+            Point currentPos = this.RobotState.Position;
+            Point nearest = _cachedParkingPoints
+                .OrderBy(p => Math.Abs(p.X - currentPos.X) + Math.Abs(p.Y - currentPos.Y))
+                .FirstOrDefault();
+
+            if (nearest == Point.Empty)
+            {
+                return int.MaxValue;
+            }
+
+            return Math.Abs(currentPos.X - nearest.X) + Math.Abs(currentPos.Y - nearest.Y);
+        }
+
+        /// <summary>
+        /// Gets the nearest parking point coordinates
+        /// </summary>
+        private Point GetNearestParkingPoint()
+        {
+            Point currentPos = this.RobotState.Position;
+            return _cachedParkingPoints
+                .OrderBy(p => Math.Abs(p.X - currentPos.X) + Math.Abs(p.Y - currentPos.Y))
+                .FirstOrDefault();
+        }
+
+        #endregion
+
+        #region Private Methods - Charging Process
+
+        /// <summary>
+        /// Initiates the charging process: robot goes to parking, charges, then returns
+        /// </summary>
+        private async void InitiateChargingProcess()
+        {
+            if (_isChargingInProgress)
+            {
+                return;
+            }
+
+            _isChargingInProgress = true;
+            _chargingParkingPoint = GetNearestParkingPoint();
+
+            if (_chargingParkingPoint == Point.Empty)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] No parking point found for charging");
+                _isChargingInProgress = false;
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] INITIATING CHARGING PROCESS");
+            System.Diagnostics.Debug.WriteLine($"  - Parking Point: ({_chargingParkingPoint.X},{_chargingParkingPoint.Y})");
+            System.Diagnostics.Debug.WriteLine($"  - Charging Time: {ChargingTimeSeconds} seconds");
+            System.Diagnostics.Debug.WriteLine($"  - Current Position: ({this.RobotState.Position.X},{this.RobotState.Position.Y})");
+
+            // Save current path progress to resume later
+            _originalFullPath = _currentPathResult?.Path?.ToList();
+            _originalPathStepWhenChargingStarted = GetCurrentPathIndex();
+
+            // Pause current simulation
+            _simulationService.Pause();
+
+            // Create charging path from current position to parking
+            var chargingPath = await CreateChargingPathAsync(this.RobotState.Position, _chargingParkingPoint);
+
+            if (chargingPath == null || chargingPath.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] Failed to create charging path");
+                _isChargingInProgress = false;
+                _simulationService.Resume();
+                return;
+            }
+
+            // Draw charging path in LightBlue
+            var coloredChargingPath = new ColoredPath(chargingPath, Color.LightBlue, false);
+            var allPaths = new List<ColoredPath> { coloredChargingPath };
+
+            // Also show original return path (green, thinner)
+            if (_originalFullPath != null && _originalFullPath.Count > 0)
+            {
+                var returnPath = CreateReturnPathToParking();
+                if (returnPath != null && returnPath.Count > 0)
+                {
+                    var greenPath = new ColoredPath(returnPath, Color.Green, true);
+                    allPaths.Add(greenPath);
+                }
+            }
+
+            _mapControl.DrawColoredPaths(allPaths);
+
+            // Start simulation on charging path
+            _simulationService.Start(chargingPath);
+            _isWaitingForCharging = true;
+
+            // Update UI
+            ExecuteOnUIThread(() =>
+            {
+                mainForm.lblStatus.Text = $"🔋 Battery low! Going to charging station at ({_chargingParkingPoint.X},{_chargingParkingPoint.Y})";
+            });
+
+            // Wait for robot to reach parking
+            await WaitForRobotToReachParking();
+        }
+
+        /// <summary>
+        /// Gets the current index in the original path
+        /// </summary>
+        private int GetCurrentPathIndex()
+        {
+            if (_simulationService is SimulationService simSvc)
+            {
+                // This would need to be exposed or tracked
+                // For now, estimate based on position
+                if (_originalFullPath != null)
+                {
+                    Point currentPos = this.RobotState.Position;
+                    for (int i = 0; i < _originalFullPath.Count; i++)
+                    {
+                        if (_originalFullPath[i].X == currentPos.X && _originalFullPath[i].Y == currentPos.Y)
+                        {
+                            return i;
+                        }
+                    }
+                }
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Creates a path from current position to parking point
+        /// </summary>
+        private async Task<List<PathNode>> CreateChargingPathAsync(Point from, Point to)
+        {
+            var finder = new AlgorithmFactory(_mapGrid).Create(AlgorithmType.AStar);
+
+            if (finder == null)
+            {
+                return null;
+            }
+
+            finder.AllowDiagonals = true;
+            finder.Metric = DistanceMetric.Euclidean;
+
+            var result = await Task.Run(() => finder.FindPath(from, to));
+
+            if (result.Success && result.Path != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging path created: {result.Path.Count} cells");
+                return result.Path.ToList();
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Creates the return path from last goal to parking (green, thinner)
+        /// </summary>
+        private List<PathNode> CreateReturnPathToParking()
+        {
+            if (_originalFullPath == null || _originalFullPath.Count == 0)
+            {
+                return null;
+            }
+
+            // Find the last point before charging started that is near a goal
+            // Simplified: use current position as start for return path display
+            Point currentPos = this.RobotState.Position;
+            Point parkingPoint = _chargingParkingPoint;
+
+            // Create a direct Manhattan path for display
+            var path = new List<PathNode>();
+            path.Add(new PathNode(currentPos.X, currentPos.Y));
+
+            // Simple straight line approximation for display
+            int dx = Math.Sign(parkingPoint.X - currentPos.X);
+            int dy = Math.Sign(parkingPoint.Y - currentPos.Y);
+
+            int x = currentPos.X;
+            int y = currentPos.Y;
+
+            while (x != parkingPoint.X || y != parkingPoint.Y)
+            {
+                if (x != parkingPoint.X) x += dx;
+                if (y != parkingPoint.Y) y += dy;
+                path.Add(new PathNode(x, y));
+            }
+
+            return path;
+        }
+
+        /// <summary>
+        /// Waits for robot to reach the parking point
+        /// </summary>
+        private async Task WaitForRobotToReachParking()
+        {
+            while (_isWaitingForCharging && _simulationService.IsRunning)
+            {
+                if (this.RobotState.Position.X == _chargingParkingPoint.X &&
+                    this.RobotState.Position.Y == _chargingParkingPoint.Y)
+                {
+                    // Robot reached parking
+                    await StartCharging();
+                    return;
+                }
+
+                await Task.Delay(500);
+            }
+        }
+
+        #endregion
+
+        #region Private Methods - Charging Execution
+
+        /// <summary>
+        /// Starts the charging process at parking point
+        /// </summary>
+        private async Task StartCharging()
+        {
+            _simulationService.Pause();
+            _isWaitingForCharging = false;
+
+            _chargingStartTime = DateTime.Now;
+            DateTime chargingEndTime = _chargingStartTime.AddSeconds(ChargingTimeSeconds);
+
+            ExecuteOnUIThread(() =>
+            {
+                mainForm.lblStatus.Text = $"🔋 Charging... Will resume at {chargingEndTime:HH:mm:ss}";
+            });
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging started at {_chargingStartTime:HH:mm:ss}, will end at {chargingEndTime:HH:mm:ss}");
+
+            // Wait for charging time
+            await Task.Delay(ChargingTimeSeconds * 1000);
+
+            // Charging complete - set battery to 100%
+            _batteryService.SetFullCharge();
+            this.RobotState.BatteryLevel = 100;
+
+            ExecuteOnUIThread(() =>
+            {
+                mainForm.lblStatus.Text = $"✅ Charging complete! Resuming path...";
+            });
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Charging complete, resuming path");
+
+            // Resume original path
+            await ResumeOriginalPathAfterCharging();
+        }
+
+        /// <summary>
+        /// Resumes the original path after charging is complete
+        /// </summary>
+        private async Task ResumeOriginalPathAfterCharging()
+        {
+            if (_originalFullPath == null || _originalPathStepWhenChargingStarted >= _originalFullPath.Count)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] No original path to resume");
+                _isChargingInProgress = false;
+                return;
+            }
+
+            // Get the point where robot should resume
+            Point resumePoint = new Point(_originalFullPath[_originalPathStepWhenChargingStarted].X,
+                                          _originalFullPath[_originalPathStepWhenChargingStarted].Y);
+
+            // Create return path from parking to resume point
+            var returnPath = await CreateChargingPathAsync(_chargingParkingPoint, resumePoint);
+
+            if (returnPath == null || returnPath.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] Failed to create return path");
+                _isChargingInProgress = false;
+                _simulationService.Resume();
+                return;
+            }
+
+            // Draw return path in LightBlue
+            var coloredReturnPath = new ColoredPath(returnPath, Color.LightBlue, false);
+            _mapControl.DrawColoredPaths(new List<ColoredPath> { coloredReturnPath });
+
+            // Start simulation on return path
+            _simulationService.Stop();
+            _simulationService.Start(returnPath);
+
+            // Wait for robot to reach resume point
+            await WaitForRobotToReachResumePoint(resumePoint);
+        }
+
+        /// <summary>
+        /// Waits for robot to reach the resume point on the original path
+        /// </summary>
+        private async Task WaitForRobotToReachResumePoint(Point resumePoint)
+        {
+            while (_simulationService.IsRunning)
+            {
+                if (this.RobotState.Position.X == resumePoint.X && this.RobotState.Position.Y == resumePoint.Y)
+                {
+                    // Robot reached resume point - continue with remaining original path
+                    var remainingPath = _originalFullPath.Skip(_originalPathStepWhenChargingStarted).ToList();
+
+                    if (remainingPath.Count > 0)
+                    {
+                        _simulationService.Stop();
+                        _simulationService.Start(remainingPath);
+                    }
+
+                    // Redraw original path
+                    _mapControl.DrawPath(_originalFullPath, Color.Gold);
+
+                    _isChargingInProgress = false;
+
+                    ExecuteOnUIThread(() =>
+                    {
+                        mainForm.lblStatus.Text = $"✅ Path resumed! Battery: 100%";
+                    });
+
+                    System.Diagnostics.Debug.WriteLine("[MainViewModel] Path resumed after charging");
+                    return;
+                }
+
+                await Task.Delay(500);
+            }
+
+            _isChargingInProgress = false;
+        }
+
+        #region Private Methods - Thread Safety
+        private void ExecuteOnUIThread(Action action)
+        {
+            if (mainForm.InvokeRequired)
+            {
+                mainForm.Invoke(action);
+            }
+            else
+            {
+                action();
+            }
+        }
+        #endregion
         #endregion
     }
 

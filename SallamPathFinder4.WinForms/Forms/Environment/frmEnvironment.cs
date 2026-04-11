@@ -52,6 +52,7 @@ namespace SallamPathFinder4.WinForms.Forms
         {
             try
             {
+                CreateMenuAndToolbar();
                 InitializeComponent();
                 InitializeCustomComponents();
             }

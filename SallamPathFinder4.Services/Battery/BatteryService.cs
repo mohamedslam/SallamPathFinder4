@@ -27,7 +27,8 @@ namespace SallamPathFinder4.Services.Battery
         private const double DEFAULT_BASE_CONSUMPTION = 1.0;
         private const double MIN_BATTERY_THRESHOLD = 0;
         private const double LOW_BATTERY_WARNING = 20.0;
-        private const double CRITICAL_BATTERY_WARNING = 10.0;
+        private const double CRITICAL_BATTERY_WARNING = 10.0; 
+        private const double BATTERY_FULL_PERCENT = 100.0;
         #endregion
 
         #region Private Fields
@@ -35,7 +36,7 @@ namespace SallamPathFinder4.Services.Battery
         private readonly double _capacity;
         private readonly double _baseConsumptionPerCell;
         private readonly object _lockObject = new object();
-        #endregion
+        #endregion 
 
         #region Constructor
         /// <summary>
@@ -201,6 +202,98 @@ namespace SallamPathFinder4.Services.Battery
                 return _currentCharge <= MIN_BATTERY_THRESHOLD;
             }
         }
+        #endregion
+
+        #region Public Methods - Battery Calculation for Charging
+
+        /// <summary>
+        /// Calculates the battery percentage needed to reach a target point
+        /// </summary>
+        /// <param name="distanceInCells">Distance from current position to target in cells</param>
+        /// <param name="averageSurfaceWeight">Average surface weight along the path (1-100)</param>
+        /// <param name="robotSpeed">Robot speed in cm/s</param>
+        /// <returns>Battery percentage needed (0-100)</returns>
+        public double CalculateBatteryNeededForDistance(double distanceInCells, double averageSurfaceWeight, double robotSpeed)
+        {
+            if (distanceInCells <= 0)
+            {
+                return 0;
+            }
+
+            double surfaceFactor = Math.Max(0.1, averageSurfaceWeight / 100.0);
+            double speedFactor = Math.Max(0.5, Math.Min(2.0, robotSpeed / 10.0));
+
+            // Base consumption formula
+            double consumption = _baseConsumptionPerCell * distanceInCells * surfaceFactor * speedFactor;
+
+            // Convert consumption to percentage (based on capacity)
+            double percentageNeeded = (consumption / _capacity) * 100.0;
+
+            return Math.Min(BATTERY_FULL_PERCENT, Math.Max(0, percentageNeeded));
+        }
+
+        /// <summary>
+        /// Checks if current battery can reach the nearest parking point
+        /// </summary>
+        /// <param name="distanceToParkingCells">Distance to nearest parking in cells</param>
+        /// <param name="averageSurfaceWeight">Average surface weight along the path</param>
+        /// <param name="robotSpeed">Robot speed in cm/s</param>
+        /// <param name="safetyMarginPercent">Safety margin percentage (5-20%)</param>
+        /// <returns>True if battery is sufficient to reach parking with safety margin</returns>
+        public bool CanReachParking(
+            double distanceToParkingCells,
+            double averageSurfaceWeight,
+            double robotSpeed,
+            double safetyMarginPercent)
+        {
+            double neededBattery = CalculateBatteryNeededForDistance(distanceToParkingCells, averageSurfaceWeight, robotSpeed);
+            double requiredBattery = neededBattery + safetyMarginPercent;
+
+            lock (_lockObject)
+            {
+                bool canReach = _currentCharge >= requiredBattery;
+
+                System.Diagnostics.Debug.WriteLine($"[BatteryService] CanReachParking: Distance={distanceToParkingCells:F1} cells, " +
+                    $"Needed={neededBattery:F1}%, Safety={safetyMarginPercent:F1}%, " +
+                    $"Required={requiredBattery:F1}%, Current={_currentCharge:F1}%, CanReach={canReach}");
+
+                return canReach;
+            }
+        }
+
+        /// <summary>
+        /// Gets the battery percentage needed as a formatted string
+        /// </summary>
+        public string GetBatteryNeededText(double distanceInCells, double averageSurfaceWeight, double robotSpeed)
+        {
+            double needed = CalculateBatteryNeededForDistance(distanceInCells, averageSurfaceWeight, robotSpeed);
+            double batteriesNeeded = (needed / BATTERY_FULL_PERCENT) * 3.0; // Assuming 3 batteries = 100%
+
+            return $"{needed:F1}% ({batteriesNeeded:F1} batteries)";
+        }
+
+        /// <summary>
+        /// Formats battery level as percentage and battery count
+        /// </summary>
+        public string FormatBatteryWithBatteries(double batteryPercent, double totalBatteries = 3.0)
+        {
+            double batteriesLeft = (batteryPercent / BATTERY_FULL_PERCENT) * totalBatteries;
+            return $"{batteryPercent:F1}% ({batteriesLeft:F1}/{totalBatteries:F0} batteries)";
+        }
+
+        /// <summary>
+        /// Sets battery charge to full (100%)
+        /// </summary>
+        public void SetFullCharge()
+        {
+            lock (_lockObject)
+            {
+                _currentCharge = _capacity;
+                BatteryChanged?.Invoke(_currentCharge);
+                System.Diagnostics.Debug.WriteLine($"[BatteryService] Battery set to FULL: {_currentCharge:F1}%");
+            }
+        }
+
         #endregion
     }
 }
