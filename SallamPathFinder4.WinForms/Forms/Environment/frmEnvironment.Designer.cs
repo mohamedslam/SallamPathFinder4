@@ -255,7 +255,7 @@ namespace SallamPathFinder4.WinForms.Forms
             SuspendLayout();
             // 
             // Table Layout Panel
-            this.tlpMapArea = new System.Windows.Forms.TableLayoutPanel();
+            // 
             this.tlpMapArea.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tlpMapArea.ColumnCount = 2;
             this.tlpMapArea.RowCount = 2;
