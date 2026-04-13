@@ -53,22 +53,60 @@ namespace SallamPathFinder4.Services.Pathfinding
         #endregion
 
         #region Public Methods
+        #region Public Methods
+
         /// <summary>
-        /// Creates a pathfinder instance for the specified algorithm type
+        /// Creates a pathfinder instance for the specified algorithm type (with default Manhattan metric)
         /// </summary>
         public IPathFinder Create(AlgorithmType type)
         {
-            return type switch
+            return Create(type, DistanceMetric.Manhattan);
+        }
+
+        /// <summary>
+        /// Creates a pathfinder instance for the specified algorithm type with distance metric
+        /// </summary>
+        /// <summary>
+        /// Creates a pathfinder instance for the specified algorithm type with distance metric
+        /// </summary>
+        public IPathFinder Create(AlgorithmType type, DistanceMetric metric)
+        {
+            IPathFinder finder;
+
+            switch (type)
             {
-                AlgorithmType.AStar => new AStarFinder(_mapGrid),
-                AlgorithmType.SPPA => new SPPAFinder(_mapGrid),
-                AlgorithmType.SPPA_DL => new SPPA_DLFinder(_mapGrid, _dynamicObstacles, false, false, 2.0, 0.3),
-                AlgorithmType.ACO => new ACOFinder(_mapGrid),
-                AlgorithmType.DStar => new DStarFinder(_mapGrid),
-                AlgorithmType.KNN => new KNNFinder(_mapGrid),
-                AlgorithmType.BruteForce => new BruteForceFinder(_mapGrid),
-                _ => new AStarFinder(_mapGrid)
-            };
+                case AlgorithmType.AStar:
+                    finder = new AStarFinder(_mapGrid);
+                    break;
+                case AlgorithmType.SPPA:
+                    finder = new SPPAFinder(_mapGrid);
+                    break;
+                case AlgorithmType.SPPA_DL:
+                    finder = new SPPA_DLFinder(_mapGrid, _dynamicObstacles, false, false, 2.0, 0.3);
+                    break;
+                case AlgorithmType.ACO:
+                    finder = new ACOFinder(_mapGrid);
+                    break;
+                case AlgorithmType.DStar:
+                    finder = new DStarFinder(_mapGrid);
+                    break;
+                case AlgorithmType.KNN:
+                    finder = new KNNFinder(_mapGrid);
+                    break;
+                case AlgorithmType.BruteForce:
+                    finder = new BruteForceFinder(_mapGrid);
+                    break;
+                default:
+                    finder = new AStarFinder(_mapGrid);
+                    break;
+            }
+
+            if (finder != null)
+            {
+                finder.Metric = metric;
+            }
+
+            return finder;
         }
 
         /// <summary>
@@ -80,7 +118,7 @@ namespace SallamPathFinder4.Services.Pathfinding
             {
                 return new SPPA_DLFinder(_mapGrid, _dynamicObstacles, useNeuralNetwork, collectTrainingData, learningRate, predictionWeight);
             }
-            return Create(type);
+            return Create(type);  // الآن تعمل لأن Create(type) موجودة
         }
 
         /// <summary>
@@ -89,16 +127,20 @@ namespace SallamPathFinder4.Services.Pathfinding
         public IPathFinder Create(AlgorithmType type, DistanceMetric metric,
             bool allowDiagonals, bool heavyDiagonals, int heuristicWeight, int searchLimit)
         {
-            var finder = Create(type);
+            var finder = Create(type, metric);
 
-            finder.Metric = metric;
-            finder.AllowDiagonals = allowDiagonals;
-            finder.HeavyDiagonals = heavyDiagonals;
-            finder.HeuristicWeight = heuristicWeight;
-            finder.SearchLimit = searchLimit;
+            if (finder != null)
+            {
+                finder.AllowDiagonals = allowDiagonals;
+                finder.HeavyDiagonals = heavyDiagonals;
+                finder.HeuristicWeight = heuristicWeight;
+                finder.SearchLimit = searchLimit;
+            }
 
             return finder;
         }
+
+        #endregion
 
         /// <summary>
         /// Checks if the specified algorithm is available

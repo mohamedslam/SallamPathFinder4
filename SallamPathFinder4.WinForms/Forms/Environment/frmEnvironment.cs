@@ -32,6 +32,21 @@ namespace SallamPathFinder4.WinForms.Forms
         private const int DETECTION_ZONE_INTERVAL_MS = 100;
         private const int DEFAULT_GRID_WIDTH = 100;
         private const int DEFAULT_GRID_HEIGHT = 100;
+            #region Constants 
+
+            // Keyboard shortcuts
+            private const Keys SHORTCUT_NEW_MAP = Keys.Control | Keys.N;
+            private const Keys SHORTCUT_OPEN_MAP = Keys.Control | Keys.O;
+            private const Keys SHORTCUT_SAVE_MAP = Keys.Control | Keys.S;
+            private const Keys SHORTCUT_FIND_PATH = Keys.Control | Keys.F;
+            private const Keys SHORTCUT_NEW_EXPERIMENT = Keys.Control | Keys.Shift | Keys.N;
+            private const Keys SHORTCUT_SET_START_POINT = Keys.Control | Keys.Shift | Keys.S;
+            private const Keys SHORTCUT_ORDER_GOALS = Keys.Control | Keys.Shift | Keys.G;
+            private const Keys SHORTCUT_START_SIMULATION = Keys.F5;
+            private const Keys SHORTCUT_PAUSE_SIMULATION = Keys.F6;
+            private const Keys SHORTCUT_STOP_SIMULATION = Keys.F7;
+            #endregion
+
         #endregion
 
         #region Private Fields
@@ -45,11 +60,15 @@ namespace SallamPathFinder4.WinForms.Forms
         private bool _isMovingParking;
         private Random _random;
         private ISimulationService _simulationService;
-
             #region Private Fields - Dynamic Charging
             private bool _isDynamicChargingEnabled;
             private int _chargingTimeSeconds;
             private double _safetyMarginPercent;
+            #endregion
+            #region Private Fields - Shortcuts
+            private bool _isSettingStartPoint;
+            private bool _orderGoalsByDistance;
+            private List<GoalPoint> _originalGoalsOrder;
             #endregion
         #endregion
 
@@ -218,6 +237,7 @@ namespace SallamPathFinder4.WinForms.Forms
             if (_viewModel == null || algorithmSettingsPanel == null) return;
 
             _viewModel.SelectedAlgorithm = algorithmSettingsPanel.CurrentAlgorithm;
+            _viewModel.SelectedMetric = algorithmSettingsPanel.SelectedMetric;  // ← NEW
             _viewModel.AllowDiagonals = algorithmSettingsPanel.AllowDiagonals;
             _viewModel.HeavyDiagonals = algorithmSettingsPanel.HeavyDiagonals;
             _viewModel.HeuristicWeight = algorithmSettingsPanel.HeuristicWeight;
@@ -452,6 +472,20 @@ namespace SallamPathFinder4.WinForms.Forms
         private void MapControl_MouseClick(object sender, MouseEventArgs e)
         {
             var cell = mapControl.GetGridCellAtPoint(e.Location);
+            if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
+
+            // ========== Handle set start point mode ==========
+            if (_isSettingStartPoint)
+            {
+                mapControl.SetCurrentStartPoint(cell);
+                mapControl.RobotPosition = cell;
+                _viewModel.RobotState.Position = cell;
+                _isSettingStartPoint = false;
+                mapControl.Cursor = Cursors.Default;
+                lblStatus.Text = $"🟢 Start point set to ({cell.X},{cell.Y})";
+                mapControl.Invalidate();
+                return;
+            }
             if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
 
             if (_isAddingGoal)
@@ -751,14 +785,18 @@ namespace SallamPathFinder4.WinForms.Forms
             base.OnFormClosing(e);
         }
 
+        #region Form Events
+
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            // ESC - Cancel current operation
             if (keyData == Keys.Escape)
             {
                 CancelCurrentDrawMode();
                 return true;
             }
 
+            // Manual robot control (WASD + QE)
             switch (keyData)
             {
                 case Keys.W:
@@ -772,8 +810,283 @@ namespace SallamPathFinder4.WinForms.Forms
                     _viewModel.RobotState.Angle = mapControl.RobotAngle;
                     return true;
             }
+
+            // ========== KEYBOARD SHORTCUTS ==========
+
+            // File operations
+            if (keyData == SHORTCUT_NEW_MAP)
+            {
+                NewMap();
+                return true;
+            }
+
+            if (keyData == SHORTCUT_OPEN_MAP)
+            {
+                OpenMap();
+                return true;
+            }
+
+            if (keyData == SHORTCUT_SAVE_MAP)
+            {
+                SaveMap();
+                return true;
+            }
+
+            // Pathfinding
+            if (keyData == SHORTCUT_FIND_PATH)
+            {
+                _viewModel?.FindPathAsync();
+                return true;
+            }
+
+            // New experiment (clear everything)
+            if (keyData == SHORTCUT_NEW_EXPERIMENT)
+            {
+                NewExperiment();
+                return true;
+            }
+
+            // Set start point
+            if (keyData == SHORTCUT_SET_START_POINT)
+            {
+                StartSetStartPointMode();
+                return true;
+            }
+
+            // Order goals by distance
+            if (keyData == SHORTCUT_ORDER_GOALS)
+            {
+                ToggleOrderGoalsByDistance();
+                return true;
+            }
+
+            // Simulation control
+            if (keyData == SHORTCUT_START_SIMULATION)
+            {
+                _viewModel?.StartSimulation();
+                return true;
+            }
+
+            if (keyData == SHORTCUT_PAUSE_SIMULATION)
+            {
+                _viewModel?.TogglePause();
+                return true;
+            }
+
+            if (keyData == SHORTCUT_STOP_SIMULATION)
+            {
+                _viewModel?.StopSimulation();
+                return true;
+            }
+
+            // Algorithm selection (Ctrl+1 to Ctrl+7)
+            if (keyData == (Keys.Control | Keys.D1))
+            {
+                SelectAlgorithm(0); // A*
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D2))
+            {
+                SelectAlgorithm(1); // SPPA
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D3))
+            {
+                SelectAlgorithm(2); // SPPA-DL
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D4))
+            {
+                SelectAlgorithm(3); // ACO
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D5))
+            {
+                SelectAlgorithm(4); // D*
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D6))
+            {
+                SelectAlgorithm(5); // KNN
+                return true;
+            }
+
+            if (keyData == (Keys.Control | Keys.D7))
+            {
+                SelectAlgorithm(6); // Brute Force
+                return true;
+            }
+
             return base.ProcessCmdKey(ref msg, keyData);
         }
+        #region Shortcut Methods
+
+        /// <summary>
+        /// Creates a new experiment (clears all paths, resets battery, clears goals and parking)
+        /// </summary>
+        private void NewExperiment()
+        {
+            var result = MessageBox.Show(
+                "Start a new experiment?\n\nThis will clear all paths, reset battery, and clear all goals and parking points.",
+                "New Experiment",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result != DialogResult.Yes)
+            {
+                return;
+            }
+
+            // Clear all paths from map
+            mapControl.ClearPaths();
+
+            // Clear all goals
+            mapControl.ClearGoals();
+            _viewModel?.Goals?.Clear();
+
+            // Clear all parking points
+            mapControl.ClearParkingPoints();
+            _viewModel?.ParkingPoints?.Clear();
+
+            // Reset start points
+            mapControl.ResetStartPoints();
+            mapControl.AddStartPoint(new Point(10, 10));
+
+            // Reset robot position
+            mapControl.RobotPosition = new Point(10, 10);
+            mapControl.RobotAngle = 0;
+
+            // Reset battery to 100%
+            _viewModel?.SetBatteryLevel(100);
+            _viewModel?.ResetChargingStatistics();
+
+            // Clear path display panel
+            pathDisplayPanel?.ClearPath();
+
+            // Reset status
+            lblStatus.Text = "🟢 New experiment started. Ready.";
+
+            // Refresh UI
+            RefreshGoalsList();
+            RefreshParkingList();
+            mapControl.Invalidate();
+
+            System.Diagnostics.Debug.WriteLine("[Shortcut] New experiment started");
+        }
+
+        /// <summary>
+        /// Starts set start point mode (user clicks on map to set robot start position)
+        /// </summary>
+        private void StartSetStartPointMode()
+        {
+            CancelCurrentDrawMode();
+            _isSettingStartPoint = true;
+            mapControl.Cursor = Cursors.Cross;
+            lblStatus.Text = "🟡 Click on map to set robot start point (Press ESC to cancel)";
+            System.Diagnostics.Debug.WriteLine("[Shortcut] Set start point mode activated");
+        }
+
+        /// <summary>
+        /// Selects algorithm by index
+        /// </summary>
+        /// <summary>
+        /// Selects algorithm by index
+        /// </summary>
+        /// <summary>
+        /// Selects algorithm by index
+        /// </summary>
+        private void SelectAlgorithm(int algorithmIndex)
+        {
+            if (algorithmSettingsPanel != null)
+            {
+                algorithmSettingsPanel.SetAlgorithmByIndex(algorithmIndex);
+                System.Diagnostics.Debug.WriteLine($"[Shortcut] Algorithm selected: index {algorithmIndex}");
+            }
+        }
+
+        /// <summary>
+        /// Toggles ordering of goals by distance from start point
+        /// </summary>
+        private void ToggleOrderGoalsByDistance()
+        {
+            if (_viewModel == null)
+            {
+                return;
+            }
+
+            _orderGoalsByDistance = !_orderGoalsByDistance;
+
+            if (_orderGoalsByDistance)
+            {
+                OrderGoalsByDistance();
+                lblStatus.Text = "🟢 Goals ordered by distance from start point";
+                System.Diagnostics.Debug.WriteLine("[Shortcut] Order goals by distance: ENABLED");
+            }
+            else
+            {
+                RestoreOriginalGoalsOrder();
+                lblStatus.Text = "🟢 Goals restored to original order";
+                System.Diagnostics.Debug.WriteLine("[Shortcut] Order goals by distance: DISABLED");
+            }
+        }
+
+        /// <summary>
+        /// Orders goals by distance from current robot start point
+        /// </summary>
+        private void OrderGoalsByDistance()
+        {
+            if (_viewModel?.Goals == null || _viewModel.Goals.Count == 0)
+            {
+                return;
+            }
+
+            Point startPoint = mapControl.RobotPosition;
+
+            var orderedGoals = _viewModel.Goals
+                .OrderBy(g => Math.Abs(g.Location.X - startPoint.X) + Math.Abs(g.Location.Y - startPoint.Y))
+                .ToList();
+
+            // Save original order if not already saved
+            if (_originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
+            {
+                _originalGoalsOrder = _viewModel.Goals.ToList();
+            }
+
+            _viewModel.Goals.Clear();
+            foreach (var goal in orderedGoals)
+            {
+                _viewModel.Goals.Add(goal);
+            }
+
+            RefreshGoalsList();
+        }
+
+        /// <summary>
+        /// Restores original goals order
+        /// </summary>
+        private void RestoreOriginalGoalsOrder()
+        {
+            if (_viewModel?.Goals == null || _originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
+            {
+                return;
+            }
+
+            _viewModel.Goals.Clear();
+            foreach (var goal in _originalGoalsOrder)
+            {
+                _viewModel.Goals.Add(goal);
+            }
+
+            RefreshGoalsList();
+        }
+
+        #endregion
+        #endregion
 
         private void CancelCurrentDrawMode()
         {

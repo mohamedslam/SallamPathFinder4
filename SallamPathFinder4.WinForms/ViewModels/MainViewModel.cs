@@ -368,7 +368,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
                 System.Diagnostics.Debug.WriteLine($"Processing goal {i + 1}/{goalsList.Count} at ({goalsList[i].Location.X},{goalsList[i].Location.Y})");
 
-                var finder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm);
+                var finder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric);
 
                 if (finder == null)
                 {
@@ -444,7 +444,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 {
                     System.Diagnostics.Debug.WriteLine($"Finding return path to parking at ({nearestParking.Location.X},{nearestParking.Location.Y})");
 
-                    var returnFinder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm);
+                    var returnFinder =  new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric); 
 
                     if (returnFinder != null)
                     {
@@ -781,7 +781,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
             try
             {
-                var finder = new AlgorithmFactory(_mapGrid).Create(type);
+                var finder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric);
                 if (finder == null)
                 {
                     result.Success = false;
@@ -1584,7 +1584,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
         /// </summary>
         private async Task<List<PathNode>> CreateChargingPathAsync(Point from, Point to)
         {
-            var finder = new AlgorithmFactory(_mapGrid).Create(AlgorithmType.SPPA);
+            var finder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric);
 
             if (finder == null)
             {

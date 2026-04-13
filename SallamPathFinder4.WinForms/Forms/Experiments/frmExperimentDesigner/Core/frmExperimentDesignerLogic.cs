@@ -261,7 +261,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             var chkHeavyDiagonals = form.Controls.Find("_chkHeavyDiagonals", true).FirstOrDefault() as CheckBox;
             var nudHeuristicWeight = form.Controls.Find("_nudHeuristicWeight", true).FirstOrDefault() as NumericUpDown;
             var nudSearchLimit = form.Controls.Find("_nudSearchLimit", true).FirstOrDefault() as NumericUpDown;
-
+             
             finder.Metric = ExperimentSharedLogic.GetDistanceMetric(metric);
             finder.AllowDiagonals = chkAllowDiagonals?.Checked == true;
             finder.HeavyDiagonals = chkHeavyDiagonals?.Checked == true;
