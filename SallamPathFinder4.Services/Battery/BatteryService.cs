@@ -202,6 +202,22 @@ namespace SallamPathFinder4.Services.Battery
                 return _currentCharge <= MIN_BATTERY_THRESHOLD;
             }
         }
+
+            #region Public Methods - Battery Formatting
+
+            /// <summary>
+            /// Formats battery level as percentage and battery count
+            /// </summary>
+            /// <param name="batteryPercent">Battery percentage (0-100)</param>
+            /// <param name="totalBatteries">Total battery capacity in battery units (default: 3.0)</param>
+            /// <returns>Formatted string like "65% (1.95/3.0 batteries)"</returns>
+            public string FormatBatteryWithBatteries(double batteryPercent, double totalBatteries = 3.0)
+            {
+                double batteriesLeft = (batteryPercent / 100.0) * totalBatteries;
+                return $"{batteryPercent:F1}% ({batteriesLeft:F1}/{totalBatteries:F0} batteries)";
+            }
+
+            #endregion
         #endregion
 
         #region Public Methods - Battery Calculation for Charging
@@ -270,15 +286,6 @@ namespace SallamPathFinder4.Services.Battery
             double batteriesNeeded = (needed / BATTERY_FULL_PERCENT) * 3.0; // Assuming 3 batteries = 100%
 
             return $"{needed:F1}% ({batteriesNeeded:F1} batteries)";
-        }
-
-        /// <summary>
-        /// Formats battery level as percentage and battery count
-        /// </summary>
-        public string FormatBatteryWithBatteries(double batteryPercent, double totalBatteries = 3.0)
-        {
-            double batteriesLeft = (batteryPercent / BATTERY_FULL_PERCENT) * totalBatteries;
-            return $"{batteryPercent:F1}% ({batteriesLeft:F1}/{totalBatteries:F0} batteries)";
         }
 
         /// <summary>

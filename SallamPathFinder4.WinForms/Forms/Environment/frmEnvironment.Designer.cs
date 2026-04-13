@@ -56,7 +56,7 @@ namespace SallamPathFinder4.WinForms.Forms
         private System.Windows.Forms.ToolStripStatusLabel lblCellPos;
         private System.Windows.Forms.ToolStripStatusLabel lblRealPos;
         private System.Windows.Forms.ToolStripStatusLabel lblRobotPos;
-        private System.Windows.Forms.ToolStripStatusLabel lblBattery;
+        public  System.Windows.Forms.ToolStripStatusLabel lblBattery;
         private System.Windows.Forms.ToolStripStatusLabel lblAlgoTime;
         private System.Windows.Forms.ToolStripStatusLabel lblTravelTime;
         #endregion

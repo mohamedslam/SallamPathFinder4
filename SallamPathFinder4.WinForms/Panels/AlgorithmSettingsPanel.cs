@@ -36,6 +36,11 @@ namespace SallamPathFinder4.WinForms.Panels
         private Button _btnFindPath;
         private Button _btnStartSimulation;
         private Button _btnStopSimulation;
+                #region Private Fields - Common Settings
+                private ComboBox _cboDistanceMetric;
+                private Label _lblDistanceMetric;
+                private Label _lblMetricDescription;
+                #endregion
         #endregion
 
         #region Constants
@@ -56,6 +61,29 @@ namespace SallamPathFinder4.WinForms.Panels
         public int SearchLimit => (int)_nudSearchLimit.Value;
         public bool AllowDiagonals => _chkAllowDiagonals.Checked;
         public bool HeavyDiagonals => _chkHeavyDiagonals.Checked;
+            #region Public Properties - Distance Metric
+
+            /// <summary>
+            /// Gets the selected distance metric for pathfinding
+            /// </summary>
+            public DistanceMetric SelectedMetric
+            {
+                get
+                {
+                    return _cboDistanceMetric?.SelectedIndex switch
+                    {
+                        0 => DistanceMetric.Manhattan,
+                        1 => DistanceMetric.Euclidean,
+                        2 => DistanceMetric.MaxDXDY,
+                        3 => DistanceMetric.DiagonalShortcut,
+                        4 => DistanceMetric.EuclideanNoSQR,
+                        5 => DistanceMetric.Custom,
+                        _ => DistanceMetric.Manhattan
+                    };
+                }
+            }
+
+            #endregion
         #endregion
 
         #region Constructor

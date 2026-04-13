@@ -288,7 +288,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     // Block path through windows for SPPA-DL
                     if (neighborCell.ElementType == MapElementType.Window)
                     {
-                        continue;
+                        RecordInvalidMove(new Point(nx, ny));
+                        continue;  // منع المرور عبر النافذة
                     }
 
                     if (!neighborCell.IsWalkable)

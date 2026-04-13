@@ -60,17 +60,16 @@ namespace SallamPathFinder4.WinForms.ViewModels
         private List<bool> _visitedGoals;
         private List<Point> _traveledPath;
         private CancellationTokenSource _searchCts;
-        
-        #region Private Fields - Dynamic Charging
-        private System.Windows.Forms.Timer _batteryCheckTimer;
-        private bool _isChargingInProgress;
-        private Point _chargingParkingPoint;
-        private List<PathNode> _originalFullPath;
-        private int _originalPathStepWhenChargingStarted;
-        private List<Point> _cachedParkingPoints;
-        private DateTime _chargingStartTime;
-        private bool _isWaitingForCharging;
-        #endregion
+            #region Private Fields - Dynamic Charging
+                private System.Windows.Forms.Timer _batteryCheckTimer;
+                private bool _isChargingInProgress;
+                private Point _chargingParkingPoint;
+                private List<PathNode> _originalFullPath;
+                private int _originalPathStepWhenChargingStarted;
+                private List<Point> _cachedParkingPoints;
+                private DateTime _chargingStartTime;
+                private bool _isWaitingForCharging;
+            #endregion
         #endregion
 
         #region Constructor
@@ -194,6 +193,51 @@ namespace SallamPathFinder4.WinForms.ViewModels
         public int ChargingTimeSeconds { get; private set; }
         public double SafetyMarginPercent { get; private set; }
         public bool IsChargingInProgress => _isChargingInProgress;
+
+        #endregion
+
+        #region Public Properties - Charging & Time Statistics
+
+        /// <summary>
+        /// Total charging units as decimal number (e.g., 2.3 means 2 full charges + 30% of third)
+        /// </summary>
+        public double TotalChargingUnits => _totalBatteryConsumed / 100.0;
+
+        /// <summary>
+        /// Total charging time in seconds
+        /// </summary>
+        public double TotalChargingTimeSeconds => _totalChargingTimeSeconds;
+
+        /// <summary>
+        /// Total travel time (actual movement) in seconds
+        /// </summary>
+        public double TotalTravelTimeSeconds => _totalTravelTimeSeconds;
+
+        /// <summary>
+        /// Total overhead time (exiting and re-entering path) in seconds
+        /// </summary>
+        public double TotalOverheadTimeSeconds => _totalOverheadTimeSeconds;
+
+        /// <summary>
+        /// Total time (travel + charging + overhead) in seconds
+        /// </summary>
+        public double TotalTimeSeconds => _totalTravelTimeSeconds + _totalChargingTimeSeconds + _totalOverheadTimeSeconds;
+
+        /// <summary>
+        /// Formatted battery and time statistics text for status bar
+        /// </summary>
+        public string BatteryAndTimeStatsText
+        {
+            get
+            {
+                var batteryService = new BatteryService();
+                string batteryText = batteryService.FormatBatteryWithBatteries(RobotState.BatteryLevel, 3.0);
+                string usageText = $"Used: {_totalBatteryConsumed:F1}% ({TotalChargingUnits:F1} charges)";
+                string timeText = $"Time: {TotalTimeSeconds:F0}s";
+                return $"🔋 {batteryText} | 📊 {usageText} | ⏱️ {timeText}";
+            }
+        }
+
         #endregion
 
         #region Nested Class - Pathfinding Result
@@ -447,7 +491,6 @@ namespace SallamPathFinder4.WinForms.ViewModels
         #region Public Methods - Simulation
         public void StartSimulation()
         {
-
             System.Diagnostics.Debug.WriteLine($"StartSimulation: _simulationService type = {_simulationService?.GetType()}");
 
             if (_simulationService is SimulationService simSvc)
@@ -455,6 +498,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 System.Diagnostics.Debug.WriteLine($"StartSimulation: DoorGroups count before start = {simSvc.GetDoorGroupsCount()}");
                 simSvc.StartDoorManager();
             }
+
             if (_currentPathResult?.Path == null || _currentPathResult.Path.Count == 0)
                 return;
 
@@ -462,6 +506,14 @@ namespace SallamPathFinder4.WinForms.ViewModels
             _simulationService.SetGoals(goalsList);
             System.Diagnostics.Debug.WriteLine($"StartSimulation: SetGoals called with {goalsList.Count} goals");
 
+            // ========== NEW: Reset charging statistics at simulation start ==========
+            ResetChargingStatistics();
+
+            // ========== NEW: Record initial battery and cell size ==========
+            _initialBatteryPercent = this.RobotState.BatteryLevel;
+            _cellSizeCm = _mapControl.ScaleCmPerCell;
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Simulation started with {_initialBatteryPercent:F1}% battery, cell size={_cellSizeCm}cm");
 
             // Load charging settings and start monitoring
             LoadChargingSettings();
@@ -799,13 +851,71 @@ namespace SallamPathFinder4.WinForms.ViewModels
         #endregion
 
         #region Public Methods - Battery
+        /// <summary>
+        /// Consumes battery based on distance traveled
+        /// Also updates travel time statistics
+        /// </summary>
+        /// <param name="distance">Distance traveled in cells</param>
         public void ConsumeBattery(double distance)
         {
             double surfaceWeight = 50;
             double speed = RobotState.Speed;
+
+            // Store old charge before consumption
+            double oldCharge = RobotState.BatteryLevel;
+
+            // Consume battery
             _batteryService.Consume(distance, surfaceWeight, speed);
+
+            // Calculate consumed amount
+            double newCharge = RobotState.BatteryLevel;
+            double consumed = oldCharge - newCharge;
+
+            if (consumed > 0)
+            {
+                // Update total battery consumed
+                _totalBatteryConsumed += consumed;
+
+                // Calculate and update travel time (distance in cm / speed)
+                double distanceCm = distance * _cellSizeCm;
+                double timeSeconds = distanceCm / speed;
+                _totalTravelTimeSeconds += timeSeconds;
+
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] Battery consumed: {consumed:F1}%, " +
+                    $"Total: {_totalBatteryConsumed:F1}%, Travel time: {timeSeconds:F2}s");
+
+                // Update UI
+                UpdateBatteryAndTimeStats();
+            }
         }
         #endregion
+
+        #region Public Methods - Reset Statistics 
+
+        /// <summary>
+        /// Resets all charging and time statistics
+        /// Call this at the beginning of each new simulation
+        /// </summary>
+        public void ResetChargingStatistics()
+        {
+            _totalBatteryConsumed = 0;
+            _totalChargingTimeSeconds = 0;
+            _totalTravelTimeSeconds = 0;
+            _totalOverheadTimeSeconds = 0;
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Charging statistics reset");
+
+            // Notify UI of property changes
+            OnPropertyChanged(nameof(BatteryAndTimeStatsText));
+            OnPropertyChanged(nameof(TotalChargingUnits));
+            OnPropertyChanged(nameof(TotalChargingTimeSeconds));
+            OnPropertyChanged(nameof(TotalTravelTimeSeconds));
+            OnPropertyChanged(nameof(TotalOverheadTimeSeconds));
+            OnPropertyChanged(nameof(TotalTimeSeconds));
+        }
+
+        #endregion
+ 
 
         #region Private Methods - Event Handlers
         private void OnRobotMoved(Point position, float angle)
@@ -922,8 +1032,22 @@ namespace SallamPathFinder4.WinForms.ViewModels
         #endregion
 
         #region Battery Event Handlers
-        private async void OnBatteryEmpty()
+        private void OnBatteryEmpty()
         {
+            // إذا كان الشحن الديناميكي مفعلاً، لا تظهر رسالة استبدال البطارية
+            if (this.IsDynamicChargingEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] Battery empty but dynamic charging is enabled - should auto-charge");
+
+                // تأكد من بدء عملية الشحن إذا لم تكن قيد التقدم
+                if (!_isChargingInProgress && !_isWaitingForCharging)
+                {
+                    InitiateChargingProcess();
+                }
+                return;
+            }
+
+            // الوضع اليدوي: رسالة استبدال البطارية
             if (_isWaitingForBatteryReplacement) return;
 
             _isWaitingForBatteryReplacement = true;
@@ -931,12 +1055,8 @@ namespace SallamPathFinder4.WinForms.ViewModels
             _simulationService.Pause();
             IsSimulating = false;
 
-            await Task.Delay(100);
-
             var result = MessageBox.Show(
-                "🔋 Battery is empty!\n\n" +
-                $"Robot stopped at cell ({RobotState.Position.X}, {RobotState.Position.Y}).\n\n" +
-                "Do you want to replace the battery and continue?",
+                "🔋 Battery is empty!\n\nDo you want to replace the battery?",
                 "Battery Empty",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -944,17 +1064,13 @@ namespace SallamPathFinder4.WinForms.ViewModels
             if (result == DialogResult.Yes)
             {
                 _simulationService.Stop();
-
                 _batteryService.SetCharge(100);
                 RobotState.BatteryLevel = 100;
 
-                await Task.Delay(100);
-
                 if (_currentPathResult != null && _currentPathResult.Path != null)
                 {
-                    var currentPos = RobotState.Position;
                     var remainingPath = _currentPathResult.Path
-                        .SkipWhile(p => p.X != currentPos.X || p.Y != currentPos.Y)
+                        .SkipWhile(p => p.X != RobotState.Position.X || p.Y != RobotState.Position.Y)
                         .ToList();
 
                     if (remainingPath.Count > 0)
@@ -977,6 +1093,14 @@ namespace SallamPathFinder4.WinForms.ViewModels
         {
             RobotState.BatteryLevel = level;
 
+            // إذا كان الشحن الديناميكي مفعلاً، لا تظهر رسالة استبدال البطارية
+            if (this.IsDynamicChargingEnabled)
+            {
+                // دع نظام الشحن التلقائي يتولى الأمر
+                return;
+            }
+
+            // الوضع اليدوي فقط
             if (IsSimulating && level <= 0)
             {
                 lock (_batteryLock)
@@ -1085,6 +1209,12 @@ namespace SallamPathFinder4.WinForms.ViewModels
             }
 
             System.Diagnostics.Debug.WriteLine($"[MainViewModel] Parking points updated: {_cachedParkingPoints.Count} points");
+
+            // طباعة النقاط للتأكد
+            foreach (var p in _cachedParkingPoints)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - Parking: ({p.X},{p.Y})");
+            }
         }
 
         #endregion
@@ -1179,10 +1309,60 @@ namespace SallamPathFinder4.WinForms.ViewModels
         /// </summary>
         private void CheckBatteryAndChargeIfNeeded()
         {
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] CheckBatteryAndChargeIfNeeded - " +
+                $"Current={this.RobotState.BatteryLevel}%, " +
+                $"InProgress={_isChargingInProgress}, Waiting={_isWaitingForCharging}");
+
+            // Skip if charging already in progress
+            if (_isChargingInProgress || _isWaitingForCharging)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] SKIP - charging already in progress");
+                return;
+            }
+
+            // Skip if dynamic charging is not enabled
+            if (!this.IsDynamicChargingEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] SKIP - dynamic charging disabled");
+                return;
+            }
+
+            // Skip if simulation is not running
+            if (!this.IsSimulating)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] SKIP - simulation not running");
+                return;
+            }
+
+            // Skip if no parking points
+            if (_cachedParkingPoints == null || _cachedParkingPoints.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] SKIP - no parking points");
+                return;
+            }
+
             double currentBattery = this.RobotState.BatteryLevel;
 
             // Calculate distance to nearest parking
             int distanceToParking = GetDistanceToNearestParking();
+
+            // SPECIAL CASE: If robot is already on a parking point
+            if (distanceToParking == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] Robot is already on a parking point");
+
+                // Only charge if battery is critically low (below 20%)
+                if (currentBattery <= 20.0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MainViewModel] Battery low ({currentBattery}%) while on parking - charging");
+                    InitiateChargingProcess();
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MainViewModel] Battery OK ({currentBattery}%) - no need to charge");
+                }
+                return;
+            }
 
             if (distanceToParking == int.MaxValue)
             {
@@ -1205,7 +1385,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
             // Check if battery is too low to continue safely
             if (currentBattery <= requiredBattery)
             {
-                // Need to charge now
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] Battery LOW - initiating charging process");
                 InitiateChargingProcess();
             }
         }
@@ -1215,17 +1395,31 @@ namespace SallamPathFinder4.WinForms.ViewModels
         /// </summary>
         private int GetDistanceToNearestParking()
         {
-            Point currentPos = this.RobotState.Position;
-            Point nearest = _cachedParkingPoints
-                .OrderBy(p => Math.Abs(p.X - currentPos.X) + Math.Abs(p.Y - currentPos.Y))
-                .FirstOrDefault();
-
-            if (nearest == Point.Empty)
+            if (_cachedParkingPoints == null || _cachedParkingPoints.Count == 0)
             {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] GetDistanceToNearestParking: No parking points available");
                 return int.MaxValue;
             }
 
-            return Math.Abs(currentPos.X - nearest.X) + Math.Abs(currentPos.Y - nearest.Y);
+            Point currentPos = this.RobotState.Position;
+
+            int minDistance = int.MaxValue;
+            Point nearestParking = Point.Empty;
+
+            foreach (var parking in _cachedParkingPoints)
+            {
+                int distance = Math.Abs(currentPos.X - parking.X) + Math.Abs(currentPos.Y - parking.Y);
+                if (distance < minDistance)
+                {
+                    minDistance = distance;
+                    nearestParking = parking;
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] GetDistanceToNearestParking: Current=({currentPos.X},{currentPos.Y}), " +
+                $"Nearest=({nearestParking.X},{nearestParking.Y}), Distance={minDistance}");
+
+            return minDistance;
         }
 
         /// <summary>
@@ -1248,8 +1442,11 @@ namespace SallamPathFinder4.WinForms.ViewModels
         /// </summary>
         private async void InitiateChargingProcess()
         {
-            if (_isChargingInProgress)
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] InitiateChargingProcess - START");
+
+            if (_isChargingInProgress || _isWaitingForCharging)
             {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] InitiateChargingProcess - already in progress, EXIT");
                 return;
             }
 
@@ -1263,14 +1460,36 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 return;
             }
 
+            // Save current path progress to resume later
+            if (_currentPathResult != null && _currentPathResult.Path != null)
+            {
+                _originalFullPath = _currentPathResult.Path.ToList();
+                _originalPathStepWhenChargingStarted = GetCurrentPathIndex();
+
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] Original path saved: {_originalFullPath.Count} cells, current index: {_originalPathStepWhenChargingStarted}");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] WARNING: No original path to save!");
+                _isChargingInProgress = false;
+                return;
+            }
+
+            // ========== NEW: Calculate overhead time for exiting to parking ==========
+            Point currentPos = this.RobotState.Position;
+            int distanceToParking = Math.Abs(currentPos.X - _chargingParkingPoint.X) +
+                                    Math.Abs(currentPos.Y - _chargingParkingPoint.Y);
+            double overheadTimeToParking = (distanceToParking * _cellSizeCm) / this.RobotState.Speed;
+            _totalOverheadTimeSeconds += overheadTimeToParking;
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Overhead time to parking: {overheadTimeToParking:F2}s (distance={distanceToParking} cells)");
+
+            UpdateBatteryAndTimeStats();
+
             System.Diagnostics.Debug.WriteLine($"[MainViewModel] INITIATING CHARGING PROCESS");
             System.Diagnostics.Debug.WriteLine($"  - Parking Point: ({_chargingParkingPoint.X},{_chargingParkingPoint.Y})");
             System.Diagnostics.Debug.WriteLine($"  - Charging Time: {ChargingTimeSeconds} seconds");
             System.Diagnostics.Debug.WriteLine($"  - Current Position: ({this.RobotState.Position.X},{this.RobotState.Position.Y})");
-
-            // Save current path progress to resume later
-            _originalFullPath = _currentPathResult?.Path?.ToList();
-            _originalPathStepWhenChargingStarted = GetCurrentPathIndex();
 
             // Pause current simulation
             _simulationService.Pause();
@@ -1286,8 +1505,10 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 return;
             }
 
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging path created: {chargingPath.Count} cells");
+
             // Draw charging path in LightBlue
-            var coloredChargingPath = new ColoredPath(chargingPath, Color.LightBlue, false);
+            var coloredChargingPath = new ColoredPath(chargingPath, Color.LightBlue, PathType.Charging, 4, false);
             var allPaths = new List<ColoredPath> { coloredChargingPath };
 
             // Also show original return path (green, thinner)
@@ -1296,7 +1517,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 var returnPath = CreateReturnPathToParking();
                 if (returnPath != null && returnPath.Count > 0)
                 {
-                    var greenPath = new ColoredPath(returnPath, Color.Green, true);
+                    var greenPath = new ColoredPath(returnPath, Color.Green, PathType.Return, 2, false);
                     allPaths.Add(greenPath);
                 }
             }
@@ -1310,43 +1531,60 @@ namespace SallamPathFinder4.WinForms.ViewModels
             // Update UI
             ExecuteOnUIThread(() =>
             {
-                mainForm.lblStatus.Text = $"🔋 Battery low! Going to charging station at ({_chargingParkingPoint.X},{_chargingParkingPoint.Y})";
+                if (mainForm?.lblStatus != null)
+                {
+                    mainForm.lblStatus.Text = $"🔋 Battery low! Going to charging station at ({_chargingParkingPoint.X},{_chargingParkingPoint.Y})";
+                }
             });
 
             // Wait for robot to reach parking
             await WaitForRobotToReachParking();
         }
-
         /// <summary>
         /// Gets the current index in the original path
         /// </summary>
         private int GetCurrentPathIndex()
         {
-            if (_simulationService is SimulationService simSvc)
+            if (_originalFullPath == null)
             {
-                // This would need to be exposed or tracked
-                // For now, estimate based on position
-                if (_originalFullPath != null)
+                return 0;
+            }
+
+            Point currentPos = this.RobotState.Position;
+
+            for (int i = 0; i < _originalFullPath.Count; i++)
+            {
+                if (_originalFullPath[i].X == currentPos.X && _originalFullPath[i].Y == currentPos.Y)
                 {
-                    Point currentPos = this.RobotState.Position;
-                    for (int i = 0; i < _originalFullPath.Count; i++)
-                    {
-                        if (_originalFullPath[i].X == currentPos.X && _originalFullPath[i].Y == currentPos.Y)
-                        {
-                            return i;
-                        }
-                    }
+                    return i;
                 }
             }
-            return 0;
-        }
 
+            // If not found, return closest index
+            int closestIndex = 0;
+            double minDistance = double.MaxValue;
+
+            for (int i = 0; i < _originalFullPath.Count; i++)
+            {
+                double distance = Math.Abs(_originalFullPath[i].X - currentPos.X) +
+                                  Math.Abs(_originalFullPath[i].Y - currentPos.Y);
+                if (distance < minDistance)
+                {
+                    minDistance = distance;
+                    closestIndex = i;
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Current position ({currentPos.X},{currentPos.Y}) not found in path, using closest index {closestIndex}");
+
+            return closestIndex;
+        }
         /// <summary>
         /// Creates a path from current position to parking point
         /// </summary>
         private async Task<List<PathNode>> CreateChargingPathAsync(Point from, Point to)
         {
-            var finder = new AlgorithmFactory(_mapGrid).Create(AlgorithmType.AStar);
+            var finder = new AlgorithmFactory(_mapGrid).Create(AlgorithmType.SPPA);
 
             if (finder == null)
             {
@@ -1408,12 +1646,14 @@ namespace SallamPathFinder4.WinForms.ViewModels
         /// </summary>
         private async Task WaitForRobotToReachParking()
         {
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Waiting for robot to reach parking point");
+
             while (_isWaitingForCharging && _simulationService.IsRunning)
             {
                 if (this.RobotState.Position.X == _chargingParkingPoint.X &&
                     this.RobotState.Position.Y == _chargingParkingPoint.Y)
                 {
-                    // Robot reached parking
+                    System.Diagnostics.Debug.WriteLine("[MainViewModel] Robot reached parking point - starting charging");
                     await StartCharging();
                     return;
                 }
@@ -1421,7 +1661,6 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 await Task.Delay(500);
             }
         }
-
         #endregion
 
         #region Private Methods - Charging Execution
@@ -1434,49 +1673,101 @@ namespace SallamPathFinder4.WinForms.ViewModels
             _simulationService.Pause();
             _isWaitingForCharging = false;
 
-            _chargingStartTime = DateTime.Now;
-            DateTime chargingEndTime = _chargingStartTime.AddSeconds(ChargingTimeSeconds);
+            int totalSeconds = this.ChargingTimeSeconds;
 
+            // ========== NEW: Update charging statistics ==========
+            _totalChargingTimeSeconds += totalSeconds;
+
+            // Calculate and add charged amount to total consumed
+            double chargedAmount = 100 - this.RobotState.BatteryLevel;
+            if (chargedAmount > 0)
+            {
+                _totalBatteryConsumed += chargedAmount;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging: +{chargedAmount:F1}%, " +
+                $"Total consumed: {_totalBatteryConsumed:F1}%, Charging time: {totalSeconds}s");
+
+            UpdateBatteryAndTimeStats();
+
+            // Start countdown timer on UI
             ExecuteOnUIThread(() =>
             {
-                mainForm.lblStatus.Text = $"🔋 Charging... Will resume at {chargingEndTime:HH:mm:ss}";
+                if (mainForm?.robotPanel != null)
+                {
+                    mainForm.robotPanel.StartChargingCountdown(totalSeconds);
+                }
+                if (mainForm?.lblStatus != null)
+                {
+                    mainForm.lblStatus.Text = $"🔋 Charging... {totalSeconds} seconds remaining";
+                }
             });
 
-            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging started at {_chargingStartTime:HH:mm:ss}, will end at {chargingEndTime:HH:mm:ss}");
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging started for {totalSeconds} seconds");
 
             // Wait for charging time
-            await Task.Delay(ChargingTimeSeconds * 1000);
+            await Task.Delay(totalSeconds * 1000);
 
-            // Charging complete - set battery to 100%
+            // Stop countdown timer
+            ExecuteOnUIThread(() =>
+            {
+                if (mainForm?.robotPanel != null)
+                {
+                    mainForm.robotPanel.StopChargingCountdown();
+                }
+                if (mainForm?.lblStatus != null)
+                {
+                    mainForm.lblStatus.Text = $"✅ Charging complete! Resuming path...";
+                }
+            });
+
+            // Set battery to full
             _batteryService.SetFullCharge();
             this.RobotState.BatteryLevel = 100;
 
-            ExecuteOnUIThread(() =>
-            {
-                mainForm.lblStatus.Text = $"✅ Charging complete! Resuming path...";
-            });
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Charging complete, battery at 100%");
 
-            System.Diagnostics.Debug.WriteLine("[MainViewModel] Charging complete, resuming path");
+            UpdateBatteryAndTimeStats();
 
             // Resume original path
             await ResumeOriginalPathAfterCharging();
         }
+
+        #region Private Methods - Resume After Charging
 
         /// <summary>
         /// Resumes the original path after charging is complete
         /// </summary>
         private async Task ResumeOriginalPathAfterCharging()
         {
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] ResumeOriginalPathAfterCharging - START");
+
+            _isChargingInProgress = false;
+            _isWaitingForCharging = false;
+
             if (_originalFullPath == null || _originalPathStepWhenChargingStarted >= _originalFullPath.Count)
             {
-                System.Diagnostics.Debug.WriteLine("[MainViewModel] No original path to resume");
-                _isChargingInProgress = false;
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] No original path to resume - simulation may be complete");
                 return;
             }
 
             // Get the point where robot should resume
-            Point resumePoint = new Point(_originalFullPath[_originalPathStepWhenChargingStarted].X,
-                                          _originalFullPath[_originalPathStepWhenChargingStarted].Y);
+            Point resumePoint = new Point(
+                _originalFullPath[_originalPathStepWhenChargingStarted].X,
+                _originalFullPath[_originalPathStepWhenChargingStarted].Y
+            );
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Resuming from point ({resumePoint.X},{resumePoint.Y})");
+
+            // ========== NEW: Calculate overhead time for returning to path ==========
+            int distanceToResume = Math.Abs(_chargingParkingPoint.X - resumePoint.X) +
+                                   Math.Abs(_chargingParkingPoint.Y - resumePoint.Y);
+            double overheadTimeToResume = (distanceToResume * _cellSizeCm) / this.RobotState.Speed;
+            _totalOverheadTimeSeconds += overheadTimeToResume;
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Overhead time to resume: {overheadTimeToResume:F2}s (distance={distanceToResume} cells)");
+
+            UpdateBatteryAndTimeStats();
 
             // Create return path from parking to resume point
             var returnPath = await CreateChargingPathAsync(_chargingParkingPoint, resumePoint);
@@ -1484,13 +1775,13 @@ namespace SallamPathFinder4.WinForms.ViewModels
             if (returnPath == null || returnPath.Count == 0)
             {
                 System.Diagnostics.Debug.WriteLine("[MainViewModel] Failed to create return path");
-                _isChargingInProgress = false;
-                _simulationService.Resume();
                 return;
             }
 
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Return path created: {returnPath.Count} cells");
+
             // Draw return path in LightBlue
-            var coloredReturnPath = new ColoredPath(returnPath, Color.LightBlue, false);
+            var coloredReturnPath = new ColoredPath(returnPath, Color.LightBlue, PathType.Charging, 4, false);
             _mapControl.DrawColoredPaths(new List<ColoredPath> { coloredReturnPath });
 
             // Start simulation on return path
@@ -1500,44 +1791,360 @@ namespace SallamPathFinder4.WinForms.ViewModels
             // Wait for robot to reach resume point
             await WaitForRobotToReachResumePoint(resumePoint);
         }
+        #endregion
+        #region Private Methods - Find Optimal Resume Point (Fully Optimized)
 
         /// <summary>
-        /// Waits for robot to reach the resume point on the original path
+        /// Finds the optimal resume point on the original path after charging
+        /// Prioritizes unvisited goals and prevents skipping them
         /// </summary>
+        private async Task<Point> FindOptimalResumePointOptimized(Point currentChargingPosition, List<PathNode> originalPath, int originalIndex, Point nextGoal)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] FindOptimalResumePointOptimized - START");
+            System.Diagnostics.Debug.WriteLine($"  - Charging Position: ({currentChargingPosition.X},{currentChargingPosition.Y})");
+            System.Diagnostics.Debug.WriteLine($"  - Original Index: {originalIndex}");
+            System.Diagnostics.Debug.WriteLine($"  - Next Goal: ({nextGoal.X},{nextGoal.Y})");
+
+            // البحث في نطاق ±10 حول نقطة التوقف، مع تفضيل التقدم للأمام
+            int searchBackward = 5;   // يمكن التراجع قليلاً
+            int searchForward = 15;    // نفضل التقدم للأمام
+            int startIndex = Math.Max(0, originalIndex - searchBackward);
+            int endIndex = Math.Min(originalPath.Count - 1, originalIndex + searchForward);
+
+            System.Diagnostics.Debug.WriteLine($"  - Search range: {startIndex} to {endIndex} ({endIndex - startIndex + 1} candidates)");
+
+            var candidates = new List<CandidateInfo>();
+
+            // ========== تجميع المرشحين مع حساب الدرجات ==========
+            for (int i = startIndex; i <= endIndex; i++)
+            {
+                Point candidatePoint = new Point(originalPath[i].X, originalPath[i].Y);
+
+                // التحقق الأساسي من صحة الخلية
+                if (!_mapGrid.IsValidCoordinate(candidatePoint.X, candidatePoint.Y))
+                    continue;
+
+                if (!_mapGrid[candidatePoint.X, candidatePoint.Y].IsWalkable)
+                    continue;
+
+                // التحقق من العقبات
+                var cell = _mapGrid[candidatePoint.X, candidatePoint.Y];
+                bool isDangerous = (cell.ElementType == MapElementType.Door && !cell.IsDoorOpen) ||
+                                   (cell.OccupyingObstacle != null);
+
+                if (isDangerous)
+                    continue;
+
+                // ========== التحقق من وجود هدف غير مزور ==========
+                bool isUnvisitedGoal = false;
+                GoalPoint unvisitedGoal = null;
+
+                foreach (var goal in this.Goals)
+                {
+                    if (!goal.IsVisited && goal.Location.X == candidatePoint.X && goal.Location.Y == candidatePoint.Y)
+                    {
+                        isUnvisitedGoal = true;
+                        unvisitedGoal = goal;
+                        break;
+                    }
+                }
+
+                // ========== حساب المعايير ==========
+
+                // 1. المسافة إلى نقطة الشحن
+                int distanceFromCharger = Math.Abs(candidatePoint.X - currentChargingPosition.X) +
+                                          Math.Abs(candidatePoint.Y - currentChargingPosition.Y);
+
+                // 2. التقدم نحو الهدف (نفضل التقدم ونتجنب التراجع)
+                int progressForward = i - originalIndex;
+
+                // 3. المسافة إلى الهدف التالي
+                double distanceToNextGoal = (nextGoal != Point.Empty)
+                    ? Math.Abs(candidatePoint.X - nextGoal.X) + Math.Abs(candidatePoint.Y - nextGoal.Y)
+                    : 0;
+
+                // 4. وزن الخلية
+                double cellCost = cell.SurfaceWeight / 100.0;
+
+                // 5. درجة الخطورة (الخلايا القريبة من العقبات)
+                double dangerScore = 0;
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        int nx = candidatePoint.X + dx;
+                        int ny = candidatePoint.Y + dy;
+                        if (_mapGrid.IsValidCoordinate(nx, ny) && _mapGrid[nx, ny].OccupyingObstacle != null)
+                        {
+                            dangerScore += 0.2;
+                        }
+                    }
+                }
+
+                // ========== حساب الدرجة النهائية ==========
+                double score = 0;
+
+                // وزن المسافة من الشاحن (15%)
+                score += distanceFromCharger * 0.15;
+
+                // وزن التقدم للأمام (25%)
+                if (progressForward > 0)
+                {
+                    score -= progressForward * 3.0;  // مكافأة للتقدم
+                }
+                else if (progressForward < 0)
+                {
+                    score += Math.Abs(progressForward) * 8.0;  // عقوبة كبيرة للتراجع
+                }
+
+                // وزن المسافة إلى الهدف التالي (20%)
+                score += distanceToNextGoal * 0.20;
+
+                // وزن تكلفة الخلية (10%)
+                score += cellCost * 10.0;
+
+                // وزن درجة الخطورة (10%)
+                score += dangerScore * 10.0;
+
+                // ========== أفضلية خاصة للأهداف غير المزورة ==========
+                if (isUnvisitedGoal)
+                {
+                    // أفضلية كبيرة جداً للأهداف غير المزورة
+                    score -= 200;
+                    System.Diagnostics.Debug.WriteLine($"  - Candidate ({candidatePoint.X},{candidatePoint.Y}) is UNVISITED GOAL! Score bonus applied. Final score: {score:F2}");
+                }
+
+                System.Diagnostics.Debug.WriteLine($"  - Candidate ({candidatePoint.X},{candidatePoint.Y}): " +
+                    $"Dist={distanceFromCharger}, Progress={progressForward}, " +
+                    $"ToGoal={distanceToNextGoal:F0}, CellCost={cellCost:F2}, " +
+                    $"Danger={dangerScore:F2}, IsGoal={isUnvisitedGoal}, Score={score:F2}");
+
+                candidates.Add(new CandidateInfo
+                {
+                    Index = i,
+                    Point = candidatePoint,
+                    Score = score,
+                    DistanceFromCharger = distanceFromCharger,
+                    ProgressForward = progressForward,
+                    DistanceToNextGoal = distanceToNextGoal,
+                    IsUnvisitedGoal = isUnvisitedGoal,
+                    GoalNumber = unvisitedGoal?.Number ?? 0
+                });
+            }
+
+            if (candidates.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[MainViewModel] No candidates found!");
+                return Point.Empty;
+            }
+
+            // ترتيب حسب الدرجة (الأقل أولاً)
+            candidates = candidates.OrderBy(c => c.Score).ToList();
+
+            // طباعة أفضل 5 مرشحين
+            System.Diagnostics.Debug.WriteLine("  --- Top 5 Candidates ---");
+            for (int j = 0; j < Math.Min(5, candidates.Count); j++)
+            {
+                var c = candidates[j];
+                string goalMarker = c.IsUnvisitedGoal ? " [UNVISITED GOAL!]" : "";
+                System.Diagnostics.Debug.WriteLine($"    #{j + 1}: ({c.Point.X},{c.Point.Y}) - Score={c.Score:F2}, " +
+                    $"Progress={c.ProgressForward}, ToGoal={c.DistanceToNextGoal:F0}{goalMarker}");
+            }
+
+            // ========== البحث عن مسار صالح ==========
+            // نبدأ بأفضل المرشحين (حتى 5 مرشحين)
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+            {
+                for (int j = 0; j < Math.Min(5, candidates.Count); j++)
+                {
+                    var candidate = candidates[j];
+
+                    if (cts.Token.IsCancellationRequested)
+                        break;
+
+                    try
+                    {
+                        var pathTask = CreateChargingPathAsync(currentChargingPosition, candidate.Point);
+                        var completedTask = await Task.WhenAny(pathTask, Task.Delay(1500, cts.Token));
+
+                        if (completedTask != pathTask)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"  - Candidate ({candidate.Point.X},{candidate.Point.Y}): Timeout");
+                            continue;
+                        }
+
+                        var tempPath = await pathTask;
+
+                        if (tempPath != null && tempPath.Count > 0)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"  - Candidate ({candidate.Point.X},{candidate.Point.Y}): ✓ VALID (path={tempPath.Count} cells)");
+
+                            // إذا كان المرشح هو هدف غير مزور، سجل ذلك
+                            if (candidate.IsUnvisitedGoal)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"  - *** This candidate is an UNVISITED GOAL (Goal {candidate.GoalNumber}) - will be visited after charging ***");
+                            }
+
+                            return candidate.Point;
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"  - Candidate ({candidate.Point.X},{candidate.Point.Y}): No valid path");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"  - Candidate ({candidate.Point.X},{candidate.Point.Y}): Error - {ex.Message}");
+                    }
+                }
+            }
+
+            // إذا فشل الجميع، أرجع أفضل مرشح من حيث الدرجة فقط
+            var bestCandidate = candidates.FirstOrDefault();
+            if (bestCandidate != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - Returning best candidate by score: ({bestCandidate.Point.X},{bestCandidate.Point.Y})");
+                return bestCandidate.Point;
+            }
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] No valid candidate found");
+            return Point.Empty;
+        }
+
+        /// <summary>
+        /// Helper class for candidate information (extended)
+        /// </summary>
+        private class CandidateInfo
+        {
+            public int Index { get; set; }
+            public Point Point { get; set; }
+            public double Score { get; set; }
+            public int DistanceFromCharger { get; set; }
+            public int ProgressForward { get; set; }
+            public double DistanceToNextGoal { get; set; }
+            public bool IsUnvisitedGoal { get; set; }
+            public int GoalNumber { get; set; }
+        }
+
+        #endregion
+        private void RestartBatteryMonitoring()
+        {
+            // Stop existing timer
+            if (_batteryCheckTimer != null)
+            {
+                _batteryCheckTimer.Stop();
+                _batteryCheckTimer.Dispose();
+                _batteryCheckTimer = null;
+            }
+
+            // Create and start new timer
+            _batteryCheckTimer = new System.Windows.Forms. Timer();
+            _batteryCheckTimer.Interval = (int)(BATTERY_CHECK_INTERVAL_SECONDS * 1000);
+            _batteryCheckTimer.Tick += OnBatteryCheckTimerTick;
+            _batteryCheckTimer.Start();
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Battery monitoring RESTARTED");
+        }
+        #region Private Methods - Charging Resume
+
+        /// <summary>
+        /// Waits for robot to reach the resume point on the original path after charging
+        /// </summary>
+        /// <param name="resumePoint">The point where robot should resume original path</param>
         private async Task WaitForRobotToReachResumePoint(Point resumePoint)
         {
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] WAITING for resume point ({resumePoint.X},{resumePoint.Y})");
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Original path has {_originalFullPath?.Count ?? 0} cells, current index = {_originalPathStepWhenChargingStarted}");
+
             while (_simulationService.IsRunning)
             {
-                if (this.RobotState.Position.X == resumePoint.X && this.RobotState.Position.Y == resumePoint.Y)
-                {
-                    // Robot reached resume point - continue with remaining original path
-                    var remainingPath = _originalFullPath.Skip(_originalPathStepWhenChargingStarted).ToList();
+                Point currentPos = this.RobotState.Position;
 
-                    if (remainingPath.Count > 0)
+                if (currentPos.X == resumePoint.X && currentPos.Y == resumePoint.Y)
+                {
+                    System.Diagnostics.Debug.WriteLine("[MainViewModel] REACHED resume point!");
+
+                    // Get remaining path from original path
+                    if (_originalFullPath == null || _originalPathStepWhenChargingStarted >= _originalFullPath.Count)
                     {
-                        _simulationService.Stop();
-                        _simulationService.Start(remainingPath);
+                        System.Diagnostics.Debug.WriteLine("[MainViewModel] No remaining path - simulation complete");
+                        _isChargingInProgress = false;
+                        _isWaitingForCharging = false;
+
+                        ExecuteOnUIThread(() =>
+                        {
+                            if (mainForm?.lblStatus != null)
+                            {
+                                mainForm.lblStatus.Text = "✅ All goals completed! Simulation finished.";
+                            }
+                        });
+                        return;
                     }
 
-                    // Redraw original path
+                    var remainingPath = _originalFullPath.Skip(_originalPathStepWhenChargingStarted).ToList();
+
+                    if (remainingPath == null || remainingPath.Count == 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[MainViewModel] Remaining path is empty - simulation complete");
+                        _isChargingInProgress = false;
+                        _isWaitingForCharging = false;
+
+                        ExecuteOnUIThread(() =>
+                        {
+                            if (mainForm?.lblStatus != null)
+                            {
+                                mainForm.lblStatus.Text = "✅ All goals completed! Simulation finished.";
+                            }
+                        });
+                        return;
+                    }
+
+                    // Stop current simulation
+                    _simulationService.Stop();
+
+                    // Start remaining path
+                    _simulationService.Start(remainingPath);
+
+                    // Redraw original path in gold
                     _mapControl.DrawPath(_originalFullPath, Color.Gold);
 
-                    _isChargingInProgress = false;
+                    System.Diagnostics.Debug.WriteLine($"[MainViewModel] Remaining path resumed: {remainingPath.Count} cells");
 
+                    // ========== إعادة تعيين المتغيرات ==========
+                    _isChargingInProgress = false;
+                    _isWaitingForCharging = false;
+
+                    // Restart battery monitoring for future charging needs
+                    if (this.IsDynamicChargingEnabled)
+                    {
+                        RestartBatteryMonitoring();
+                        System.Diagnostics.Debug.WriteLine("[MainViewModel] Battery monitoring RESTARTED after charging");
+                    }
+
+                    // Update UI
                     ExecuteOnUIThread(() =>
                     {
-                        mainForm.lblStatus.Text = $"✅ Path resumed! Battery: 100%";
+                        if (mainForm?.lblStatus != null)
+                        {
+                            mainForm.lblStatus.Text = "✅ Charging complete! Path resumed.";
+                        }
                     });
 
-                    System.Diagnostics.Debug.WriteLine("[MainViewModel] Path resumed after charging");
                     return;
                 }
 
-                await Task.Delay(500);
+                await Task.Delay(100);
             }
 
+            // If simulation stopped unexpectedly
             _isChargingInProgress = false;
+            _isWaitingForCharging = false;
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] EXITED WaitForRobotToReachResumePoint - simulation stopped");
         }
+
+        #endregion
+        #endregion
 
         #region Private Methods - Thread Safety
         private void ExecuteOnUIThread(Action action)
@@ -1552,6 +2159,99 @@ namespace SallamPathFinder4.WinForms.ViewModels
             }
         }
         #endregion
+ 
+        #region Public Methods - Dynamic Charging Settings
+
+        /// <summary>
+        /// Updates dynamic charging settings from UI
+        /// Call this method when settings change in RobotPanel
+        /// </summary>
+        /// <param name="isEnabled">Whether dynamic charging is enabled</param>
+        /// <param name="chargingTimeSeconds">Charging time in seconds</param>
+        /// <param name="safetyMarginPercent">Safety margin percentage (5-20%)</param>
+        public void UpdateChargingSettings(bool isEnabled, int chargingTimeSeconds, double safetyMarginPercent)
+        {
+            this.IsDynamicChargingEnabled = isEnabled;
+            this.ChargingTimeSeconds = chargingTimeSeconds;
+            this.SafetyMarginPercent = safetyMarginPercent;
+
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Charging Settings Updated: Enabled={isEnabled}, " +
+                $"Time={chargingTimeSeconds}s, Safety={safetyMarginPercent}%");
+
+            if (isEnabled && this.IsSimulating)
+            {
+                StartBatteryMonitoring();
+            }
+            else if (!isEnabled)
+            {
+                StopBatteryMonitoring();
+                _isChargingInProgress = false;
+                _isWaitingForCharging = false;
+            }
+        }
+
+        /// <summary>
+        /// Gets whether dynamic charging is enabled
+        /// </summary>
+        public bool GetDynamicChargingEnabled()
+        {
+            return this.IsDynamicChargingEnabled;
+        }
+
+        /// <summary>
+        /// Gets the charging time in seconds
+        /// </summary>
+        public int GetChargingTimeSeconds()
+        {
+            return this.ChargingTimeSeconds;
+        }
+
+        /// <summary>
+        /// Gets the safety margin percentage
+        /// </summary>
+        public double GetSafetyMarginPercent()
+        {
+            return this.SafetyMarginPercent;
+        }
+
+        #endregion
+
+        #region Private Fields - Charging & Time Statistics
+
+        private double _totalBatteryConsumed;
+        private double _totalChargingTimeSeconds;
+        private double _totalTravelTimeSeconds;
+        private double _totalOverheadTimeSeconds;
+        private double _initialBatteryPercent;
+        private double _cellSizeCm;
+
+        #endregion
+
+        #region Private Methods - Update Statistics
+
+        /// <summary>
+        /// Updates the battery and time statistics display in the UI
+        /// </summary>
+        private void UpdateBatteryAndTimeStats()
+        {
+            // Notify property changed for all statistics
+            OnPropertyChanged(nameof(BatteryAndTimeStatsText));
+            OnPropertyChanged(nameof(TotalChargingUnits));
+            OnPropertyChanged(nameof(TotalChargingTimeSeconds));
+            OnPropertyChanged(nameof(TotalTravelTimeSeconds));
+            OnPropertyChanged(nameof(TotalOverheadTimeSeconds));
+            OnPropertyChanged(nameof(TotalTimeSeconds));
+
+            // Update UI directly
+            ExecuteOnUIThread(() =>
+            {
+                if (mainForm?.lblBattery != null)
+                {
+                    mainForm.lblBattery.Text = this.BatteryAndTimeStatsText;
+                }
+            });
+        }
+
         #endregion
     }
 

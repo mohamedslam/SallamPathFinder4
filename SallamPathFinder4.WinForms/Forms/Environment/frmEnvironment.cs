@@ -45,6 +45,12 @@ namespace SallamPathFinder4.WinForms.Forms
         private bool _isMovingParking;
         private Random _random;
         private ISimulationService _simulationService;
+
+            #region Private Fields - Dynamic Charging
+            private bool _isDynamicChargingEnabled;
+            private int _chargingTimeSeconds;
+            private double _safetyMarginPercent;
+            #endregion
         #endregion
 
         #region Constructor
@@ -199,6 +205,8 @@ namespace SallamPathFinder4.WinForms.Forms
                 algorithmSettingsPanel.FindPathRequested += (s, e) => _viewModel.FindPathAsync();
                 algorithmSettingsPanel.SettingsChanged += (s, e) => UpdateAlgorithmSettings();
             }
+            // Dynamic Charging Events
+            WireChargingEvents();
 
             mapControl.MouseClick += MapControl_MouseClick;
             mapControl.MouseMove += MapControl_MouseMove;
@@ -215,6 +223,57 @@ namespace SallamPathFinder4.WinForms.Forms
             _viewModel.HeuristicWeight = algorithmSettingsPanel.HeuristicWeight;
             _viewModel.SearchLimit = algorithmSettingsPanel.SearchLimit;
         }
+
+        #region Event Wiring - Dynamic Charging
+
+        /// <summary>
+        /// Wires up dynamic charging events from RobotPanel
+        /// </summary>
+        private void WireChargingEvents()
+        {
+            if (robotPanel == null) return;
+
+            robotPanel.ChargingSettingsChanged += OnChargingSettingsChanged;
+
+            // ربط حدث اكتمال الشحن
+            robotPanel.ChargingCompleted += OnChargingCompleted;
+        }
+        private void OnChargingCompleted()
+        {
+            // هذا الحدث قد لا يكون ضرورياً لأن MainViewModel يتعامل مع الشحن مباشرة
+            System.Diagnostics.Debug.WriteLine("[frmEnvironment] Charging completed event received");
+        }
+        /// <summary>
+        /// Handles charging settings changes from RobotPanel
+        /// </summary>
+        private void OnChargingSettingsChanged(object sender, EventArgs e)
+        {
+            if (robotPanel == null) return;
+
+            _isDynamicChargingEnabled = robotPanel.IsDynamicChargingEnabled;
+            _chargingTimeSeconds = robotPanel.ChargingTimeSeconds;
+            _safetyMarginPercent = robotPanel.SafetyMarginPercent;
+
+            // Update ViewModel
+            _viewModel?.UpdateChargingSettings(_isDynamicChargingEnabled, _chargingTimeSeconds, _safetyMarginPercent);
+
+            // Update status display
+            if (_isDynamicChargingEnabled)
+            {
+                TimeSpan ts = TimeSpan.FromSeconds(_chargingTimeSeconds);
+                lblStatus.Text = $"🔋 Dynamic Charging ENABLED | Charge Time: {ts:hh\\:mm\\:ss} | Safety Margin: {_safetyMarginPercent}%";
+            }
+            else
+            {
+                lblStatus.Text = "🔋 Dynamic Charging DISABLED (Manual battery replacement mode)";
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[frmEnvironment] Charging Settings: Enabled={_isDynamicChargingEnabled}, " +
+                $"Time={_chargingTimeSeconds}s, Safety={_safetyMarginPercent}%");
+        }
+
+        #endregion
+
         #endregion
 
         #region ViewModel Binding
@@ -264,6 +323,9 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.UpdateRobotPosition(_viewModel.RobotState.Position, _viewModel.RobotState.Angle);
         }
 
+        /// <summary>
+        /// Updates the battery display in the status bar
+        /// </summary>
         private void UpdateBatteryDisplay()
         {
             if (InvokeRequired)
@@ -271,8 +333,14 @@ namespace SallamPathFinder4.WinForms.Forms
                 Invoke(new Action(UpdateBatteryDisplay));
                 return;
             }
-            lblBattery.Text = $"🔋 Battery: {_viewModel.RobotState.BatteryLevel:F1}%";
-            robotPanel?.UpdateBattery(_viewModel.RobotState.BatteryLevel);
+
+            if (lblBattery != null && _viewModel != null)
+            {
+                // Use the new formatted text from ViewModel
+                lblBattery.Text = _viewModel.BatteryAndTimeStatsText;
+            }
+
+            robotPanel?.UpdateBattery(_viewModel?.RobotState.BatteryLevel ?? 100);
         }
 
         private void DisplayPath()

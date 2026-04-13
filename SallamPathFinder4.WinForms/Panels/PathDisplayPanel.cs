@@ -7,11 +7,13 @@
 /// </summary>
 #endregion
 
-#region Namespace Imports
-#endregion
+#region Imports NameSpace
+using SallamPathFinder4.Core.Models.Path;
+#endregion 
 
 namespace SallamPathFinder4.WinForms.Panels
 {
+
     public sealed class PathDisplayPanel : Panel
     {
         #region Private Fields
@@ -21,6 +23,10 @@ namespace SallamPathFinder4.WinForms.Panels
         private Label _lblTotalLength;
         private Label _lblTitle;
         private Button _btnSave;
+            #region Private Fields - Path Groups
+            private List<PathGroup> _pathGroups;
+            private int _currentGroupIndex;
+            #endregion
         #endregion
 
         #region Constants
@@ -136,6 +142,156 @@ namespace SallamPathFinder4.WinForms.Panels
         }
         #endregion
 
+        #region Public Methods - Path Groups
+
+        /// <summary>
+        /// Clears all path groups and display
+        /// </summary>
+        public void ClearPathGroups()
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(ClearPathGroups));
+                return;
+            }
+
+            _pathGroups?.Clear();
+            _lvPathSteps.Items.Clear();
+            _currentGroupIndex = 0;
+
+            _lblTotalCells.Text = "Total Cells: 0";
+            _lblTotalTime.Text = "Computation Time: 0 ms";
+            _lblTotalLength.Text = "Path Length: 0 cm";
+        }
+
+        /// <summary>
+        /// Adds a path group to the display
+        /// </summary>
+        /// <param name="groupName">Name of the group (e.g., "🎯 Goal 1", "🔋 Charging Path")</param>
+        /// <param name="groupColor">Color of the group (matches goal color)</param>
+        /// <param name="nodes">List of path nodes in this group</param>
+        public void AddPathGroup(string groupName, Color groupColor, List<PathNode> nodes)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => AddPathGroup(groupName, groupColor, nodes)));
+                return;
+            }
+
+            if (_pathGroups == null)
+            {
+                _pathGroups = new List<PathGroup>();
+            }
+
+            var group = new PathGroup
+            {
+                Name = groupName,
+                Color = groupColor,
+                Nodes = nodes,
+                StartStep = _currentGroupIndex + 1,
+                EndStep = _currentGroupIndex + nodes.Count
+            };
+
+            _pathGroups.Add(group);
+
+            // Add group header
+            var headerItem = new ListViewItem(groupName);
+            headerItem.BackColor = Color.FromArgb(50, groupColor);
+            headerItem.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            headerItem.ForeColor = Color.FromArgb(52, 73, 94);
+            _lvPathSteps.Items.Add(headerItem);
+
+            // Add nodes
+            foreach (var node in nodes)
+            {
+                _currentGroupIndex++;
+                var item = new ListViewItem(_currentGroupIndex.ToString());
+                item.SubItems.Add(node.X.ToString());
+                item.SubItems.Add(node.Y.ToString());
+                item.SubItems.Add(groupName);
+                item.BackColor = Color.FromArgb(30, groupColor);
+                _lvPathSteps.Items.Add(item);
+            }
+
+            // Auto-scroll to last item
+            if (_lvPathSteps.Items.Count > 0)
+            {
+                _lvPathSteps.EnsureVisible(_lvPathSteps.Items.Count - 1);
+            }
+        }
+
+        /// <summary>
+        /// Displays a complete path with multiple colored segments
+        /// </summary>
+        /// <param name="coloredPaths">List of colored paths to display</param>
+        /// <param name="scaleCmPerCell">Scale for real length calculation</param>
+        public void DisplayColoredPaths(List<ColoredPath> coloredPaths, double scaleCmPerCell)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => DisplayColoredPaths(coloredPaths, scaleCmPerCell)));
+                return;
+            }
+
+            ClearPathGroups();
+
+            if (coloredPaths == null || coloredPaths.Count == 0) return;
+
+            int totalCells = 0;
+            int groupNumber = 1;
+
+            foreach (var coloredPath in coloredPaths)
+            {
+                if (coloredPath == null || coloredPath.Nodes == null || coloredPath.Nodes.Count == 0) continue;
+
+                string groupName = GetGroupName(coloredPath.Type, groupNumber);
+                AddPathGroup(groupName, coloredPath.Color, coloredPath.Nodes.ToList());
+
+                totalCells += coloredPath.Nodes.Count;
+
+                if (coloredPath.Type != PathType.Return)
+                {
+                    groupNumber++;
+                }
+            }
+
+            // Update statistics (time and length need to be set separately)
+            _lblTotalCells.Text = $"Total Cells: {totalCells}";
+            _lblTotalLength.Text = $"Path Length: {totalCells * scaleCmPerCell:F1} cm";
+        }
+
+        /// <summary>
+        /// Gets the display name for a path type
+        /// </summary>
+        private string GetGroupName(PathType type, int goalNumber)
+        {
+            return type switch
+            {
+                PathType.Normal => $"🎯 Goal {goalNumber}",
+                PathType.Return => "🏁 Return to Parking",
+                PathType.Charging => "🔋 Charging Path",
+                _ => $"Segment {goalNumber}"
+            };
+        }
+
+        /// <summary>
+        /// Updates statistics with computation time
+        /// </summary>
+        public void UpdateStatsWithGroups(int totalCells, double timeMs, double lengthCm)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateStatsWithGroups(totalCells, timeMs, lengthCm)));
+                return;
+            }
+
+            _lblTotalCells.Text = $"Total Cells: {totalCells}";
+            _lblTotalTime.Text = $"Computation Time: {timeMs:F2} ms";
+            _lblTotalLength.Text = $"Path Length: {lengthCm:F1} cm";
+        }
+
+        #endregion
+
         #region Event Handlers
         private void BtnSave_Click(object sender, EventArgs e)
         {
@@ -167,4 +323,21 @@ namespace SallamPathFinder4.WinForms.Panels
         }
         #endregion
     }
-}
+   
+    /// <summary>
+    /// Represents a group of path nodes belonging to a specific goal or segment
+    /// </summary>
+    public class PathGroup
+    {
+        public string Name { get; set; }
+        public Color Color { get; set; }
+        public List<PathNode> Nodes { get; set; }
+        public int StartStep { get; set; }
+        public int EndStep { get; set; }
+
+        public override string ToString()
+        {
+            return $"{Name}: {Nodes.Count} cells";
+        }
+    }  
+} 

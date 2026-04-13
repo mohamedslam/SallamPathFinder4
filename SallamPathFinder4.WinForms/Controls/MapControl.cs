@@ -32,14 +32,18 @@ namespace SallamPathFinder4.WinForms.Controls
         }
         #endregion
 
-        #region Constants
+        #region Constants 
         private const int MIN_CELL_SIZE = 4;
         private const int DEFAULT_CELL_SIZE = 30;
         private const float MIN_ZOOM = 0.5f;
         private const float MAX_ZOOM = 3.0f;
         private const float ZOOM_STEP = 0.1f;
         private const double SQRT2 = 1.4142135623730951;
+        private const int NORMAL_PATH_THICKNESS = 4;
+        private const int RETURN_PATH_THICKNESS = 2;
+        private const int CHARGING_PATH_THICKNESS = 4;
         #endregion
+
         #region Private Fields - Special Cells
         private Point _startPoint;
         private HashSet<Point> _collisionCells;
@@ -51,6 +55,7 @@ namespace SallamPathFinder4.WinForms.Controls
         private Dictionary<(int, int), int> _startPoints;
         private int _nextStartIndex;
         #endregion
+
         #region Private Fields - Core
         private MapGrid _mapGrid;
         private List<GoalPoint> _goals;
@@ -552,6 +557,7 @@ namespace SallamPathFinder4.WinForms.Controls
             int endX = Math.Min(_mapGrid.Width - 1, (int)((visibleWidth - _viewOffset.X) / scaledCellSize) + 2);
             int endY = Math.Min(_mapGrid.Height - 1, (int)((visibleHeight - _viewOffset.Y) / scaledCellSize) + 2);
 
+            // ========== رسم الخلايا (الحلقة المزدوجة) ==========
             for (int y = startY; y <= endY; y++)
             {
                 for (int x = startX; x <= endX; x++)
@@ -568,18 +574,18 @@ namespace SallamPathFinder4.WinForms.Controls
                     DrawDynamicObstacles(g, x, y, rect);
                     DrawDetectionZone(g, x, y, rect);
                     DrawGridLines(g, rect);
-                    DrawSpecialCells(g, x, y, rect);  // Add this line
+                    DrawSpecialCells(g, x, y, rect);
+                    // Add this line
                     // Draw coordinates if enabled
                     if (_showCoordinates)
                     {
                         DrawCoordinates(g, rect, x, y);
                     }
-
                 }
             }
 
-            // Draw dashed return path for areas the robot has traversed
-            DrawDashedReturnPath(g);
+            // ========== رسم خطوط المسارات (مرة واحدة فقط) ==========
+            DrawPathLines(g);
 
             // Draw robot on top
             DrawRobot(g);
@@ -762,21 +768,23 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
+        #region Private Methods - Drawing Paths
+
         private void DrawPaths(Graphics g, int x, int y, Rectangle rect)
         {
             if (_coloredPaths == null) return;
 
             foreach (var coloredPath in _coloredPaths)
             {
-                // التحقق من وجود coloredPath و Nodes
                 if (coloredPath == null || coloredPath.Nodes == null) continue;
 
-                // مسار العودة يتم رسمه كخط متقطع بين الخلايا، وليس تلوين خلايا
-                if (coloredPath.IsReturnPath)
+                // مسار العودة والمسار الأزرق يتم رسمه كخطوط بين الخلايا
+                if (coloredPath.Type == PathType.Return || coloredPath.Type == PathType.Charging)
                 {
                     continue;
                 }
 
+                // المسار العادي (Normal) - تلوين الخلايا
                 foreach (var node in coloredPath.Nodes)
                 {
                     if (node.X == x && node.Y == y)
@@ -791,19 +799,21 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        // دالة إضافية لرسم الخط المتقطع لمسار العودة
-        private void DrawDashedReturnPath(Graphics g)
+        private void DrawPathLines(Graphics g)
         {
             if (_coloredPaths == null) return;
 
             foreach (var coloredPath in _coloredPaths)
             {
-                if (coloredPath == null || !coloredPath.IsReturnPath || coloredPath.Nodes == null || coloredPath.Nodes.Count < 2)
-                    continue;
+                if (coloredPath == null || coloredPath.Nodes == null || coloredPath.Nodes.Count < 2) continue;
 
-                using (var pen = new Pen(coloredPath.Color, 4))
+                // استخدام القلم مع الإعدادات المناسبة
+                using (var pen = new Pen(coloredPath.Color, coloredPath.Thickness))
                 {
-                    pen.DashStyle = DashStyle.Dash;
+                    if (coloredPath.IsDashed)
+                    {
+                        pen.DashStyle = DashStyle.Dash;
+                    }
 
                     for (int i = 1; i < coloredPath.Nodes.Count; i++)
                     {
@@ -818,6 +828,36 @@ namespace SallamPathFinder4.WinForms.Controls
                 }
             }
         }
+
+        #endregion
+
+        //// دالة إضافية لرسم الخط المتقطع لمسار العودة
+        //private void DrawDashedReturnPath(Graphics g)
+        //{
+        //    if (_coloredPaths == null) return;
+
+        //    foreach (var coloredPath in _coloredPaths)
+        //    {
+        //        if (coloredPath == null || !coloredPath.IsReturnPath || coloredPath.Nodes == null || coloredPath.Nodes.Count < 2)
+        //            continue;
+
+        //        using (var pen = new Pen(coloredPath.Color, 4))
+        //        {
+        //            pen.DashStyle = DashStyle.Dash;
+
+        //            for (int i = 1; i < coloredPath.Nodes.Count; i++)
+        //            {
+        //                var from = coloredPath.Nodes[i - 1];
+        //                var to = coloredPath.Nodes[i];
+        //                var rectFrom = GetCellRect(from.X, from.Y);
+        //                var rectTo = GetCellRect(to.X, to.Y);
+        //                var fromCenter = new Point(rectFrom.X + rectFrom.Width / 2, rectFrom.Y + rectFrom.Height / 2);
+        //                var toCenter = new Point(rectTo.X + rectTo.Width / 2, rectTo.Y + rectTo.Height / 2);
+        //                g.DrawLine(pen, fromCenter, toCenter);
+        //            }
+        //        }
+        //    }
+        //}
 
         private void DrawDynamicObstacles(Graphics g, int x, int y, Rectangle rect)
         {
