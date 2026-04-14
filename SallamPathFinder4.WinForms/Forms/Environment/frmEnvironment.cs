@@ -64,14 +64,14 @@ namespace SallamPathFinder4.WinForms.Forms
             private bool _isDynamicChargingEnabled;
             private int _chargingTimeSeconds;
             private double _safetyMarginPercent;
-            #endregion
-            #region Private Fields - Shortcuts
-            private bool _orderGoalsByDistance;
-            private List<GoalPoint> _originalGoalsOrder;
-            #endregion
+            #endregion 
             #region Private Fields - Start Point
             private bool _isSettingStartPoint;
             #endregion
+           #region Private Fields - Goals Ordering
+            private bool _orderGoalsByDistance;
+            private List<GoalPoint> _originalGoalsOrder;
+           #endregion
         #endregion
 
         #region Constructor
@@ -438,16 +438,24 @@ namespace SallamPathFinder4.WinForms.Forms
 
         private void RefreshGoalsList()
         {
-            _viewModel.Goals.Clear();
-            foreach (var goal in mapControl.Goals)
-                _viewModel.Goals.Add(goal);
-            goalsPanel?.RefreshList();
-            _viewModel.RefreshHasGoals();
-
-            if (_simulationService != null)
+            if (_viewModel?.Goals != null && goalsPanel != null)
             {
-                var goalsList = _viewModel.Goals.Select(g => g.Location).ToList();
-                _simulationService.SetGoals(goalsList);
+                // Update mapControl goals from ViewModel
+                mapControl.Goals = _viewModel.Goals.ToList();
+
+                // Rest of the code...
+                _viewModel.Goals.Clear();
+                foreach (var goal in mapControl.Goals)
+                {
+                    _viewModel.Goals.Add(goal);
+                }
+                goalsPanel.RefreshList();
+                _viewModel.RefreshHasGoals();
+            }
+            System.Diagnostics.Debug.WriteLine("ViewModel Goals after ordering:");
+            for (int i = 0; i < _viewModel.Goals.Count; i++)
+            {
+                System.Diagnostics.Debug.WriteLine($"  Goal {i}: {_viewModel.Goals[i].Name} at ({_viewModel.Goals[i].Location.X},{_viewModel.Goals[i].Location.Y})");
             }
         }
 
@@ -786,6 +794,154 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         #endregion
 
+        #region Goals Ordering Methods
+
+        /// <summary>
+        /// Toggles ordering of goals by distance from start point
+        /// </summary>
+        private void ToggleOrderGoalsByDistance()
+        {
+            if (_viewModel == null || _viewModel.Goals == null)
+            {
+                return;
+            }
+
+            _orderGoalsByDistance = !_orderGoalsByDistance;
+
+            if (_orderGoalsByDistance)
+            {
+                OrderGoalsByDistance();
+                lblStatus.Text = "🟢 Goals ordered by distance from start point";
+                System.Diagnostics.Debug.WriteLine("[GoalsOrder] Order goals by distance: ENABLED");
+            }
+            else
+            {
+                RestoreOriginalGoalsOrder();
+                lblStatus.Text = "🟢 Goals restored to original order";
+                System.Diagnostics.Debug.WriteLine("[GoalsOrder] Order goals by distance: DISABLED");
+            }
+        }
+
+        /// <summary>
+        /// Orders goals by distance from current robot start point
+        /// </summary>
+        /// <summary>
+        /// Orders goals by distance from current robot start point using selected distance metric
+        /// </summary>
+        private void OrderGoalsByDistance()
+        {
+            if (_viewModel?.Goals == null || _viewModel.Goals.Count == 0)
+            {
+                return;
+            }
+
+            // Get current start point
+            Point startPoint = mapControl.HasCustomStartPoint
+                ? mapControl.RobotStartPoint
+                : mapControl.RobotPosition;
+
+            // Get selected distance metric from algorithm settings
+            DistanceMetric selectedMetric = algorithmSettingsPanel?.SelectedMetric ?? DistanceMetric.Manhattan;
+
+            System.Diagnostics.Debug.WriteLine($"[GoalsOrder] Ordering goals from start point ({startPoint.X},{startPoint.Y}) using metric: {selectedMetric}");
+
+            // Save original order if not already saved
+            if (_originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
+            {
+                _originalGoalsOrder = _viewModel.Goals.ToList();
+            }
+
+            // Order goals by distance using selected metric
+            var orderedGoals = _viewModel.Goals
+                .OrderBy(g => CalculateDistance(startPoint, g.Location, selectedMetric))
+                .ToList();
+
+            // Apply new order
+            _viewModel.Goals.Clear();
+            foreach (var goal in orderedGoals)
+            {
+                _viewModel.Goals.Add(goal);
+            }
+
+            // Refresh UI
+            RefreshGoalsList();
+            _viewModel.ClearCachedPath();
+
+            // Log the new order with distances
+            for (int i = 0; i < orderedGoals.Count; i++)
+            {
+                var goal = orderedGoals[i];
+                double distance = CalculateDistance(startPoint, goal.Location, selectedMetric);
+                System.Diagnostics.Debug.WriteLine($"[GoalsOrder]   Goal {i + 1}: {goal.Name} at ({goal.Location.X},{goal.Location.Y}) - distance {distance:F2}");
+            }
+
+            // Recalculate path with new goal order
+            if (_viewModel.HasPath || _viewModel.CurrentPathResult != null)
+            {
+                System.Diagnostics.Debug.WriteLine("[GoalsOrder] Recalculating path with new goal order...");
+                mapControl.ClearPaths();
+                pathDisplayPanel?.ClearPath();
+                _viewModel.FindPathAsync();
+            }
+        }
+   
+        /// <summary>
+        /// Calculates distance between two points using the specified metric
+        /// </summary>
+        private double CalculateDistance(Point a, Point b, DistanceMetric metric)
+        {
+            int dx = Math.Abs(a.X - b.X);
+            int dy = Math.Abs(a.Y - b.Y);
+
+            return metric switch
+            {
+                DistanceMetric.Manhattan => dx + dy,
+                DistanceMetric.Euclidean => Math.Sqrt(dx * dx + dy * dy),
+                DistanceMetric.MaxDXDY => Math.Max(dx, dy),
+                DistanceMetric.DiagonalShortcut => (2 * Math.Min(dx, dy)) + Math.Abs(dx - dy),
+                DistanceMetric.EuclideanNoSQR => dx * dx + dy * dy,
+                _ => dx + dy // Default to Manhattan
+            };
+        }
+        /// <summary>
+        /// Restores original goals order
+        /// </summary>
+        /// <summary>
+        /// Restores original goals order
+        /// </summary>
+        private void RestoreOriginalGoalsOrder()
+        {
+            if (_viewModel?.Goals == null || _originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
+            {
+                return;
+            }
+
+            _viewModel.Goals.Clear();
+            foreach (var goal in _originalGoalsOrder)
+            {
+                _viewModel.Goals.Add(goal);
+            }
+
+            RefreshGoalsList();
+            System.Diagnostics.Debug.WriteLine("[GoalsOrder] Original order restored");
+
+            // Recalculate path with original goal order
+            if (_viewModel.HasPath || _viewModel.CurrentPathResult != null)
+            {
+                System.Diagnostics.Debug.WriteLine("[GoalsOrder] Recalculating path with original goal order...");
+                mapControl.ClearPaths();
+                pathDisplayPanel?.ClearPath();
+                _viewModel.FindPathAsync();
+            }
+        }
+
+        /// <summary>
+        /// Checks if goals are currently ordered by distance
+        /// </summary>
+        private bool IsGoalsOrderedByDistance => _orderGoalsByDistance;
+
+        #endregion
+
         #region Form Events
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
@@ -864,7 +1020,7 @@ namespace SallamPathFinder4.WinForms.Forms
             // Order goals by distance
             if (keyData == SHORTCUT_ORDER_GOALS)
             {
-                ToggleOrderGoalsByDistance();
+                ToggleOrderGoalsByDistance(); 
                 return true;
             }
 
@@ -1004,82 +1160,7 @@ namespace SallamPathFinder4.WinForms.Forms
                 System.Diagnostics.Debug.WriteLine($"[Shortcut] Algorithm selected: index {algorithmIndex}");
             }
         }
-
-        /// <summary>
-        /// Toggles ordering of goals by distance from start point
-        /// </summary>
-        private void ToggleOrderGoalsByDistance()
-        {
-            if (_viewModel == null)
-            {
-                return;
-            }
-
-            _orderGoalsByDistance = !_orderGoalsByDistance;
-
-            if (_orderGoalsByDistance)
-            {
-                OrderGoalsByDistance();
-                lblStatus.Text = "🟢 Goals ordered by distance from start point";
-                System.Diagnostics.Debug.WriteLine("[Shortcut] Order goals by distance: ENABLED");
-            }
-            else
-            {
-                RestoreOriginalGoalsOrder();
-                lblStatus.Text = "🟢 Goals restored to original order";
-                System.Diagnostics.Debug.WriteLine("[Shortcut] Order goals by distance: DISABLED");
-            }
-        }
-
-        /// <summary>
-        /// Orders goals by distance from current robot start point
-        /// </summary>
-        private void OrderGoalsByDistance()
-        {
-            if (_viewModel?.Goals == null || _viewModel.Goals.Count == 0)
-            {
-                return;
-            }
-
-            Point startPoint = mapControl.RobotPosition;
-
-            var orderedGoals = _viewModel.Goals
-                .OrderBy(g => Math.Abs(g.Location.X - startPoint.X) + Math.Abs(g.Location.Y - startPoint.Y))
-                .ToList();
-
-            // Save original order if not already saved
-            if (_originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
-            {
-                _originalGoalsOrder = _viewModel.Goals.ToList();
-            }
-
-            _viewModel.Goals.Clear();
-            foreach (var goal in orderedGoals)
-            {
-                _viewModel.Goals.Add(goal);
-            }
-
-            RefreshGoalsList();
-        }
-
-        /// <summary>
-        /// Restores original goals order
-        /// </summary>
-        private void RestoreOriginalGoalsOrder()
-        {
-            if (_viewModel?.Goals == null || _originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
-            {
-                return;
-            }
-
-            _viewModel.Goals.Clear();
-            foreach (var goal in _originalGoalsOrder)
-            {
-                _viewModel.Goals.Add(goal);
-            }
-
-            RefreshGoalsList();
-        }
+         
 
         #endregion
         #endregion
@@ -1197,6 +1278,7 @@ namespace SallamPathFinder4.WinForms.Forms
         }
 
         #endregion
+
         #region Dialog Methods
         /// <summary>
         /// Shows the experiment browser form

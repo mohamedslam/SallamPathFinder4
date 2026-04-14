@@ -143,6 +143,12 @@ namespace SallamPathFinder4.WinForms.Forms
             var robotMenuItem = new ToolStripMenuItem("Robot");
             robotMenuItem.DropDownItems.Add("Robot Dashboard...", null, (s, e) => ShowDashboard());
 
+            // View menu - add separator and order goals option
+            var orderGoalsItem = new ToolStripMenuItem("Order Goals by Distance");
+            orderGoalsItem.ShortcutKeyDisplayString = "Ctrl+Shift+G";
+            orderGoalsItem.Click += (s, e) => ToggleOrderGoalsByDistance();
+            viewMenuItem.DropDownItems.Add(orderGoalsItem);
+
             // ========== ADD MENUS TO MENUSTRIP ==========
             mainMenuStrip.Items.Add(fileMenuItem);
             mainMenuStrip.Items.Add(viewMenuItem);
@@ -165,7 +171,8 @@ namespace SallamPathFinder4.WinForms.Forms
             testMenu.DropDownItems.Add("Test SPPA-DL Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.SPPA_DL));
             testMenu.DropDownItems.Add(new ToolStripSeparator());
             testMenu.DropDownItems.Add("Clear Test Results", null, (s, e) => ClearTestResults());
-
+           
+            
 
             // Add Dynamic Obstacles submenu
             var obstacleMenu = new ToolStripDropDownButton("🚧 Obstacles");

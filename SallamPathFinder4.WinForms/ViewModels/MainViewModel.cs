@@ -276,7 +276,11 @@ namespace SallamPathFinder4.WinForms.ViewModels
         public async Task FindPathAsync()
         {
             System.Diagnostics.Debug.WriteLine("=== FindPathAsync STARTED ===");
-            System.Diagnostics.Debug.WriteLine($"Goals count: {Goals.Count}");
+            System.Diagnostics.Debug.WriteLine("Current goals order in ViewModel:");
+            for (int i = 0; i < Goals.Count; i++)
+            {
+                System.Diagnostics.Debug.WriteLine($"  Goal {i}: {Goals[i].Name} at ({Goals[i].Location.X},{Goals[i].Location.Y})");
+            }
 
             if (Goals.Count == 0)
             {
@@ -295,14 +299,15 @@ namespace SallamPathFinder4.WinForms.ViewModels
             try
             {
                 Point start = HasCustomStartPoint ? RobotStartPoint : RobotState.Position;
-                var goalsList = Goals.ToList();
+                var goalsList = Goals.Select(g => g.Location).ToList();
 
                 System.Diagnostics.Debug.WriteLine($"Start position: ({start.X},{start.Y})");
                 System.Diagnostics.Debug.WriteLine($"Goals list count: {goalsList.Count}");
 
                 for (int i = 0; i < goalsList.Count; i++)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Goal {i}: ({goalsList[i].Location.X},{goalsList[i].Location.Y})");
+                    // التصحيح: استخدام X و Y بدلاً من Location.X و Location.Y
+                    System.Diagnostics.Debug.WriteLine($"Goal {i}: ({goalsList[i].X},{goalsList[i].Y})");
                 }
 
                 // Run pathfinding in background thread
@@ -372,7 +377,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
         /// <summary>
         /// Internal pathfinding logic running on background thread
         /// </summary>
-        private PathfindingInternalResult FindPathInternal(Point start, List<GoalPoint> goalsList, CancellationToken token)
+        private PathfindingInternalResult FindPathInternal(Point start, List<Point> goalsList, CancellationToken token)
         {
             var coloredSegments = new List<ColoredPath>();
             var fullPath = new List<PathNode>();
@@ -384,7 +389,8 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 // Check for cancellation
                 token.ThrowIfCancellationRequested();
 
-                System.Diagnostics.Debug.WriteLine($"Processing goal {i + 1}/{goalsList.Count} at ({goalsList[i].Location.X},{goalsList[i].Location.Y})");
+                Point currentGoal = goalsList[i];
+                System.Diagnostics.Debug.WriteLine($"Processing goal {i + 1}/{goalsList.Count} at ({currentGoal.X},{currentGoal.Y})");
 
                 var finder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric);
 
@@ -409,7 +415,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 PathResult result = null;
 
                 // Run each segment with a timeout using a separate thread
-                var segmentTask = Task.Run(() => finder.FindPath(currentPos, goalsList[i].Location));
+                var segmentTask = Task.Run(() => finder.FindPath(currentPos, currentGoal));
                 bool completed = segmentTask.Wait(SEGMENT_TIMEOUT_MS);
 
                 if (!completed)
@@ -435,9 +441,15 @@ namespace SallamPathFinder4.WinForms.ViewModels
                     };
                 }
 
-                // Color the path segment with goal color (transparent 180)
-                Color segmentColor = Color.FromArgb(180, goalsList[i].Color);
-                coloredSegments.Add(new ColoredPath(result.Path.ToList(), segmentColor, false));
+                // Get goal color from original Goals list (using position matching)
+                Color goalColor = Color.Gold;
+                var matchingGoal = Goals.FirstOrDefault(g => g.Location.X == currentGoal.X && g.Location.Y == currentGoal.Y);
+                if (matchingGoal != null)
+                {
+                    goalColor = Color.FromArgb(180, matchingGoal.Color);
+                }
+
+                coloredSegments.Add(new ColoredPath(result.Path.ToList(), goalColor, false));
 
                 if (fullPath.Count == 0)
                     fullPath.AddRange(result.Path);
@@ -445,7 +457,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                     fullPath.AddRange(result.Path.Skip(1));
 
                 totalTime += result.ComputationTimeSeconds;
-                currentPos = goalsList[i].Location;
+                currentPos = currentGoal;
 
                 System.Diagnostics.Debug.WriteLine($"Goal {i + 1} completed. Total path so far: {fullPath.Count} cells");
             }
@@ -453,7 +465,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
             // Return path to nearest parking (dashed green line)
             if (ParkingPoints.Count > 0 && goalsList.Count > 0)
             {
-                var lastGoal = goalsList.Last().Location;
+                Point lastGoal = goalsList.Last();
                 var nearestParking = ParkingPoints
                     .OrderBy(p => Math.Abs(p.Location.X - lastGoal.X) + Math.Abs(p.Location.Y - lastGoal.Y))
                     .FirstOrDefault();
@@ -462,7 +474,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 {
                     System.Diagnostics.Debug.WriteLine($"Finding return path to parking at ({nearestParking.Location.X},{nearestParking.Location.Y})");
 
-                    var returnFinder =  new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric); 
+                    var returnFinder = new AlgorithmFactory(_mapGrid).Create(SelectedAlgorithm, SelectedMetric);
 
                     if (returnFinder != null)
                     {
@@ -2271,6 +2283,18 @@ namespace SallamPathFinder4.WinForms.ViewModels
         }
 
         #endregion
+
+        /// <summary>
+        /// Clears cached path data to force recalculation with new goal order
+        /// </summary>
+        public void ClearCachedPath()
+        {
+            _currentPathResult = null;
+            _originalFullPath = null;
+            HasPath = false;
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Cached path cleared");
+        }
     }
 
     #region AlgorithmTestResult Class
