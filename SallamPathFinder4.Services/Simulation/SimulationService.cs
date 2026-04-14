@@ -15,7 +15,7 @@ using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
 using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.ML.Training;
-using System.Drawing;
+using System.Drawing; 
 #endregion
 
 namespace SallamPathFinder4.Services.Simulation
@@ -302,25 +302,28 @@ namespace SallamPathFinder4.Services.Simulation
             Point newPosition = _lastRobotPosition;
             float newAngle = _lastRobotAngle;
 
-            switch (command)
+            // Handle different command types
+            switch (command.ID)
             {
-                case RobotCommand.Forward:
+                case CommandID.Forward:
+                    int steps = command.Parameters.Count > 0 ? (int)command.Parameters[0] : stepSize;
                     newPosition = new Point(
-                        _lastRobotPosition.X + (int)(stepSize * Math.Cos(_lastRobotAngle * Math.PI / 180)),
-                        _lastRobotPosition.Y + (int)(stepSize * Math.Sin(_lastRobotAngle * Math.PI / 180)));
+                        _lastRobotPosition.X + (int)(steps * Math.Cos(_lastRobotAngle * Math.PI / 180)),
+                        _lastRobotPosition.Y + (int)(steps * Math.Sin(_lastRobotAngle * Math.PI / 180)));
                     break;
 
-                case RobotCommand.Backward:
+                case CommandID.Backward:
+                    steps = command.Parameters.Count > 0 ? (int)command.Parameters[0] : stepSize;
                     newPosition = new Point(
-                        _lastRobotPosition.X - (int)(stepSize * Math.Cos(_lastRobotAngle * Math.PI / 180)),
-                        _lastRobotPosition.Y - (int)(stepSize * Math.Sin(_lastRobotAngle * Math.PI / 180)));
+                        _lastRobotPosition.X - (int)(steps * Math.Cos(_lastRobotAngle * Math.PI / 180)),
+                        _lastRobotPosition.Y - (int)(steps * Math.Sin(_lastRobotAngle * Math.PI / 180)));
                     break;
 
-                case RobotCommand.TurnLeft:
+                case CommandID.TurnLeftTank:
                     newAngle = _lastRobotAngle - rotationAngle;
                     break;
 
-                case RobotCommand.TurnRight:
+                case CommandID.TurnRightTank:
                     newAngle = _lastRobotAngle + rotationAngle;
                     break;
 
