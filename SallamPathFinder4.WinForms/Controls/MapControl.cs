@@ -95,7 +95,11 @@ namespace SallamPathFinder4.WinForms.Controls
         private Point _lastMousePosition;
         private Random _random;
         #endregion
-        
+
+        #region Private Fields - Start Point
+        private Point _robotStartPoint;
+        #endregion
+
         #region Constructor
         public MapControl()
         {
@@ -291,14 +295,54 @@ namespace SallamPathFinder4.WinForms.Controls
         }
         #endregion
 
+        #region Public Properties - Start Point
+
+        /// <summary>
+        /// Gets or sets the robot start point on the map
+        /// </summary>
+        public Point RobotStartPoint
+        {
+            get => _robotStartPoint;
+            set
+            {
+                _robotStartPoint = value;
+                SetCurrentStartPoint(value);
+                Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Indicates whether a custom start point is set
+        /// </summary>
+        public bool HasCustomStartPoint => _robotStartPoint != Point.Empty;
+
+        #endregion
+
         #region Public Methods - Start Points
+
+        /// <summary>
+        /// Sets the current start point (clears previous and adds new)
+        /// </summary>
+        public void SetCurrentStartPoint(Point location)
+        {
+            ResetStartPoints();
+            AddStartPoint(location);
+            _robotStartPoint = location;
+
+            // Also update the actual robot position
+            this.RobotPosition = location;
+
+            System.Diagnostics.Debug.WriteLine($"[MapControl] Start point set to ({location.X},{location.Y})");
+        }
+
         /// <summary>
         /// Resets start point counter for new experiment
         /// </summary>
         public void ResetStartPoints()
         {
-            _startPoints.Clear();
+            _startPoints?.Clear();
             _nextStartIndex = 0;
+            _robotStartPoint = Point.Empty;
         }
 
         /// <summary>
@@ -307,7 +351,9 @@ namespace SallamPathFinder4.WinForms.Controls
         public void AddStartPoint(Point location)
         {
             if (_startPoints == null)
+            {
                 _startPoints = new Dictionary<(int, int), int>();
+            }
 
             if (!_startPoints.ContainsKey((location.X, location.Y)))
             {
@@ -317,16 +363,7 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        /// <summary>
-        /// Sets the current start point (clears previous and adds new)
-        /// </summary>
-        public void SetCurrentStartPoint(Point location)
-        {
-            ResetStartPoints();
-            AddStartPoint(location);
-        }
         #endregion
-
 
         #region Public Methods - Path Drawing
         public void ClearPaths()

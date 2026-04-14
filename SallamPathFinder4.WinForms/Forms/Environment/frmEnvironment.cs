@@ -66,9 +66,11 @@ namespace SallamPathFinder4.WinForms.Forms
             private double _safetyMarginPercent;
             #endregion
             #region Private Fields - Shortcuts
-            private bool _isSettingStartPoint;
             private bool _orderGoalsByDistance;
             private List<GoalPoint> _originalGoalsOrder;
+            #endregion
+            #region Private Fields - Start Point
+            private bool _isSettingStartPoint;
             #endregion
         #endregion
 
@@ -479,13 +481,19 @@ namespace SallamPathFinder4.WinForms.Forms
             {
                 mapControl.SetCurrentStartPoint(cell);
                 mapControl.RobotPosition = cell;
-                _viewModel.RobotState.Position = cell;
+
+                if (_viewModel != null)
+                {
+                    _viewModel.RobotState.Position = cell;
+                }
+
                 _isSettingStartPoint = false;
                 mapControl.Cursor = Cursors.Default;
                 lblStatus.Text = $"🟢 Start point set to ({cell.X},{cell.Y})";
                 mapControl.Invalidate();
                 return;
             }
+            
             if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
 
             if (_isAddingGoal)
@@ -978,19 +986,7 @@ namespace SallamPathFinder4.WinForms.Forms
 
             System.Diagnostics.Debug.WriteLine("[Shortcut] New experiment started");
         }
-
-        /// <summary>
-        /// Starts set start point mode (user clicks on map to set robot start position)
-        /// </summary>
-        private void StartSetStartPointMode()
-        {
-            CancelCurrentDrawMode();
-            _isSettingStartPoint = true;
-            mapControl.Cursor = Cursors.Cross;
-            lblStatus.Text = "🟡 Click on map to set robot start point (Press ESC to cancel)";
-            System.Diagnostics.Debug.WriteLine("[Shortcut] Set start point mode activated");
-        }
-
+         
         /// <summary>
         /// Selects algorithm by index
         /// </summary>
@@ -1159,6 +1155,48 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         #endregion
 
+        #region Start Point Methods
+
+        /// <summary>
+        /// Starts set start point mode (user clicks on map to set robot start position)
+        /// </summary>
+        private void StartSetStartPointMode()
+        {
+            CancelCurrentDrawMode();
+            _isSettingStartPoint = true;
+            mapControl.Cursor = Cursors.Cross;
+            lblStatus.Text = "🟡 Click on map to set robot start point (Press ESC to cancel)";
+            System.Diagnostics.Debug.WriteLine("[StartPoint] Set start point mode activated");
+        }
+
+        /// <summary>
+        /// Resets start point to default (10,10)
+        /// </summary>
+        private void ResetStartPoint()
+        {
+            var result = MessageBox.Show(
+                "Reset start point to default (10,10)?",
+                "Reset Start Point",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                Point defaultStart = new Point(10, 10);
+                mapControl.SetCurrentStartPoint(defaultStart);
+                mapControl.RobotPosition = defaultStart;
+
+                if (_viewModel != null)
+                {
+                    _viewModel.RobotState.Position = defaultStart;
+                }
+
+                lblStatus.Text = $"🟢 Start point reset to ({defaultStart.X},{defaultStart.Y})";
+                mapControl.Invalidate();
+            }
+        }
+
+        #endregion
         #region Dialog Methods
         /// <summary>
         /// Shows the experiment browser form

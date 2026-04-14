@@ -240,6 +240,24 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
         #endregion
 
+        #region Public Properties - Start Point
+
+        /// <summary>
+        /// Gets the robot start point from map control
+        /// </summary>
+        public Point RobotStartPoint
+        {
+            get => _mapControl.RobotStartPoint;
+            set => _mapControl.RobotStartPoint = value;
+        }
+
+        /// <summary>
+        /// Indicates whether a custom start point is set
+        /// </summary>
+        public bool HasCustomStartPoint => _mapControl.HasCustomStartPoint;
+
+        #endregion
+
         #region Nested Class - Pathfinding Result
         private sealed class PathfindingInternalResult
         {
@@ -276,7 +294,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
             try
             {
-                Point start = RobotState.Position;
+                Point start = HasCustomStartPoint ? RobotStartPoint : RobotState.Position;
                 var goalsList = Goals.ToList();
 
                 System.Diagnostics.Debug.WriteLine($"Start position: ({start.X},{start.Y})");
