@@ -42,42 +42,30 @@ namespace SallamPathFinder4.WinForms.Forms.Shared
         public string CompletedScreenshotPath { get; set; }
         public string ReplayPath { get; set; }
         public List<Point> Path { get; set; }
-    }
+        public string GoalOrder { get; set; }
+        public bool UsedDynamicCharging { get; set; }
+        public double  ChargingTimeSeconds { get; set; }
+        public double SafetyMarginPercent { get; set; }
+        public bool OrderedByDistance { get; set; }
+        public Point StartPointUsed { get; set; }
+        public Point EndPointReached { get; set; }
+        public double EstimatedTimeSeconds { get; set; }
+        // Battery Statistics
+        public double InitialBatteryPercent { get; set; }
+        public double FinalBatteryPercent { get; set; }
+        public double TotalBatteryConsumedPercent { get; set; }
+        public double TotalChargingUnits { get; set; }
+        public int TotalChargingCycles { get; set; }
+        public double TotalChargingTimeSeconds { get; set; }
 
-    /// <summary>
-    /// Represents the complete settings for an experiment
-    /// </summary>
-    public class ExperimentSettings
-    {
-        public string ExperimentName { get; set; }
-        public List<string> SelectedAlgorithms { get; set; }
-        public List<string> SelectedMetrics { get; set; }
-        public int GoalCount { get; set; }
-        public int ParkingCount { get; set; }
-        public int StaticObstacles { get; set; }
-        public int DynamicObstacles { get; set; }
-        public int HeuristicWeight { get; set; }
-        public int SearchLimit { get; set; }
-        public bool AllowDiagonals { get; set; }
-        public bool HeavyDiagonals { get; set; }
-        public RobotSettings RobotSettings { get; set; }
-        public MLSettings MLSettings { get; set; }
-        public int Iterations { get; set; }
-        public bool SaveScreenshots { get; set; }
-        public bool SaveReplay { get; set; }
-        public bool ShowPathOnScreenshots { get; set; }
-        public string SavePath { get; set; }
-    }
+        // Time Statistics
+        public double TotalTravelTimeSeconds { get; set; }
+        public double TotalOverheadTimeSeconds { get; set; }
+        public double TotalTimeSeconds { get; set; }
 
-    /// <summary>
-    /// Represents machine learning settings for SPPA-DL algorithm
-    /// </summary>
-    public class MLSettings
-    {
-        public bool EnableDynamicLearning { get; set; }
-        public double LearningRate { get; set; }
-        public bool UseNeuralNetwork { get; set; }
-        public bool CollectTrainingData { get; set; }
-        public bool TrainBeforeExperiment { get; set; }
+        // Failure Analysis Path Errors
+        public bool HasPathErrors { get; set; }
+        public string PathErrorsJson { get; set; } 
+        public string FailureReason { get; set; } = string.Empty;
     }
 }

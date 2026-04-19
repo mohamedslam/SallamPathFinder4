@@ -141,6 +141,30 @@ namespace SallamPathFinder4.Core.Models.Experiments
         public List<CollisionRecord> CollisionRecords { get; set; }
         #endregion
 
+        #region Properties - Iteration Tracking
+        /// <summary>نقاط البداية لكل تكرار (JSON)</summary>
+        public string StartPointsJson { get; set; }
+
+        /// <summary>نقاط النهاية لكل تكرار (JSON)</summary>
+        public string EndPointsJson { get; set; }
+
+        /// <summary>بيانات المسارات الكاملة لكل تكرار (JSON)</summary>
+        public string PathsDataJson { get; set; }
+
+        /// <summary>إعدادات الشحن المستخدمة (JSON)</summary>
+        public string ChargingSettingsJson { get; set; }
+        #endregion
+
+        #region Properties - Dynamic Charging Settings
+        public bool EnableDynamicCharging { get; set; }
+        public int ChargingTimeSeconds { get; set; }
+        public double SafetyMarginPercent { get; set; }
+        #endregion
+
+        #region Properties - Algorithm Settings
+        public bool OrderGoalsByDistance { get; set; }
+        #endregion
+
         #region Public Methods
         public static string GetCsvHeader()
         {

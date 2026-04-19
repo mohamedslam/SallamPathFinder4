@@ -10,6 +10,7 @@
 #region Namespace Imports
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults.Core;
 using SallamPathFinder4.WinForms.Models;
+using System.Text;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
@@ -193,6 +194,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
                                  $"🔋 Battery: {avgBattery:F1}% | 💥 Collisions: {avgCollisions:F1} | " +
                                  $"🏆 Best: {(bestAlgorithm?.Algorithm ?? "N/A")}";
         }
+
+   
 
         /// <summary>
         /// Clears all filters and refreshes the display

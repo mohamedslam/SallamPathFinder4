@@ -121,7 +121,9 @@ namespace SallamPathFinder4.Services.Simulation
         public double AverageActualSpeed => _totalDistance > 0 && _totalWeightedTime > 0 ? _totalDistance / _totalWeightedTime : _baseSpeed;
         public double TotalDistance => _totalDistance;
         public double TotalWeightedTime => _totalWeightedTime;
-        public ObstacleDataCollector DataCollector => _dataCollector;
+        public ObstacleDataCollector DataCollector => _dataCollector;    
+        public bool FastModeForExperiments { get; set; } = false;
+
         #region Public Properties - Charging
         /// <summary>
         /// Indicates whether robot is currently in charging mode (going to/from charging station)
@@ -569,6 +571,9 @@ namespace SallamPathFinder4.Services.Simulation
 
         private void MoveObstacleRandomly(DynamicObstacle obstacle, double deltaTimeSeconds)
         {
+            double speedMultiplier = FastModeForExperiments ? 5.0 : 1.0;  // 5x أسرع
+            double effectiveSpeed = obstacle.Speed * speedMultiplier; 
+ 
             if (obstacle.Speed <= 0) return;
 
             double steps = obstacle.Speed * deltaTimeSeconds;
