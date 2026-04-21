@@ -397,7 +397,7 @@ namespace SallamPathFinder4.WinForms.Panels
                 if (_remainingChargingSeconds == 0)
                 {
                     _countdownTimer.Stop();
-                    ChargingCompleted?.Invoke();
+                    ChargingCompleted?.Invoke();   
                 }
             }
         }

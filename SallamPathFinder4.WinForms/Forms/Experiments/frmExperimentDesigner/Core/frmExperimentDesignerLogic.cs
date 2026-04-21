@@ -464,7 +464,82 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             }
         }
         #endregion
+        #region Private Method - CalculateAndFillResultData
 
+        /// <summary>
+        /// Calculates all battery, time, and path statistics and fills the result object
+        /// </summary>
+        public  void CalculateAndFillResultData(
+            ComparisonResult result,
+            List<PathNode> fullPath,
+            Point startPoint,
+            Point endPoint,
+            List<Point> goals,
+            RobotSettings robotSettings,
+            double chargingTimeSeconds,
+            double cellSizeCm,
+            bool orderGoalsByDistance,
+            double pathfindingTimeMs)
+        {
+            // ========== 1. BASIC PATH METRICS ==========
+            result.PathLength = fullPath.Count;
+            result.Path = fullPath.Select(p => new Point(p.X, p.Y)).ToList();
+            result.ComputationTimeMs = pathfindingTimeMs;
+            result.StartPointUsed = startPoint;
+            result.EndPointReached = endPoint;
+            result.OrderedByDistance = orderGoalsByDistance;
+
+            // ========== 2. GOAL ORDER ==========
+            if (orderGoalsByDistance)
+            {
+                var orderedGoals = goals
+                    .OrderBy(g => Math.Abs(g.X - startPoint.X) + Math.Abs(g.Y - startPoint.Y))
+                    .ToList();
+                result.GoalOrder = string.Join(" → ", orderedGoals.Select(g => $"({g.X},{g.Y})"));
+            }
+            else
+            {
+                result.GoalOrder = string.Join(" → ", goals.Select(g => $"({g.X},{g.Y})"));
+            }
+
+            // ========== 3. TIME STATISTICS ==========
+            if (cellSizeCm <= 0) cellSizeCm = 10.0;
+            double totalDistanceCm = fullPath.Count * cellSizeCm;
+            double travelTimeSeconds = totalDistanceCm / Math.Max(0.1, robotSettings.InitialSpeedCmS);
+
+            result.TotalTravelTimeSeconds = travelTimeSeconds;
+            result.AverageActualSpeed = travelTimeSeconds > 0 ? totalDistanceCm / travelTimeSeconds : robotSettings.InitialSpeedCmS;
+
+            // ========== 4. BATTERY STATISTICS ==========
+            double batteryConsumedPerCell = robotSettings.BatteryConsumptionRate;
+            if (batteryConsumedPerCell <= 0) batteryConsumedPerCell = 1.0;
+
+            double estimatedConsumption = fullPath.Count * batteryConsumedPerCell;
+            double totalChargingNeeded = Math.Max(0, estimatedConsumption - robotSettings.InitialBatteryLevel);
+            int chargingCycles = (int)Math.Ceiling(totalChargingNeeded / 100.0);
+            double totalChargingTimeSeconds = chargingCycles * chargingTimeSeconds;
+
+            result.InitialBatteryPercent = robotSettings.InitialBatteryLevel;
+            result.FinalBatteryPercent = Math.Max(0, robotSettings.InitialBatteryLevel - estimatedConsumption);
+            result.TotalBatteryConsumedPercent = estimatedConsumption;
+            result.TotalChargingUnits = estimatedConsumption / 100.0;
+            result.TotalChargingCycles = chargingCycles;
+            result.TotalChargingTimeSeconds = totalChargingTimeSeconds;
+            result.RemainingBattery = result.FinalBatteryPercent;
+
+            // ========== 5. TOTAL TIME ==========
+            result.TotalOverheadTimeSeconds = 0; // Can be updated when actual charging occurs
+            result.TotalTimeSeconds = travelTimeSeconds + totalChargingTimeSeconds;
+
+            // ========== 6. DEBUG OUTPUT ==========
+            System.Diagnostics.Debug.WriteLine($"[CalculateResult] PathLength={result.PathLength}, Distance={totalDistanceCm:F1}cm");
+            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Battery: Initial={result.InitialBatteryPercent:F1}%, Consumed={result.TotalBatteryConsumedPercent:F1}%, Final={result.FinalBatteryPercent:F1}%");
+            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Charging: Units={result.TotalChargingUnits:F2}, Cycles={result.TotalChargingCycles}, Time={result.TotalChargingTimeSeconds:F0}s");
+            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Time: Travel={result.TotalTravelTimeSeconds:F2}s, Total={result.TotalTimeSeconds:F2}s");
+            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Start=({result.StartPointUsed.X},{result.StartPointUsed.Y}), End=({result.EndPointReached.X},{result.EndPointReached.Y})");
+        }
+
+        #endregion
         #region Dynamic Charging Settings
         /// <summary>
         /// Gets dynamic charging settings from form

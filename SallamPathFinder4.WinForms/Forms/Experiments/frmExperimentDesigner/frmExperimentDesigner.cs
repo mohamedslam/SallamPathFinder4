@@ -372,8 +372,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         #region Private Methods - Experiment Execution
         #region Private Methods - Run Single Experiment
 
-        #region Private Methods - Run Single Experiment
-
+        #region Private Methods - Run Single Experiment  
         /// <summary>
         /// Runs a single experiment iteration with full data collection
         /// </summary>
@@ -385,12 +384,11 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             MLSettings mlSettings,
             Point startPoint,
             bool orderGoalsByDistance)
-        {            
+        {
             var result = _logic.CreateEmptyResult(algorithm, metric, iteration, robotSettings, this);
 
             try
             {
-                
                 // ========== 1. INITIALIZE RESULT ==========
                 _iterationStartPoints.Add(startPoint);
 
@@ -402,12 +400,26 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 result.ChargingTimeSeconds = chargingTimeSeconds;
                 result.SafetyMarginPercent = safetyMarginPercent;
                 result.StartPointUsed = startPoint;
+                result.OrderedByDistance = orderGoalsByDistance;
+
+                // Battery statistics
                 result.InitialBatteryPercent = robotSettings.InitialBatteryLevel;
-                StartDetectionZoneUpdater(); 
+
+                // Goal order
+                List<Point> goals = _logic.GetRealGoals(_viewModel, _chkUseCurrentMap.Checked);
+                if (orderGoalsByDistance)
+                {
+                    goals = goals.OrderBy(g => Math.Abs(g.X - startPoint.X) + Math.Abs(g.Y - startPoint.Y)).ToList();
+                    result.GoalOrder = string.Join(" → ", goals.Select(g => $"({g.X},{g.Y})"));
+                }
+                else
+                {
+                    result.GoalOrder = string.Join(" → ", goals.Select(g => $"({g.X},{g.Y})"));
+                }
+
                 System.Diagnostics.Debug.WriteLine($"[Experiment] {algorithm} - {metric} - Iter {iteration}: Start=({startPoint.X},{startPoint.Y})");
 
                 // ========== 2. VALIDATE INPUT ==========
-                List<Point> goals = _logic.GetRealGoals(_viewModel, _chkUseCurrentMap.Checked);
                 if (goals == null || goals.Count == 0)
                 {
                     result.Success = false;
@@ -419,12 +431,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
                 List<Point> parkingPoints = _logic.GetParkingPoints(_viewModel, _chkUseCurrentMap.Checked);
 
-                // ========== 3. ORDER GOALS (Fixed order - no dynamic ordering) ==========
-                List<Point> orderedGoals = goals.ToList();  // Use user-defined order only
-                result.OrderedByDistance = false;
-                result.GoalOrder = string.Join(";", orderedGoals.Select(g => $"({g.X},{g.Y})"));
-
-                // ========== 4. INITIAL SCREENSHOT ==========
+                // ========== 3. INITIAL SCREENSHOT ==========
                 await ClearAllPaths();
 
                 ExecuteOnUIThread(() =>
@@ -442,7 +449,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                     await SaveScreenshot(algorithm, metric, iteration, "Initial", result);
                 }
 
-                // ========== 5. CREATE AND CONFIGURE FINDER ==========
+                // ========== 4. CREATE AND CONFIGURE FINDER ==========
                 var finder = _logic.CreateAlgorithmFinder(_mapGrid, algorithm, mlSettings);
                 if (finder == null)
                 {
@@ -454,13 +461,10 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 }
 
                 _logic.ConfigureFinder(finder, metric, this);
+                ApplyAlgorithmSpecificSettings(finder, algorithm, _logic.GetCurrentSettings(this));
 
-                // ========== 6. APPLY ALGORITHM-SPECIFIC SETTINGS ==========
-                var expSettings = _logic.GetCurrentSettings(this);
-                ApplyAlgorithmSpecificSettings(finder, algorithm, expSettings);
-
-                // ========== 7. FIND SEQUENTIAL PATH ==========
-                var pathResult = await _logic.FindSequentialPath(finder, startPoint, orderedGoals);
+                // ========== 5. FIND SEQUENTIAL PATH ==========
+                var pathResult = await _logic.FindSequentialPath(finder, startPoint, goals);
                 if (!pathResult.Success)
                 {
                     result.Success = false;
@@ -470,7 +474,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                     return result;
                 }
 
-                // ========== 8. ANALYZE PATH ERRORS ==========
+                // ========== 6. ANALYZE PATH ERRORS ==========
                 var pathErrors = AnalyzePathForErrors(pathResult.Path, _mapGrid);
                 if (pathErrors.Any())
                 {
@@ -481,7 +485,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                     System.Diagnostics.Debug.WriteLine($"[Experiment] Path errors: {result.ErrorMessage}");
                 }
 
-                // ========== 9. RETURN PATH (ONLY FOR SPPA FAMILY) ==========
+                // ========== 7. RETURN PATH (ONLY FOR SPPA FAMILY) ==========
                 List<PathNode> fullPath;
                 Point endPoint;
 
@@ -515,76 +519,162 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 _iterationEndPoints.Add(endPoint);
                 result.EndPointReached = endPoint;
 
-                // ========== 10. DRAW PATH WITH COLORS ==========
-                await DrawPathWithColors(fullPath, orderedGoals, startPoint, endPoint);
+                // ========== 8. DRAW PATH WITH COLORS ==========
+                await DrawPathWithColors(fullPath, goals, startPoint, endPoint);
 
                 if (_chkSaveScreenshots.Checked)
                 {
                     await SaveScreenshot(algorithm, metric, iteration, "Path", result);
                 }
 
-                // ========== 11. DRAW COMPLETED PATH ==========
+                // ========== 9. DRAW COMPLETED PATH ==========
                 await DrawCompletedPath(fullPath, endPoint);
 
                 if (_chkSaveScreenshots.Checked)
                 {
                     await SaveScreenshot(algorithm, metric, iteration, "Completed", result);
                 }
+                 
+                // ========== 10. CALCULATE BATTERY STATISTICS (FIXED) ==========
+                double cellSizeCm = _mapControl.ScaleCmPerCell;
+                if (cellSizeCm <= 0) cellSizeCm = 10.0;  // Default value
 
-                // ========== 12. FILL RESULT DATA ==========
+                double totalDistanceCm = fullPath.Count * cellSizeCm;
+                double travelTimeSeconds = totalDistanceCm / robotSettings.InitialSpeedCmS;
+
+                // Calculate battery consumption
+                double batteryConsumedPerCell = robotSettings.BatteryConsumptionRate;
+                if (batteryConsumedPerCell <= 0) batteryConsumedPerCell = 1.0;  // Default
+
+                double estimatedConsumption = fullPath.Count * batteryConsumedPerCell;
+
+                // Calculate charging cycles needed
+                double totalChargingNeeded = Math.Max(0, estimatedConsumption - robotSettings.InitialBatteryLevel);
+                int chargingCycles = (int)Math.Ceiling(totalChargingNeeded / 100.0);
+                double totalChargingTimeSeconds = chargingCycles * chargingTimeSeconds;
+
+                // FORCE VALUES FOR TESTING (remove after debugging)
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] fullPath.Count = {fullPath.Count}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] cellSizeCm = {cellSizeCm}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] robotSettings.InitialSpeedCmS = {robotSettings.InitialSpeedCmS}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] batteryConsumedPerCell = {batteryConsumedPerCell}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] estimatedConsumption = {estimatedConsumption}");
+
+                // ========== 11. FILL RESULT DATA (FIXED) ==========
                 result.Success = true;
                 result.FailureReason = "None";
                 result.PathLength = fullPath.Count;
-                result.ComputationTimeMs = pathResult.TotalTimeMs + (result.PathLength * 0.1); // Rough estimate for return path
+                result.ComputationTimeMs = pathResult.TotalTimeMs + (result.PathLength * 0.1);
                 result.Path = fullPath.Select(p => new System.Drawing.Point(p.X, p.Y)).ToList();
 
-                // Battery statistics (estimated)
-                double batteryConsumedPerCell = robotSettings.BatteryConsumptionRate;
-                result.TotalBatteryConsumedPercent = fullPath.Count * batteryConsumedPerCell;
-                result.TotalChargingUnits = result.TotalBatteryConsumedPercent / 100.0;
-                result.RemainingBattery = Math.Max(0, robotSettings.InitialBatteryLevel - result.TotalBatteryConsumedPercent);
-                result.FinalBatteryPercent = result.RemainingBattery;
+                // Battery statistics - FORCE VALUES
+                result.InitialBatteryPercent = robotSettings.InitialBatteryLevel;
+                result.FinalBatteryPercent = Math.Max(0, robotSettings.InitialBatteryLevel - estimatedConsumption);
+                result.TotalBatteryConsumedPercent = estimatedConsumption;
+                result.TotalChargingUnits = estimatedConsumption / 100.0;
+                result.TotalChargingCycles = chargingCycles;
+                result.TotalChargingTimeSeconds = totalChargingTimeSeconds;
+                result.RemainingBattery = result.FinalBatteryPercent;
 
-                // Time statistics (estimated)
-                double cellSizeCm = _mapControl.ScaleCmPerCell;
-                double totalDistanceCm = fullPath.Count * cellSizeCm;
-                result.TotalTravelTimeSeconds = totalDistanceCm / robotSettings.InitialSpeedCmS;
-                result.TotalTimeSeconds = result.TotalTravelTimeSeconds;
+                // Time statistics
+                result.TotalTravelTimeSeconds = travelTimeSeconds;
+                result.TotalOverheadTimeSeconds = 0;
+                result.TotalTimeSeconds = travelTimeSeconds + totalChargingTimeSeconds;
 
-                // ========== 13. SAVE PATH FOR JSON EXPORT ==========
-                _iterationPaths.Add(result.Path);
+                // Average speed
+                result.AverageActualSpeed = travelTimeSeconds > 0 ? totalDistanceCm / travelTimeSeconds : robotSettings.InitialSpeedCmS;
+
+                // ========== PATH INFORMATION (FIXED) ==========
+                result.StartPointUsed = startPoint;
+                result.EndPointReached = endPoint;
+
+                // Goal order
+                if (orderGoalsByDistance)
+                {
+                    var orderedGoals = goals.OrderBy(g => Math.Abs(g.X - startPoint.X) + Math.Abs(g.Y - startPoint.Y)).ToList();
+                    result.GoalOrder = string.Join(" → ", orderedGoals.Select(g => $"({g.X},{g.Y})"));
+                }
+                else
+                {
+                    result.GoalOrder = string.Join(" → ", goals.Select(g => $"({g.X},{g.Y})"));
+                }
+                result.OrderedByDistance = orderGoalsByDistance;
+
+                // Collision and error statistics
+                result.CollisionCount = 0;  // Will be updated from simulation
+                result.InvalidMoveCount = 0;  // Will be updated from simulation
+
+                // Debug output
+                System.Diagnostics.Debug.WriteLine($"[Experiment] BATTERY: Initial={result.InitialBatteryPercent:F1}%, " +
+                    $"Final={result.FinalBatteryPercent:F1}%, Consumed={result.TotalBatteryConsumedPercent:F1}%, " +
+                    $"Units={result.TotalChargingUnits:F2}, Cycles={result.TotalChargingCycles}");
+                System.Diagnostics.Debug.WriteLine($"[Experiment] TIME: Travel={result.TotalTravelTimeSeconds:F2}s, " +
+                    $"Total={result.TotalTimeSeconds:F2}s");
+                System.Diagnostics.Debug.WriteLine($"[Experiment] PATH: Start=({result.StartPointUsed.X},{result.StartPointUsed.Y}), " +
+                    $"End=({result.EndPointReached.X},{result.EndPointReached.Y})");
+                System.Diagnostics.Debug.WriteLine($"[Experiment] GOAL ORDER: {result.GoalOrder}");
+
+                // ========== 11. FILL RESULT DATA ==========
+                result.Success = true;
+                result.FailureReason = "None";
+                result.PathLength = fullPath.Count;
+                result.ComputationTimeMs = pathResult.TotalTimeMs + (result.PathLength * 0.1);
+                result.Path = fullPath.Select(p => new System.Drawing.Point(p.X, p.Y)).ToList();
+
+                // Battery statistics
+                result.InitialBatteryPercent = robotSettings.InitialBatteryLevel;
+                result.FinalBatteryPercent = Math.Max(0, robotSettings.InitialBatteryLevel - estimatedConsumption);
+                result.TotalBatteryConsumedPercent = estimatedConsumption;
+                result.TotalChargingUnits = estimatedConsumption / 100.0;
+                result.TotalChargingCycles = chargingCycles;
+                result.TotalChargingTimeSeconds = totalChargingTimeSeconds;
+                result.RemainingBattery = result.FinalBatteryPercent;
+
+                // Time statistics
+                result.TotalTravelTimeSeconds = travelTimeSeconds;
+                result.TotalOverheadTimeSeconds = 0; // Can be calculated from actual charging events
+                result.TotalTimeSeconds = travelTimeSeconds + totalChargingTimeSeconds;
+
+                // Average speed
+                result.AverageActualSpeed = travelTimeSeconds > 0 ? totalDistanceCm / travelTimeSeconds : robotSettings.InitialSpeedCmS;
 
                 System.Diagnostics.Debug.WriteLine($"[Experiment] {algorithm} - {metric} - Iter {iteration}: " +
                     $"SUCCESS, PathLength={result.PathLength}, Time={result.ComputationTimeMs:F2}ms, " +
                     $"Start=({startPoint.X},{startPoint.Y}), End=({endPoint.X},{endPoint.Y})");
 
-
-                // ========== Calculate Battery Statistics ==========
-                 double estimatedConsumption = fullPath.Count * batteryConsumedPerCell;
-
-                result.InitialBatteryPercent = robotSettings.InitialBatteryLevel;
-                result.FinalBatteryPercent = Math.Max(0, robotSettings.InitialBatteryLevel - estimatedConsumption);
-                result.TotalBatteryConsumedPercent = estimatedConsumption;
-                result.TotalChargingUnits = estimatedConsumption / 100.0;
-                result.TotalChargingCycles = (int)(estimatedConsumption / 100.0);
-                result.TotalChargingTimeSeconds = result.TotalChargingCycles * chargingTimeSeconds;
-
                 System.Diagnostics.Debug.WriteLine($"[Experiment] Battery: Initial={result.InitialBatteryPercent:F1}%, " +
-                    $"Consumed={result.TotalBatteryConsumedPercent:F1}%, Units={result.TotalChargingUnits:F2}, " +
-                    $"Cycles={result.TotalChargingCycles}, ChargingTime={result.TotalChargingTimeSeconds:F0}s");
-                 
+                    $"Final={result.FinalBatteryPercent:F1}%, Consumed={result.TotalBatteryConsumedPercent:F1}%, " +
+                    $"Units={result.TotalChargingUnits:F2}, Cycles={result.TotalChargingCycles}, " +
+                    $"ChargingTime={result.TotalChargingTimeSeconds:F0}s");
+
+                System.Diagnostics.Debug.WriteLine($"[Experiment] Time: Travel={result.TotalTravelTimeSeconds:F0}s, " +
+                    $"Total={result.TotalTimeSeconds:F0}s");
+                _logic.CalculateAndFillResultData( result,
+                                                   fullPath,
+                                                   startPoint,
+                                                   endPoint,
+                                                   goals,
+                                                   robotSettings,
+                                                   chargingTimeSeconds,
+                                                   _mapControl.ScaleCmPerCell,
+                                                   orderGoalsByDistance,
+                                                   pathResult.TotalTimeMs  );
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Experiment]",ex.Message );
+                System.Diagnostics.Debug.WriteLine($"[Experiment] Exception: {ex.Message}");
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+                result.FailureReason = "Exception";
             }
             finally
-            { 
-                 StopDetectionZoneUpdater(); 
-            } 
-            return result;  
-           
-        }
+            {
+                StopDetectionZoneUpdater();
+            }
+
+            return result;
+        } 
+         
         #region Private Methods - Algorithm Specific Settings
 
         /// <summary>
@@ -988,35 +1078,88 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         /// </summary>
         private void ShowResultsViewer(List<ComparisonResult> results)
         {
+            // ========== DEBUG: تحقق من البيانات قبل العرض ==========
+            System.Diagnostics.Debug.WriteLine("=== ShowResultsViewer CALLED ===");
+            System.Diagnostics.Debug.WriteLine($"Results count: {results?.Count ?? 0}");
+
             if (results == null || results.Count == 0)
             {
-                System.Diagnostics.Debug.WriteLine("[ShowResultsViewer] No results to display");
-                MessageBox.Show("No results to display.", "Experiment Results",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                System.Diagnostics.Debug.WriteLine("ERROR: No results to display!");
+                MessageBox.Show("No results to display.", "No Results",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            var resultsList = results.Select(r => new ExperimentResultItem
-            {
-                Algorithm = r.Algorithm ?? "Unknown",
-                Metric = r.Metric ?? "Unknown",
-                Iteration = r.Iteration,
-                PathLength = r.PathLength,
-                ComputationTimeMs = r.ComputationTimeMs,
-                Success = r.Success,
-                RemainingBattery = r.RemainingBattery,
-                CollisionCount = r.CollisionCount,
-                InvalidMoveCount = r.InvalidMoveCount,
-                AverageActualSpeed = r.AverageActualSpeed,
-                InitialScreenshotPath = r.InitialScreenshotPath,
-                PathScreenshotPath = r.PathScreenshotPath,
-                CompletedScreenshotPath = r.CompletedScreenshotPath,
-                Path = r.Path,
-                ErrorMessage = r.ErrorMessage
-            }).ToList();
+            // طباعة أول نتيجة
+            var first = results[0];
+            System.Diagnostics.Debug.WriteLine($"First result: Algorithm={first.Algorithm}, Success={first.Success}, PathLength={first.PathLength}");
+            System.Diagnostics.Debug.WriteLine($"First result Battery: Initial={first.InitialBatteryPercent}, Final={first.FinalBatteryPercent}");
 
-            var resultsViewer = new frmExperimentResults.frmExperimentResults(resultsList, _currentOutputPath);
-            resultsViewer.ShowDialog();
+            try
+            {
+                // ========== تحويل ComparisonResult إلى ExperimentResultItem ==========
+                var resultsList = new List<ExperimentResultItem>();
+
+                foreach (var r in results)
+                {
+                    if (r == null) continue;
+
+                    var item = new ExperimentResultItem
+                    {
+                        Algorithm = r.Algorithm ?? "Unknown",
+                        Metric = r.Metric ?? "Unknown",
+                        Iteration = r.Iteration,
+                        PathLength = r.PathLength,
+                        ComputationTimeMs = r.ComputationTimeMs,
+                        Success = r.Success,
+                        InitialBatteryPercent = r.InitialBatteryPercent,
+                        FinalBatteryPercent = r.FinalBatteryPercent,
+                        TotalBatteryConsumedPercent = r.TotalBatteryConsumedPercent,
+                        TotalChargingUnits = r.TotalChargingUnits,
+                        TotalChargingCycles = r.TotalChargingCycles,
+                        TotalChargingTimeSeconds = r.TotalChargingTimeSeconds,
+                        TotalTravelTimeSeconds = r.TotalTravelTimeSeconds,
+                        TotalOverheadTimeSeconds = r.TotalOverheadTimeSeconds,
+                        TotalTimeSeconds = r.TotalTimeSeconds,
+                        CollisionCount = r.CollisionCount,
+                        InvalidMoveCount = r.InvalidMoveCount,
+                        AverageActualSpeed = r.AverageActualSpeed,
+                        StartPointUsed = r.StartPointUsed,
+                        EndPointReached = r.EndPointReached,
+                        GoalOrder = r.GoalOrder,
+                        InitialScreenshotPath = r.InitialScreenshotPath,
+                        PathScreenshotPath = r.PathScreenshotPath,
+                        CompletedScreenshotPath = r.CompletedScreenshotPath,
+                        ErrorMessage = r.ErrorMessage
+                    };
+
+                    resultsList.Add(item);
+                    System.Diagnostics.Debug.WriteLine($"Added item: {item.Algorithm} - Iter {item.Iteration} - PathLength={item.PathLength}");
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Converted {resultsList.Count} items");
+
+                if (resultsList.Count == 0)
+                {
+                    MessageBox.Show("No valid results to display.", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // ========== عرض النتائج ==========
+                System.Diagnostics.Debug.WriteLine($"Creating frmExperimentResults with path: {_currentOutputPath}");
+                var resultsViewer = new frmExperimentResults.frmExperimentResults(resultsList, _currentOutputPath);
+                System.Diagnostics.Debug.WriteLine($"frmExperimentResults created, showing dialog...");
+                resultsViewer.ShowDialog();
+                System.Diagnostics.Debug.WriteLine($"frmExperimentResults dialog closed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EXCEPTION in ShowResultsViewer: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                MessageBox.Show($"Error showing results: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
         #endregion
 

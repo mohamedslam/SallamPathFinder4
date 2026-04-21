@@ -342,9 +342,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentBrowser
             }
 
             int rowIndex = dgvResults.SelectedRows[0].Index;
-            string algorithm = dgvResults.Rows[rowIndex].Cells["Algorithm"].Value?.ToString();
-            string time = dgvResults.Rows[rowIndex].Cells["TimeMs"].Value?.ToString();
-            string length = dgvResults.Rows[rowIndex].Cells["PathLength"].Value?.ToString();
+            string algorithm = dgvResults.Rows[rowIndex].Cells[1].Value?.ToString();
+            string time = dgvResults.Rows[rowIndex].Cells[3].Value?.ToString();
+            string length = dgvResults.Rows[rowIndex].Cells[4].Value?.ToString();
 
             MessageBox.Show($"Algorithm: {algorithm}\nTime: {time} ms\nPath Length: {length} cells",
                 "Experiment Details", MessageBoxButtons.OK, MessageBoxIcon.Information);
