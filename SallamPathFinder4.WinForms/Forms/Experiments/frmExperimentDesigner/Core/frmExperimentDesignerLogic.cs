@@ -43,6 +43,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             var chkDStar = form.Controls.Find("_chkDStar", true).FirstOrDefault() as CheckBox;
             var chkKNN = form.Controls.Find("_chkKNN", true).FirstOrDefault() as CheckBox;
             var chkBruteForce = form.Controls.Find("_chkBruteForce", true).FirstOrDefault() as CheckBox;
+            var chkRRT = form.Controls.Find("_chkRRT", true).FirstOrDefault() as CheckBox;  // NEW
+
 
             if (chkAStar?.Checked == true) algorithms.Add("AStar");
             if (chkSPPA?.Checked == true) algorithms.Add("SPPA");
@@ -51,6 +53,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             if (chkDStar?.Checked == true) algorithms.Add("DStar");
             if (chkKNN?.Checked == true) algorithms.Add("KNN");
             if (chkBruteForce?.Checked == true) algorithms.Add("BruteForce");
+            if (chkRRT?.Checked == true) algorithms.Add("RRT");  // NEW
 
             return algorithms;
         }

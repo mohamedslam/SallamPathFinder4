@@ -96,6 +96,21 @@ namespace SallamPathFinder4.Services.Pathfinding
                 case AlgorithmType.BruteForce:
                     finder = new BruteForceFinder(_mapGrid);
                     break;
+                case AlgorithmType.RRT:
+                    finder = new RRTFinder(_mapGrid);
+                    break;
+                case AlgorithmType.PRM:
+                    finder = new PRMFinder(_mapGrid);
+                    break;
+                case AlgorithmType.PSO:
+                    finder = new PSOFinder(_mapGrid);
+                    break;
+                case AlgorithmType.GA:
+                    finder = new GAFinder(_mapGrid);
+                    break;
+                case AlgorithmType.RRTStar:
+                    finder = new RRTStarFinder(_mapGrid);
+                    break;
                 default:
                     finder = new AStarFinder(_mapGrid);
                     break;
@@ -156,6 +171,11 @@ namespace SallamPathFinder4.Services.Pathfinding
                 AlgorithmType.DStar => true,
                 AlgorithmType.KNN => true,
                 AlgorithmType.BruteForce => true,
+                AlgorithmType.RRT => true,
+                AlgorithmType.PRM => true,
+                AlgorithmType.PSO => true,
+                AlgorithmType.GA => true,
+                AlgorithmType.RRTStar => true,
                 _ => false
             };
         }
@@ -174,6 +194,11 @@ namespace SallamPathFinder4.Services.Pathfinding
                 AlgorithmType.DStar => "D* (Dynamic A*)",
                 AlgorithmType.KNN => "K-Nearest Neighbors",
                 AlgorithmType.BruteForce => "Brute Force",
+                AlgorithmType.RRT => "RRT (Rapidly-exploring Random Tree)",
+                AlgorithmType.PRM => "PRM (Probabilistic Roadmap)",
+                AlgorithmType.PSO => "PSO (Particle Swarm Optimization)",
+                AlgorithmType.GA => "GA (Genetic Algorithm)",
+                AlgorithmType.RRTStar => "RRT* (RRT-Star)",
                 _ => "Unknown"
             };
         }
@@ -192,6 +217,11 @@ namespace SallamPathFinder4.Services.Pathfinding
                 AlgorithmType.DStar => "f(n) = g(n) + h(n) + d(n)",
                 AlgorithmType.KNN => "d(x,y) = √Σ(x_i - y_i)²",
                 AlgorithmType.BruteForce => "min Σ cost(path)",
+                AlgorithmType.RRT => "Sample random points, expand tree, connect to nearest",
+                AlgorithmType.PRM => "Build roadmap of samples, query with Dijkstra",
+                AlgorithmType.PSO => "v = w*v + c1*r1*(pBest - x) + c2*r2*(gBest - x)",
+                AlgorithmType.GA => "Selection, Crossover, Mutation, Elitism",
+                AlgorithmType.RRTStar => "RRT with rewiring for asymptotic optimality",
                 _ => "Unknown"
             };
         }

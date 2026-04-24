@@ -84,10 +84,60 @@ namespace SallamPathFinder4.WinForms.Panels
         private NumericUpDown _nudBFIterations;
         #endregion
 
+        #region Private Fields - RRT Settings
+        private NumericUpDown _nudRRTIterations;
+        private NumericUpDown _nudRRTStepSize;
+        private NumericUpDown _nudRRTGoalBias;
+        private CheckBox _chkRRTStar;
+        private CheckBox _chkRRTSmooth;
+        private CheckBox _chkRRTBidirectional;
+        #endregion
+
+        #region Private Fields - PRM Settings
+        private NumericUpDown _nudPRMSamples;
+        private NumericUpDown _nudPRMConnectionRadius;
+        private NumericUpDown _nudPRMMaxNeighbors;
+        private NumericUpDown _nudPRMSampleBias;
+        private CheckBox _chkPRMUseKDTree;
+        private CheckBox _chkPRMLazyCollision;
+        #endregion
+
         #region Private Fields - Action Buttons
         private Button _btnFindPath;
         private Button _btnStartSimulation;
         private Button _btnStopSimulation;
+        #endregion
+
+        #region Private Fields - PSO Settings
+        private NumericUpDown _nudPSOPopulation;
+        private NumericUpDown _nudPSOMaxIterations;
+        private NumericUpDown _nudPSOInertia;
+        private NumericUpDown _nudPSOCognitive;
+        private NumericUpDown _nudPSOSocial;
+        private NumericUpDown _nudPSOPathSegments;
+        private CheckBox _chkPSOAdaptiveInertia;
+        private CheckBox _chkPSOElitism;
+        #endregion
+
+        #region Private Fields - GA Settings
+        private NumericUpDown _nudGAPopulation;
+        private NumericUpDown _nudGAGenerations;
+        private NumericUpDown _nudGACrossoverRate;
+        private NumericUpDown _nudGAMutationRate;
+        private NumericUpDown _nudGAEliteRatio;
+        private NumericUpDown _nudGATournamentSize;
+        private CheckBox _chkGAAdaptiveMutation;
+        #endregion
+
+        #region Private Fields - RRT* Settings
+        private NumericUpDown _nudRRTStarIterations;
+        private NumericUpDown _nudRRTStarStepSize;
+        private NumericUpDown _nudRRTStarGoalBias;
+        private NumericUpDown _nudRRTStarRewiringRadius;
+        private NumericUpDown _nudRRTStarGoalRadius;
+        private CheckBox _chkRRTStarInformedSampling;
+        private CheckBox _chkRRTStarSmoothPath;
+        private CheckBox _chkRRTStarBidirectional;
         #endregion
 
         #region Events
@@ -96,6 +146,8 @@ namespace SallamPathFinder4.WinForms.Panels
         public event EventHandler StartSimulationRequested;
         public event EventHandler StopSimulationRequested;
         #endregion
+
+    
 
         #region Properties
         public AlgorithmType CurrentAlgorithm { get; private set; } = AlgorithmType.AStar;
@@ -172,12 +224,13 @@ namespace SallamPathFinder4.WinForms.Panels
             _cboAlgorithmType = new ComboBox
             {
                 Location = new Point(120, y - 3),
-                Width = 180,
+                Width = 200,
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             _cboAlgorithmType.Items.AddRange(new string[]
             {
-                "A*", "SPPA", "SPPA-DL", "ACO", "D*", "KNN", "Brute Force"
+        "A*", "SPPA", "SPPA-DL", "ACO", "D*", "KNN", "Brute Force",
+        "RRT", "PRM", "PSO", "GA", "RRT*"
             });
             _cboAlgorithmType.SelectedIndex = 0;
             _cboAlgorithmType.SelectedIndexChanged += CboAlgorithmType_SelectedIndexChanged;
@@ -563,6 +616,954 @@ namespace SallamPathFinder4.WinForms.Panels
             RegisterBruteForceEvents();
         }
 
+        private void CreateRRTSettings()
+        {
+            int y = GetCommonSettingsBottom() + 10;
+
+            var lblTitle = new Label
+            {
+                Text = "═══════════ RRT SPECIFIC SETTINGS ═══════════",
+                Location = new Point(5, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = Color.FromArgb(155, 89, 182)  // Purple color
+            };
+            _pnlSettingsContainer.Controls.Add(lblTitle);
+            y += GROUP_HEADER_HEIGHT;
+
+            // Max Iterations
+            var lblIter = new Label { Text = "Max Iterations:", Location = new Point(10, y), AutoSize = true };
+            _nudRRTIterations = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 100,
+                Minimum = 100,
+                Maximum = 50000,
+                Value = 5000,
+                Increment = 500
+            };
+            _pnlSettingsContainer.Controls.Add(lblIter);
+            _pnlSettingsContainer.Controls.Add(_nudRRTIterations);
+            y += ROW_HEIGHT;
+
+            // Step Size
+            var lblStep = new Label { Text = "Step Size (cells):", Location = new Point(10, y), AutoSize = true };
+            _nudRRTStepSize = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 80,
+                Minimum = 0.5M,
+                Maximum = 10M,
+                Value = 1.0M,
+                DecimalPlaces = 1,
+                Increment = 0.5M
+            };
+            _pnlSettingsContainer.Controls.Add(lblStep);
+            _pnlSettingsContainer.Controls.Add(_nudRRTStepSize);
+            y += ROW_HEIGHT;
+
+            // Goal Bias
+            var lblBias = new Label { Text = "Goal Bias (0-1):", Location = new Point(10, y), AutoSize = true };
+            _nudRRTGoalBias = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 80,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 10,
+                DecimalPlaces = 0
+            };
+            var lblBiasPercent = new Label { Text = "%", Location = new Point(215, y - 3), AutoSize = true };
+            _pnlSettingsContainer.Controls.Add(lblBias);
+            _pnlSettingsContainer.Controls.Add(_nudRRTGoalBias);
+            _pnlSettingsContainer.Controls.Add(lblBiasPercent);
+            y += ROW_HEIGHT;
+
+            // RRT* Option
+            _chkRRTStar = new CheckBox
+            {
+                Text = "Use RRT* (Optimal Rewiring)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkRRTStar);
+            y += ROW_HEIGHT - 5;
+
+            // Path Smoothing
+            _chkRRTSmooth = new CheckBox
+            {
+                Text = "Smooth Path (Remove Redundant Points)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkRRTSmooth);
+            y += ROW_HEIGHT - 5;
+
+            // Bidirectional RRT
+            _chkRRTBidirectional = new CheckBox
+            {
+                Text = "Bidirectional RRT (Two Trees)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = false
+            };
+            _pnlSettingsContainer.Controls.Add(_chkRRTBidirectional);
+
+            RegisterRRTEvents();
+        }
+
+        private void RegisterRRTEvents()
+        {
+            _nudRRTIterations.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudRRTStepSize.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudRRTGoalBias.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkRRTStar.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkRRTSmooth.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkRRTBidirectional.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+       
+        #region Private Methods - PRM Settings
+        private void CreatePRMSettings()
+        {
+            int y = GetCommonSettingsBottom() + 10;
+
+            var lblTitle = new Label
+            {
+                Text = "═══════════ PRM SPECIFIC SETTINGS ═══════════",
+                Location = new Point(5, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = Color.FromArgb(52, 152, 219)  // Blue color
+            };
+            _pnlSettingsContainer.Controls.Add(lblTitle);
+            y += GROUP_HEADER_HEIGHT;
+
+            // Number of Samples
+            var lblSamples = new Label
+            {
+                Text = "Number of Samples:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPRMSamples = new NumericUpDown
+            {
+                Location = new Point(160, y - 3),
+                Width = 100,
+                Minimum = 50,
+                Maximum = 5000,
+                Value = 500,
+                Increment = 50
+            };
+            _pnlSettingsContainer.Controls.Add(lblSamples);
+            _pnlSettingsContainer.Controls.Add(_nudPRMSamples);
+            y += ROW_HEIGHT;
+
+            // Connection Radius
+            var lblRadius = new Label
+            {
+                Text = "Connection Radius (cells):",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPRMConnectionRadius = new NumericUpDown
+            {
+                Location = new Point(180, y - 3),
+                Width = 80,
+                Minimum = 1,
+                Maximum = 50,
+                Value = 10,
+                DecimalPlaces = 1,
+                Increment = 0.5M
+            };
+            _pnlSettingsContainer.Controls.Add(lblRadius);
+            _pnlSettingsContainer.Controls.Add(_nudPRMConnectionRadius);
+            y += ROW_HEIGHT;
+
+            // Max Neighbors
+            var lblNeighbors = new Label
+            {
+                Text = "Max Neighbors:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPRMMaxNeighbors = new NumericUpDown
+            {
+                Location = new Point(120, y - 3),
+                Width = 80,
+                Minimum = 1,
+                Maximum = 50,
+                Value = 15
+            };
+            var lblNeighborsInfo = new Label
+            {
+                Text = "(limits connections per node)",
+                Location = new Point(205, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblNeighbors);
+            _pnlSettingsContainer.Controls.Add(_nudPRMMaxNeighbors);
+            _pnlSettingsContainer.Controls.Add(lblNeighborsInfo);
+            y += ROW_HEIGHT;
+
+            // Sample Bias
+            var lblBias = new Label
+            {
+                Text = "Sample Bias (near obstacles):",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPRMSampleBias = new NumericUpDown
+            {
+                Location = new Point(180, y - 3),
+                Width = 80,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 10,
+                DecimalPlaces = 0
+            };
+            var lblBiasPercent = new Label
+            {
+                Text = "%",
+                Location = new Point(265, y - 3),
+                AutoSize = true
+            };
+            _pnlSettingsContainer.Controls.Add(lblBias);
+            _pnlSettingsContainer.Controls.Add(_nudPRMSampleBias);
+            _pnlSettingsContainer.Controls.Add(lblBiasPercent);
+            y += ROW_HEIGHT;
+
+            // Use KD-Tree (Performance)
+            _chkPRMUseKDTree = new CheckBox
+            {
+                Text = "Use KD-Tree for faster neighbor search",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkPRMUseKDTree);
+            y += ROW_HEIGHT - 5;
+
+            // Lazy Collision Check
+            _chkPRMLazyCollision = new CheckBox
+            {
+                Text = "Lazy Collision Check (faster, less accurate)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = false
+            };
+            _pnlSettingsContainer.Controls.Add(_chkPRMLazyCollision);
+            y += ROW_HEIGHT;
+
+            // Info label
+            var lblInfo = new Label
+            {
+                Text = "ℹ️ PRM builds a roadmap of samples, then uses Dijkstra for queries.\n" +
+                       "Best for multi-query scenarios in static environments.",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.FromArgb(100, 100, 100)
+            };
+            _pnlSettingsContainer.Controls.Add(lblInfo);
+
+            RegisterPRMEvents();
+        }
+
+        private void RegisterPRMEvents()
+        {
+            _nudPRMSamples.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPRMConnectionRadius.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPRMMaxNeighbors.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPRMSampleBias.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkPRMUseKDTree.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkPRMLazyCollision.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Gets PRM configuration values
+        /// </summary>
+        public (int samples, double radius, int maxNeighbors, double bias, bool useKDTree, bool lazyCollision) GetPRMConfig()
+        {
+            return (
+                (int)_nudPRMSamples.Value,
+                (double)_nudPRMConnectionRadius.Value,
+                (int)_nudPRMMaxNeighbors.Value,
+                (double)_nudPRMSampleBias.Value / 100.0,
+                _chkPRMUseKDTree.Checked,
+                _chkPRMLazyCollision.Checked
+            );
+        }
+        #endregion
+
+        #region Private Methods - PSO Settings
+        private void CreatePSOSettings()
+        {
+            int y = GetCommonSettingsBottom() + 10;
+
+            var lblTitle = new Label
+            {
+                Text = "═══════════ PSO SPECIFIC SETTINGS ═══════════",
+                Location = new Point(5, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = Color.FromArgb(46, 204, 113)  // Green color
+            };
+            _pnlSettingsContainer.Controls.Add(lblTitle);
+            y += GROUP_HEADER_HEIGHT;
+
+            // Population Size
+            var lblPopulation = new Label
+            {
+                Text = "Population Size:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPSOPopulation = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 80,
+                Minimum = 10,
+                Maximum = 200,
+                Value = 50,
+                Increment = 10
+            };
+            _pnlSettingsContainer.Controls.Add(lblPopulation);
+            _pnlSettingsContainer.Controls.Add(_nudPSOPopulation);
+            y += ROW_HEIGHT;
+
+            // Max Iterations
+            var lblIterations = new Label
+            {
+                Text = "Max Iterations:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPSOMaxIterations = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 100,
+                Minimum = 20,
+                Maximum = 500,
+                Value = 100,
+                Increment = 20
+            };
+            _pnlSettingsContainer.Controls.Add(lblIterations);
+            _pnlSettingsContainer.Controls.Add(_nudPSOMaxIterations);
+            y += ROW_HEIGHT;
+
+            // Inertia Weight
+            var lblInertia = new Label
+            {
+                Text = "Inertia Weight (w):",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPSOInertia = new NumericUpDown
+            {
+                Location = new Point(140, y - 3),
+                Width = 70,
+                Minimum = 1,
+                Maximum = 100,
+                Value = 70,
+                DecimalPlaces = 2
+            };
+            var lblInertiaInfo = new Label
+            {
+                Text = "(0.1 - 1.0)",
+                Location = new Point(215, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblInertia);
+            _pnlSettingsContainer.Controls.Add(_nudPSOInertia);
+            _pnlSettingsContainer.Controls.Add(lblInertiaInfo);
+            y += ROW_HEIGHT;
+
+            // Cognitive Weight
+            var lblCognitive = new Label
+            {
+                Text = "Cognitive Weight (c1):",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPSOCognitive = new NumericUpDown
+            {
+                Location = new Point(150, y - 3),
+                Width = 70,
+                Minimum = 1,
+                Maximum = 300,
+                Value = 150,
+                DecimalPlaces = 2
+            };
+            var lblCognitiveInfo = new Label
+            {
+                Text = "(0.1 - 3.0)",
+                Location = new Point(225, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblCognitive);
+            _pnlSettingsContainer.Controls.Add(_nudPSOCognitive);
+            _pnlSettingsContainer.Controls.Add(lblCognitiveInfo);
+            y += ROW_HEIGHT;
+
+            // Social Weight
+            var lblSocial = new Label
+            {
+                Text = "Social Weight (c2):",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPSOSocial = new NumericUpDown
+            {
+                Location = new Point(140, y - 3),
+                Width = 70,
+                Minimum = 1,
+                Maximum = 300,
+                Value = 150,
+                DecimalPlaces = 2
+            };
+            var lblSocialInfo = new Label
+            {
+                Text = "(0.1 - 3.0)",
+                Location = new Point(215, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblSocial);
+            _pnlSettingsContainer.Controls.Add(_nudPSOSocial);
+            _pnlSettingsContainer.Controls.Add(lblSocialInfo);
+            y += ROW_HEIGHT;
+
+            // Path Segments
+            var lblSegments = new Label
+            {
+                Text = "Path Segments:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudPSOPathSegments = new NumericUpDown
+            {
+                Location = new Point(120, y - 3),
+                Width = 80,
+                Minimum = 5,
+                Maximum = 50,
+                Value = 20
+            };
+            var lblSegmentsInfo = new Label
+            {
+                Text = "(more segments = smoother paths)",
+                Location = new Point(205, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblSegments);
+            _pnlSettingsContainer.Controls.Add(_nudPSOPathSegments);
+            _pnlSettingsContainer.Controls.Add(lblSegmentsInfo);
+            y += ROW_HEIGHT;
+
+            // Adaptive Inertia
+            _chkPSOAdaptiveInertia = new CheckBox
+            {
+                Text = "Adaptive Inertia (decrease over time)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkPSOAdaptiveInertia);
+            y += ROW_HEIGHT - 5;
+
+            // Elitism
+            _chkPSOElitism = new CheckBox
+            {
+                Text = "Use Elitism (keep best particle)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkPSOElitism);
+            y += ROW_HEIGHT;
+
+            // Info label
+            var lblInfo = new Label
+            {
+                Text = "ℹ️ PSO simulates bird flocking behavior.\n" +
+                       "Each particle represents a candidate path.",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.FromArgb(100, 100, 100)
+            };
+            _pnlSettingsContainer.Controls.Add(lblInfo);
+
+            RegisterPSOEvents();
+        }
+
+        private void RegisterPSOEvents()
+        {
+            _nudPSOPopulation.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPSOMaxIterations.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPSOInertia.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPSOCognitive.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPSOSocial.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudPSOPathSegments.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkPSOAdaptiveInertia.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkPSOElitism.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Gets PSO configuration values
+        /// </summary>
+        public (int population, int maxIterations, double inertia, double cognitive, double social,
+                 int pathSegments, bool adaptiveInertia, bool elitism) GetPSOConfig()
+        {
+            return (
+                (int)_nudPSOPopulation.Value,
+                (int)_nudPSOMaxIterations.Value,
+                (double)_nudPSOInertia.Value / 100.0,
+                (double)_nudPSOCognitive.Value / 100.0,
+                (double)_nudPSOSocial.Value / 100.0,
+                (int)_nudPSOPathSegments.Value,
+                _chkPSOAdaptiveInertia.Checked,
+                _chkPSOElitism.Checked
+            );
+        }
+        #endregion
+
+        #region Private Methods - GA Settings
+        private void CreateGASettings()
+        {
+            int y = GetCommonSettingsBottom() + 10;
+
+            var lblTitle = new Label
+            {
+                Text = "═══════════ GA SPECIFIC SETTINGS ═══════════",
+                Location = new Point(5, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = Color.FromArgb(241, 196, 15)  // Yellow color
+            };
+            _pnlSettingsContainer.Controls.Add(lblTitle);
+            y += GROUP_HEADER_HEIGHT;
+
+            // Population Size
+            var lblPopulation = new Label { Text = "Population Size:", Location = new Point(10, y), AutoSize = true };
+            _nudGAPopulation = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 80,
+                Minimum = 20,
+                Maximum = 500,
+                Value = 100,
+                Increment = 10
+            };
+            _pnlSettingsContainer.Controls.Add(lblPopulation);
+            _pnlSettingsContainer.Controls.Add(_nudGAPopulation);
+            y += ROW_HEIGHT;
+
+            // Max Generations
+            var lblGenerations = new Label { Text = "Max Generations:", Location = new Point(10, y), AutoSize = true };
+            _nudGAGenerations = new NumericUpDown
+            {
+                Location = new Point(140, y - 3),
+                Width = 100,
+                Minimum = 20,
+                Maximum = 1000,
+                Value = 200,
+                Increment = 20
+            };
+            _pnlSettingsContainer.Controls.Add(lblGenerations);
+            _pnlSettingsContainer.Controls.Add(_nudGAGenerations);
+            y += ROW_HEIGHT;
+
+            // Crossover Rate
+            var lblCrossover = new Label { Text = "Crossover Rate:", Location = new Point(10, y), AutoSize = true };
+            _nudGACrossoverRate = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 80,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 80,
+                DecimalPlaces = 0
+            };
+            var lblCrossoverPercent = new Label { Text = "%", Location = new Point(215, y - 3), AutoSize = true };
+            _pnlSettingsContainer.Controls.Add(lblCrossover);
+            _pnlSettingsContainer.Controls.Add(_nudGACrossoverRate);
+            _pnlSettingsContainer.Controls.Add(lblCrossoverPercent);
+            y += ROW_HEIGHT;
+
+            // Mutation Rate
+            var lblMutation = new Label { Text = "Mutation Rate:", Location = new Point(10, y), AutoSize = true };
+            _nudGAMutationRate = new NumericUpDown
+            {
+                Location = new Point(120, y - 3),
+                Width = 80,
+                Minimum = 0,
+                Maximum = 50,
+                Value = 10,
+                DecimalPlaces = 0
+            };
+            var lblMutationPercent = new Label { Text = "%", Location = new Point(205, y - 3), AutoSize = true };
+            _pnlSettingsContainer.Controls.Add(lblMutation);
+            _pnlSettingsContainer.Controls.Add(_nudGAMutationRate);
+            _pnlSettingsContainer.Controls.Add(lblMutationPercent);
+            y += ROW_HEIGHT;
+
+            // Elite Ratio
+            var lblElite = new Label { Text = "Elite Ratio:", Location = new Point(10, y), AutoSize = true };
+            _nudGAEliteRatio = new NumericUpDown
+            {
+                Location = new Point(110, y - 3),
+                Width = 80,
+                Minimum = 0,
+                Maximum = 30,
+                Value = 10,
+                DecimalPlaces = 0
+            };
+            var lblElitePercent = new Label { Text = "%", Location = new Point(195, y - 3), AutoSize = true };
+            _pnlSettingsContainer.Controls.Add(lblElite);
+            _pnlSettingsContainer.Controls.Add(_nudGAEliteRatio);
+            _pnlSettingsContainer.Controls.Add(lblElitePercent);
+            y += ROW_HEIGHT;
+
+            // Tournament Size
+            var lblTournament = new Label { Text = "Tournament Size:", Location = new Point(10, y), AutoSize = true };
+            _nudGATournamentSize = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 60,
+                Minimum = 2,
+                Maximum = 10,
+                Value = 3
+            };
+            _pnlSettingsContainer.Controls.Add(lblTournament);
+            _pnlSettingsContainer.Controls.Add(_nudGATournamentSize);
+            y += ROW_HEIGHT;
+
+            // Adaptive Mutation
+            _chkGAAdaptiveMutation = new CheckBox
+            {
+                Text = "Adaptive Mutation (decrease over time)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkGAAdaptiveMutation);
+            y += ROW_HEIGHT;
+
+            RegisterGAEvents();
+        }
+
+        private void RegisterGAEvents()
+        {
+            _nudGAPopulation.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudGAGenerations.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudGACrossoverRate.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudGAMutationRate.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudGAEliteRatio.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudGATournamentSize.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkGAAdaptiveMutation.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Gets GA configuration values
+        /// </summary>
+        public (int population, int maxGenerations, double crossoverRate, double mutationRate,
+                 double eliteRatio, int tournamentSize, bool adaptiveMutation) GetGAConfig()
+        {
+            return (
+                (int)_nudGAPopulation.Value,
+                (int)_nudGAGenerations.Value,
+                (double)_nudGACrossoverRate.Value / 100.0,
+                (double)_nudGAMutationRate.Value / 100.0,
+                (double)_nudGAEliteRatio.Value / 100.0,
+                (int)_nudGATournamentSize.Value,
+                _chkGAAdaptiveMutation.Checked
+            );
+        }
+        #endregion
+
+        #region Private Methods - RRT* Settings
+        /// <summary>
+        /// Creates RRT* (RRT-Star) specific settings panel
+        /// </summary>
+        private void CreateRRTStarSettings()
+        {
+            int y = GetCommonSettingsBottom() + 10;
+
+            #region Title
+            var lblTitle = new Label
+            {
+                Text = "═══════════ RRT* SPECIFIC SETTINGS ═══════════",
+                Location = new Point(5, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = Color.FromArgb(155, 89, 182)  // Purple color
+            };
+            _pnlSettingsContainer.Controls.Add(lblTitle);
+            y += GROUP_HEADER_HEIGHT;
+            #endregion
+
+            #region Max Iterations
+            var lblIterations = new Label
+            {
+                Text = "Max Iterations:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudRRTStarIterations = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 100,
+                Minimum = 100,
+                Maximum = 50000,
+                Value = 5000,
+                Increment = 500
+            };
+            var lblIterationsInfo = new Label
+            {
+                Text = "(more iterations = better path)",
+                Location = new Point(235, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblIterations);
+            _pnlSettingsContainer.Controls.Add(_nudRRTStarIterations);
+            _pnlSettingsContainer.Controls.Add(lblIterationsInfo);
+            y += ROW_HEIGHT;
+            #endregion
+
+            #region Step Size
+            var lblStepSize = new Label
+            {
+                Text = "Step Size (cells):",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudRRTStarStepSize = new NumericUpDown
+            {
+                Location = new Point(140, y - 3),
+                Width = 80,
+                Minimum = 5,
+                Maximum = 100,
+                Value = 10,
+                DecimalPlaces = 1,
+                Increment = 5
+            };
+            var lblStepSizeInfo = new Label
+            {
+                Text = "(0.5 - 10.0)",
+                Location = new Point(225, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblStepSize);
+            _pnlSettingsContainer.Controls.Add(_nudRRTStarStepSize);
+            _pnlSettingsContainer.Controls.Add(lblStepSizeInfo);
+            y += ROW_HEIGHT;
+            #endregion
+
+            #region Goal Bias
+            var lblGoalBias = new Label
+            {
+                Text = "Goal Bias:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudRRTStarGoalBias = new NumericUpDown
+            {
+                Location = new Point(100, y - 3),
+                Width = 80,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 10,
+                DecimalPlaces = 0
+            };
+            var lblGoalBiasPercent = new Label
+            {
+                Text = "% (0-100)",
+                Location = new Point(185, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            var lblGoalBiasInfo = new Label
+            {
+                Text = "higher = more direct to goal",
+                Location = new Point(235, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblGoalBias);
+            _pnlSettingsContainer.Controls.Add(_nudRRTStarGoalBias);
+            _pnlSettingsContainer.Controls.Add(lblGoalBiasPercent);
+            _pnlSettingsContainer.Controls.Add(lblGoalBiasInfo);
+            y += ROW_HEIGHT;
+            #endregion
+
+            #region Rewiring Radius
+            var lblRewiringRadius = new Label
+            {
+                Text = "Rewiring Radius:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudRRTStarRewiringRadius = new NumericUpDown
+            {
+                Location = new Point(130, y - 3),
+                Width = 80,
+                Minimum = 1,
+                Maximum = 100,
+                Value = 10,
+                DecimalPlaces = 1,
+                Increment = 5
+            };
+            var lblRewiringInfo = new Label
+            {
+                Text = "(larger = better optimality)",
+                Location = new Point(215, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblRewiringRadius);
+            _pnlSettingsContainer.Controls.Add(_nudRRTStarRewiringRadius);
+            _pnlSettingsContainer.Controls.Add(lblRewiringInfo);
+            y += ROW_HEIGHT;
+            #endregion
+
+            #region Goal Sample Radius
+            var lblGoalRadius = new Label
+            {
+                Text = "Goal Sample Radius:",
+                Location = new Point(10, y),
+                AutoSize = true
+            };
+            _nudRRTStarGoalRadius = new NumericUpDown
+            {
+                Location = new Point(150, y - 3),
+                Width = 80,
+                Minimum = 1,
+                Maximum = 100,
+                Value = 20,
+                DecimalPlaces = 1,
+                Increment = 5
+            };
+            var lblGoalRadiusInfo = new Label
+            {
+                Text = "(cells)",
+                Location = new Point(235, y - 3),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _pnlSettingsContainer.Controls.Add(lblGoalRadius);
+            _pnlSettingsContainer.Controls.Add(_nudRRTStarGoalRadius);
+            _pnlSettingsContainer.Controls.Add(lblGoalRadiusInfo);
+            y += ROW_HEIGHT;
+            #endregion
+
+            #region Informed Sampling
+            _chkRRTStarInformedSampling = new CheckBox
+            {
+                Text = "Informed Sampling (focus on optimal region)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkRRTStarInformedSampling);
+            y += ROW_HEIGHT - 5;
+            #endregion
+
+            #region Path Smoothing
+            _chkRRTStarSmoothPath = new CheckBox
+            {
+                Text = "Smooth Path (remove redundant points)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = true
+            };
+            _pnlSettingsContainer.Controls.Add(_chkRRTStarSmoothPath);
+            y += ROW_HEIGHT - 5;
+            #endregion
+
+            #region Bidirectional RRT*
+            _chkRRTStarBidirectional = new CheckBox
+            {
+                Text = "Bidirectional Search (two trees)",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Checked = false
+            };
+            _pnlSettingsContainer.Controls.Add(_chkRRTStarBidirectional);
+            y += ROW_HEIGHT;
+            #endregion
+
+            #region Info Label
+            var lblInfo = new Label
+            {
+                Text = "ℹ️ RRT* is asymptotically optimal.\n" +
+                       "   - Rewiring improves path quality over time\n" +
+                       "   - Informed sampling focuses search on optimal region\n" +
+                       "   - Bidirectional can find paths faster",
+                Location = new Point(10, y),
+                Size = new Size(280, 45),
+                Font = new Font("Segoe UI", 7, FontStyle.Italic),
+                ForeColor = Color.FromArgb(100, 100, 100)
+            };
+            _pnlSettingsContainer.Controls.Add(lblInfo);
+            y += 50;
+            #endregion
+
+            RegisterRRTStarEvents();
+        }
+
+        /// <summary>
+        /// Registers events for RRT* settings
+        /// </summary>
+        private void RegisterRRTStarEvents()
+        {
+            _nudRRTStarIterations.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudRRTStarStepSize.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudRRTStarGoalBias.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudRRTStarRewiringRadius.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _nudRRTStarGoalRadius.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkRRTStarInformedSampling.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkRRTStarSmoothPath.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+            _chkRRTStarBidirectional.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Gets RRT* configuration values
+        /// </summary>
+        public (int maxIterations, double stepSize, double goalBias, double rewiringRadius,
+                 double goalRadius, bool informedSampling, bool smoothPath, bool bidirectional) GetRRTStarConfig()
+        {
+            return (
+                (int)_nudRRTStarIterations.Value,
+                (double)_nudRRTStarStepSize.Value / 10.0,
+                (double)_nudRRTStarGoalBias.Value / 100.0,
+                (double)_nudRRTStarRewiringRadius.Value / 10.0,
+                (double)_nudRRTStarGoalRadius.Value / 10.0,
+                _chkRRTStarInformedSampling.Checked,
+                _chkRRTStarSmoothPath.Checked,
+                _chkRRTStarBidirectional.Checked
+            );
+        }
+        #endregion
+
         private int GetCommonSettingsBottom()
         {
             int bottom = 0;
@@ -576,6 +1577,8 @@ namespace SallamPathFinder4.WinForms.Panels
             }
             return bottom > 0 ? bottom : 200;
         }
+
+
         #endregion
 
         #region Event Registration
@@ -657,6 +1660,21 @@ namespace SallamPathFinder4.WinForms.Panels
                 case AlgorithmType.BruteForce:
                     CreateBruteForceSettings();
                     break;
+                case AlgorithmType.RRT:
+                    CreateRRTSettings();
+                    break;
+                case AlgorithmType.PRM:
+                    CreatePRMSettings();
+                    break;
+                case AlgorithmType.PSO:
+                    CreatePSOSettings();
+                    break;
+                case AlgorithmType.GA:
+                    CreateGASettings();
+                    break;
+                case AlgorithmType.RRTStar:
+                    CreateRRTStarSettings();
+                    break;
                 default:
                     // A*, SPPA, SPPA-DL have no specific settings
                     break;
@@ -675,6 +1693,11 @@ namespace SallamPathFinder4.WinForms.Panels
                 "D*" => AlgorithmType.DStar,
                 "KNN" => AlgorithmType.KNN,
                 "Brute Force" => AlgorithmType.BruteForce,
+                "RRT" => AlgorithmType.RRT,
+                "PRM" => AlgorithmType.PRM,
+                "PSO" => AlgorithmType.PSO,
+                "GA" => AlgorithmType.GA,
+                "RRT*" => AlgorithmType.RRTStar,
                 _ => AlgorithmType.AStar
             };
 
