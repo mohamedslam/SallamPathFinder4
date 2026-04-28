@@ -31,22 +31,20 @@ namespace SallamPathFinder4.WinForms.Forms
         #region Constants
         private const int DETECTION_ZONE_INTERVAL_MS = 100;
         private const int DEFAULT_GRID_WIDTH = 100;
-        private const int DEFAULT_GRID_HEIGHT = 100;
-            #region Constants 
+        private const int DEFAULT_GRID_HEIGHT = 100; 
 
-            // Keyboard shortcuts
-            private const Keys SHORTCUT_NEW_MAP = Keys.Control | Keys.N;
-            private const Keys SHORTCUT_OPEN_MAP = Keys.Control | Keys.O;
-            private const Keys SHORTCUT_SAVE_MAP = Keys.Control | Keys.S;
-            private const Keys SHORTCUT_FIND_PATH = Keys.Control | Keys.F;
-            private const Keys SHORTCUT_NEW_EXPERIMENT = Keys.Control | Keys.Shift | Keys.N;
-            private const Keys SHORTCUT_SET_START_POINT = Keys.Control | Keys.Shift | Keys.S;
-            private const Keys SHORTCUT_ORDER_GOALS = Keys.Control | Keys.Shift | Keys.G;
-            private const Keys SHORTCUT_START_SIMULATION = Keys.F5;
-            private const Keys SHORTCUT_PAUSE_SIMULATION = Keys.F6;
-            private const Keys SHORTCUT_STOP_SIMULATION = Keys.F7;
-            #endregion
-
+        // Keyboard shortcuts
+        private const Keys SHORTCUT_NEW_MAP = Keys.Control | Keys.N;
+        private const Keys SHORTCUT_OPEN_MAP = Keys.Control | Keys.O;
+        private const Keys SHORTCUT_SAVE_MAP = Keys.Control | Keys.S;
+        private const Keys SHORTCUT_FIND_PATH = Keys.Control | Keys.F;
+        private const Keys SHORTCUT_NEW_EXPERIMENT = Keys.Control | Keys.Shift | Keys.N;
+        private const Keys SHORTCUT_SET_START_POINT = Keys.Control | Keys.Shift | Keys.S;
+        private const Keys SHORTCUT_ORDER_GOALS = Keys.Control | Keys.Shift | Keys.G;
+        private const Keys SHORTCUT_START_SIMULATION = Keys.F5;
+        private const Keys SHORTCUT_PAUSE_SIMULATION = Keys.F6;
+        private const Keys SHORTCUT_STOP_SIMULATION = Keys.F7;
+             
         #endregion
 
         #region Private Fields
@@ -231,6 +229,29 @@ namespace SallamPathFinder4.WinForms.Forms
 
             mapControl.MouseClick += MapControl_MouseClick;
             mapControl.MouseMove += MapControl_MouseMove;
+            mapControl.ViewChanged += (s, e) =>
+            {
+                // حساب المنطقة المرئية من الخريطة
+                float scaledCellSize = mapControl.CellSize * mapControl.ZoomLevel;
+                if (scaledCellSize <= 0) return;
+
+                // 🔴 استخدم ViewOffset بدلاً من _viewOffset
+                PointF viewOffset = mapControl.ViewOffset;
+
+                int visibleStartX = (int)Math.Max(0, -viewOffset.X / scaledCellSize);
+                int visibleEndX = (int)Math.Min(mapControl.MapGrid.Width - 1,
+                    visibleStartX + (mapControl.Width / scaledCellSize) + 2);
+
+                int visibleStartY = (int)Math.Max(0, -viewOffset.Y / scaledCellSize);
+                int visibleEndY = (int)Math.Min(mapControl.MapGrid.Height - 1,
+                    visibleStartY + (mapControl.Height / scaledCellSize) + 2);
+
+                // تحديث المسطرة الأفقية
+                rulerTop.UpdateVisibleRange(visibleStartX, visibleEndX, mapControl.ZoomLevel);
+
+                // تحديث المسطرة الرأسية
+                rulerLeft.UpdateVisibleRange(visibleStartY, visibleEndY, mapControl.ZoomLevel);
+            };
             robotPanel.BatteryLevelChanged += (s, e) => UpdateBatteryFromPanel();
         }
 
@@ -367,14 +388,12 @@ namespace SallamPathFinder4.WinForms.Forms
 
         private void DisplayPath()
         {
-            if (InvokeRequired)
+            var path = _viewModel.CurrentPathResult?.Path;
+            if (path == null || path.Count == 0)
             {
-                Invoke(new Action(DisplayPath));
+                System.Diagnostics.Debug.WriteLine("DisplayPath: No path to display");
                 return;
             }
-
-            var path = _viewModel.CurrentPathResult?.Path;
-            if (path == null || path.Count == 0) return;
 
             pathDisplayPanel?.ClearPath();
             int step = 1;
@@ -383,7 +402,6 @@ namespace SallamPathFinder4.WinForms.Forms
                 pathDisplayPanel?.AddPathStep(step++, node.X, node.Y, "Main", Color.Gold);
             }
             pathDisplayPanel?.UpdateStats(path.Count, _viewModel.CurrentPathResult.ComputationTimeSeconds * 1000, path.Count * 10.0);
-            lblAlgoTime.Text = $"⏱️ Algo: {_viewModel.CurrentPathResult.ComputationTimeSeconds * 1000:F2}ms";
             mapControl.DrawPath(path.ToList(), Color.Gold);
             lblStatus.Text = $"🟢 Path found! Length: {path.Count} cells";
         }
@@ -392,8 +410,12 @@ namespace SallamPathFinder4.WinForms.Forms
         #region Goals and Parking Methods
         private void StartAddingGoal()
         {
+            System.Diagnostics.Debug.WriteLine("=== StartAddingGoal CALLED ===");
+
             CancelCurrentDrawMode();
             _isAddingGoal = true;
+            System.Diagnostics.Debug.WriteLine($"_isAddingGoal = {_isAddingGoal}");
+
             mapControl.Cursor = Cursors.Cross;
             lblStatus.Text = "🟡 Click on map to add Goal point (Press ESC to cancel)";
         }
@@ -438,25 +460,26 @@ namespace SallamPathFinder4.WinForms.Forms
 
         private void RefreshGoalsList()
         {
-            if (_viewModel?.Goals != null && goalsPanel != null)
-            {
-                // Update mapControl goals from ViewModel
-                mapControl.Goals = _viewModel.Goals.ToList();
+            if (_viewModel == null || mapControl == null) return;
 
-                // Rest of the code...
-                _viewModel.Goals.Clear();
-                foreach (var goal in mapControl.Goals)
+            // مسح الأهداف الموجودة في ViewModel
+            _viewModel.Goals.Clear();
+
+            // إضافة جميع الأهداف من mapControl إلى ViewModel
+            foreach (var goal in mapControl.Goals)
+            {
+                if (goal != null)
                 {
                     _viewModel.Goals.Add(goal);
                 }
-                goalsPanel.RefreshList();
-                _viewModel.RefreshHasGoals();
             }
-            System.Diagnostics.Debug.WriteLine("ViewModel Goals after ordering:");
-            for (int i = 0; i < _viewModel.Goals.Count; i++)
-            {
-                System.Diagnostics.Debug.WriteLine($"  Goal {i}: {_viewModel.Goals[i].Name} at ({_viewModel.Goals[i].Location.X},{_viewModel.Goals[i].Location.Y})");
-            }
+
+            // تحديث واجهة المستخدم
+            goalsPanel?.RefreshList();
+            _viewModel.RefreshHasGoals();
+
+            // إعادة رسم الخريطة
+            mapControl.Invalidate();
         }
 
         private void RefreshParkingList()
@@ -481,8 +504,14 @@ namespace SallamPathFinder4.WinForms.Forms
         #region Map Event Handlers
         private void MapControl_MouseClick(object sender, MouseEventArgs e)
         {
+ 
             var cell = mapControl.GetGridCellAtPoint(e.Location);
-            if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
+            if (!mapControl.MapGrid.IsValidCoordinate(cell.X, cell.Y)) {
+                System.Diagnostics.Debug.WriteLine($"Invalid cell: ({cell.X},{cell.Y})");
+
+                return;
+            }
+        
 
             // ========== Handle set start point mode ==========
             if (_isSettingStartPoint)
@@ -506,12 +535,17 @@ namespace SallamPathFinder4.WinForms.Forms
 
             if (_isAddingGoal)
             {
+                System.Diagnostics.Debug.WriteLine($"Adding goal at ({cell.X},{cell.Y})");
+
                 var color = Color.FromArgb(_random.Next(100, 255), _random.Next(100, 255), _random.Next(100, 255));
                 mapControl.AddGoalAt(cell, color);
+                System.Diagnostics.Debug.WriteLine($"AddGoalAt completed");
                 RefreshGoalsList();
+                System.Diagnostics.Debug.WriteLine($"RefreshGoalsList completed, Goals count = {_viewModel?.Goals?.Count ?? 0}");
                 _isAddingGoal = false;
                 mapControl.Cursor = Cursors.Default;
                 mapControl.CurrentDrawMode = MapControl.DrawMode.None;
+                mapControl.Invalidate();
                 lblStatus.Text = "🟢 Ready";
                 return;
             }
@@ -803,6 +837,7 @@ namespace SallamPathFinder4.WinForms.Forms
         {
             if (_viewModel == null || _viewModel.Goals == null)
             {
+                lblStatus.Text = "⚠️ no goals to order it ";
                 return;
             }
 
@@ -823,68 +858,40 @@ namespace SallamPathFinder4.WinForms.Forms
         }
 
         /// <summary>
-        /// Orders goals by distance from current robot start point
-        /// </summary>
-        /// <summary>
         /// Orders goals by distance from current robot start point using selected distance metric
         /// </summary>
         private void OrderGoalsByDistance()
         {
-            if (_viewModel?.Goals == null || _viewModel.Goals.Count == 0)
-            {
-                return;
-            }
+            if (_viewModel?.Goals == null || _viewModel.Goals.Count == 0) return;
 
-            // Get current start point
             Point startPoint = mapControl.HasCustomStartPoint
                 ? mapControl.RobotStartPoint
                 : mapControl.RobotPosition;
 
-            // Get selected distance metric from algorithm settings
             DistanceMetric selectedMetric = algorithmSettingsPanel?.SelectedMetric ?? DistanceMetric.Manhattan;
 
-            System.Diagnostics.Debug.WriteLine($"[GoalsOrder] Ordering goals from start point ({startPoint.X},{startPoint.Y}) using metric: {selectedMetric}");
-
-            // Save original order if not already saved
             if (_originalGoalsOrder == null || _originalGoalsOrder.Count == 0)
             {
                 _originalGoalsOrder = _viewModel.Goals.ToList();
             }
 
-            // Order goals by distance using selected metric
             var orderedGoals = _viewModel.Goals
                 .OrderBy(g => CalculateDistance(startPoint, g.Location, selectedMetric))
                 .ToList();
 
-            // Apply new order
             _viewModel.Goals.Clear();
-            foreach (var goal in orderedGoals)
-            {
-                _viewModel.Goals.Add(goal);
-            }
+            foreach (var goal in orderedGoals) _viewModel.Goals.Add(goal);
 
-            // Refresh UI
-            RefreshGoalsList();
+            mapControl.Goals = _viewModel.Goals.ToList();
+            goalsPanel?.RefreshList();
+            _viewModel.RefreshHasGoals();
             _viewModel.ClearCachedPath();
 
-            // Log the new order with distances
-            for (int i = 0; i < orderedGoals.Count; i++)
-            {
-                var goal = orderedGoals[i];
-                double distance = CalculateDistance(startPoint, goal.Location, selectedMetric);
-                System.Diagnostics.Debug.WriteLine($"[GoalsOrder]   Goal {i + 1}: {goal.Name} at ({goal.Location.X},{goal.Location.Y}) - distance {distance:F2}");
-            }
-
-            // Recalculate path with new goal order
-            if (_viewModel.HasPath || _viewModel.CurrentPathResult != null)
-            {
-                System.Diagnostics.Debug.WriteLine("[GoalsOrder] Recalculating path with new goal order...");
-                mapControl.ClearPaths();
-                pathDisplayPanel?.ClearPath();
-                _viewModel.FindPathAsync();
-            }
+            mapControl.ClearPaths();
+            pathDisplayPanel?.ClearPath();
+            _viewModel.FindPathAsync();
         }
-   
+
         /// <summary>
         /// Calculates distance between two points using the specified metric
         /// </summary>
@@ -903,6 +910,7 @@ namespace SallamPathFinder4.WinForms.Forms
                 _ => dx + dy // Default to Manhattan
             };
         }
+
         /// <summary>
         /// Restores original goals order
         /// </summary>

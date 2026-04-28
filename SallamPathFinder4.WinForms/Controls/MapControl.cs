@@ -41,7 +41,7 @@ namespace SallamPathFinder4.WinForms.Controls
         private const double SQRT2 = 1.4142135623730951;
         private const int NORMAL_PATH_THICKNESS = 4;
         private const int RETURN_PATH_THICKNESS = 2;
-        private const int CHARGING_PATH_THICKNESS = 4;
+        private const int CHARGING_PATH_THICKNESS = 4; 
         #endregion
 
         #region Private Fields - Special Cells
@@ -317,6 +317,13 @@ namespace SallamPathFinder4.WinForms.Controls
         public bool HasCustomStartPoint => _robotStartPoint != Point.Empty;
 
         #endregion
+      
+        #region Public Properties - View
+        /// <summary>
+        /// الحصول على إزاحة العرض (للتحريك)
+        /// </summary>
+        public PointF ViewOffset => _viewOffset;
+        #endregion
 
         #region Public Methods - Start Points
 
@@ -392,10 +399,18 @@ namespace SallamPathFinder4.WinForms.Controls
         #region Public Methods - Goals and Parking
         public void AddGoalAt(Point cell, Color color)
         {
-            if (_mapGrid == null || !_mapGrid.IsValidCoordinate(cell.X, cell.Y)) return;
+            System.Diagnostics.Debug.WriteLine($"AddGoalAt: cell=({cell.X},{cell.Y}), current goals count={_goals.Count}");
+            if (_mapGrid == null || !_mapGrid.IsValidCoordinate(cell.X, cell.Y))
+            {
+                System.Diagnostics.Debug.WriteLine("AddGoalAt: Invalid cell or null grid");
+                return;
 
+            } 
             int newNumber = _goals.Count + 1;
-            _goals.Add(new GoalPoint(newNumber, cell, color));
+            var newGoal = new GoalPoint(newNumber, cell, color);
+            _goals.Add(newGoal);
+            System.Diagnostics.Debug.WriteLine($"AddGoalAt: Goal added, new count={_goals.Count}");
+
             _mapGrid[cell.X, cell.Y].ElementType = MapElementType.GoalPoint;
             _mapGrid.UpdateCellProperties(cell.X, cell.Y);
             Invalidate();
@@ -569,6 +584,10 @@ namespace SallamPathFinder4.WinForms.Controls
                 (int)scaledCellSize,
                 (int)scaledCellSize);
         }
+        #endregion
+
+        #region Events
+        public event EventHandler ViewChanged;  // حدث جديد
         #endregion
 
         #region Protected Methods - Paint
@@ -1143,6 +1162,7 @@ namespace SallamPathFinder4.WinForms.Controls
                 _viewOffset = new PointF(_viewOffset.X + dx, _viewOffset.Y + dy);
                 _lastMousePosition = e.Location;
                 Invalidate();
+                ViewChanged?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
@@ -1232,6 +1252,7 @@ namespace SallamPathFinder4.WinForms.Controls
                     _viewOffset.X - (mousePos.X - _viewOffset.X) * (delta / oldZoom),
                     _viewOffset.Y - (mousePos.Y - _viewOffset.Y) * (delta / oldZoom));
                 Invalidate();
+                ViewChanged?.Invoke(this, EventArgs.Empty); 
             }
         }
 

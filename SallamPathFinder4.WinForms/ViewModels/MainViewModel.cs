@@ -277,6 +277,15 @@ namespace SallamPathFinder4.WinForms.ViewModels
         {
             System.Diagnostics.Debug.WriteLine("=== FindPathAsync STARTED ===");
             System.Diagnostics.Debug.WriteLine("Current goals order in ViewModel:");
+            if (IsSimulating)
+            {
+                System.Diagnostics.Debug.WriteLine("Cannot find path while simulating");
+                return;
+            } 
+            ClearCachedPath();
+
+            System.Diagnostics.Debug.WriteLine("=== FindPathAsync STARTED ===");
+
             for (int i = 0; i < Goals.Count; i++)
             {
                 System.Diagnostics.Debug.WriteLine($"  Goal {i}: {Goals[i].Name} at ({Goals[i].Location.X},{Goals[i].Location.Y})");
@@ -589,6 +598,16 @@ namespace SallamPathFinder4.WinForms.ViewModels
             _simulationService.Stop();
             IsSimulating = false;
             IsPaused = false;
+
+            // 🔴 أضف هذه الأسطر لإعادة تعيين حالة البحث
+            _currentPathResult = null;
+            HasPath = false;
+
+            // إعادة تمكين زر البحث
+            OnPropertyChanged(nameof(HasPath));
+            OnPropertyChanged(nameof(IsSimulating));
+
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] Simulation stopped, path cleared");
         }
 
         public void ResumeSimulation()
@@ -2292,7 +2311,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
             _currentPathResult = null;
             _originalFullPath = null;
             HasPath = false;
-
+            OnPropertyChanged(nameof(HasPath));
             System.Diagnostics.Debug.WriteLine("[MainViewModel] Cached path cleared");
         }
     }
