@@ -223,6 +223,9 @@ namespace SallamPathFinder4.WinForms.Forms
             {
                 algorithmSettingsPanel.FindPathRequested += (s, e) => _viewModel.FindPathAsync();
                 algorithmSettingsPanel.SettingsChanged += (s, e) => UpdateAlgorithmSettings();
+                algorithmSettingsPanel.PauseRequested += (s, e) => _viewModel?.PauseSearch();
+                algorithmSettingsPanel.StopRequested += (s, e) => _viewModel?.StopSearch(); 
+                algorithmSettingsPanel.ResumeRequested += (s, e) => _viewModel?.ResumeSearch();
             }
             // Dynamic Charging Events
             WireChargingEvents();
@@ -253,6 +256,20 @@ namespace SallamPathFinder4.WinForms.Forms
                 rulerLeft.UpdateVisibleRange(visibleStartY, visibleEndY, mapControl.ZoomLevel);
             };
             robotPanel.BatteryLevelChanged += (s, e) => UpdateBatteryFromPanel();
+
+            // ربط حدث تغيير إعدادات التصور
+            algorithmSettingsPanel.VisualizationSettingsChanged += (s, e) =>
+            {
+                if (_viewModel != null)
+                {
+                    _viewModel.EnableVisualization = algorithmSettingsPanel.IsVisualizationEnabled;
+                    _viewModel.VisualizationSpeedDelayMs = algorithmSettingsPanel.GetSpeedDelayMs();
+                }
+            };
+
+            // تعيين القيم الأولية
+            _viewModel.EnableVisualization = algorithmSettingsPanel.IsVisualizationEnabled;
+            _viewModel.VisualizationSpeedDelayMs = algorithmSettingsPanel.GetSpeedDelayMs();
         }
 
         private void UpdateAlgorithmSettings()
@@ -400,6 +417,7 @@ namespace SallamPathFinder4.WinForms.Forms
             foreach (var node in path)
             {
                 pathDisplayPanel?.AddPathStep(step++, node.X, node.Y, "Main", Color.Gold);
+
             }
             pathDisplayPanel?.UpdateStats(path.Count, _viewModel.CurrentPathResult.ComputationTimeSeconds * 1000, path.Count * 10.0);
             mapControl.DrawPath(path.ToList(), Color.Gold);

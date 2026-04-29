@@ -9,6 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Enums;
+using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Interfaces.Services;
 using SallamPathFinder4.Core.Models.Experiments;
 using SallamPathFinder4.Core.Models.Goals;
@@ -22,6 +23,7 @@ using SallamPathFinder4.Services.Simulation;
 using SallamPathFinder4.WinForms.Controls;
 using SallamPathFinder4.WinForms.Forms;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentViewer;
+using SallamPathFinder4.WinForms.Panels;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -32,8 +34,9 @@ namespace SallamPathFinder4.WinForms.ViewModels
     public sealed class MainViewModel : INotifyPropertyChanged
     {
         #region Constants
-        private const int SEARCH_TIMEOUT_MS = 30000;
-        private const int SEGMENT_TIMEOUT_MS = 30000;
+        private const int SEARCH_TIMEOUT_MS = 300000;
+        private const int SEGMENT_SEARCH_LIMIT = 200000;      // Search limit for complex paths
+        private const int SEGMENT_TIMEOUT_MS = 60000;         // 30 seconds per segment (backup)
         private const double BATTERY_CHECK_INTERVAL_SECONDS = 2.0;  // فحص البطارية كل 2 ثانية
         private const double AVERAGE_SURFACE_WEIGHT_ESTIMATE = 50.0;  // تقدير متوسط وزن السطح
         #endregion
@@ -69,7 +72,12 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 private List<Point> _cachedParkingPoints;
                 private DateTime _chargingStartTime;
                 private bool _isWaitingForCharging;
-            #endregion
+        #endregion
+        #endregion
+        private IPathFinder _currentFinder;
+        #region Private Fields - Visualization Settings
+        private bool _enableVisualization = false;
+        private int _visualizationSpeedDelayMs = 0;
         #endregion
 
         #region Constructor
@@ -143,6 +151,20 @@ namespace SallamPathFinder4.WinForms.ViewModels
         public ObservableCollection<GoalPoint> Goals { get; }
         public ObservableCollection<ParkingPoint> ParkingPoints { get; }
         public ObservableCollection<CollisionRecord> ObstacleLog { get; }
+        #endregion
+
+        #region Public Properties - Visualization Settings
+        public bool EnableVisualization
+        {
+            get => _enableVisualization;
+            set => _enableVisualization = value;
+        }
+
+        public int VisualizationSpeedDelayMs
+        {
+            get => _visualizationSpeedDelayMs;
+            set => _visualizationSpeedDelayMs = value;
+        }
         #endregion
 
         #region Properties - Algorithm Settings
@@ -276,16 +298,11 @@ namespace SallamPathFinder4.WinForms.ViewModels
         public async Task FindPathAsync()
         {
             System.Diagnostics.Debug.WriteLine("=== FindPathAsync STARTED ===");
+
+            // Clear previous search visualization cells
+            _mapControl.ClearSearchCells();
+
             System.Diagnostics.Debug.WriteLine("Current goals order in ViewModel:");
-            if (IsSimulating)
-            {
-                System.Diagnostics.Debug.WriteLine("Cannot find path while simulating");
-                return;
-            } 
-            ClearCachedPath();
-
-            System.Diagnostics.Debug.WriteLine("=== FindPathAsync STARTED ===");
-
             for (int i = 0; i < Goals.Count; i++)
             {
                 System.Diagnostics.Debug.WriteLine($"  Goal {i}: {Goals[i].Name} at ({Goals[i].Location.X},{Goals[i].Location.Y})");
@@ -298,9 +315,24 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 return;
             }
 
-            // Cancel any ongoing search
-            _searchCts?.Cancel();
+            // ✅ IMPORTANT: Cancel previous search WITHOUT creating a new token yet
+            if (_searchCts != null)
+            {
+                try
+                {
+                    _searchCts.Cancel();
+                    _searchCts.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error canceling previous search: {ex.Message}");
+                }
+                _searchCts = null;
+            }
+
+            // ✅ Create new cancellation token source
             _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
 
             IsSearching = true;
             System.Diagnostics.Debug.WriteLine("IsSearching = true");
@@ -315,27 +347,40 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
                 for (int i = 0; i < goalsList.Count; i++)
                 {
-                    // التصحيح: استخدام X و Y بدلاً من Location.X و Location.Y
                     System.Diagnostics.Debug.WriteLine($"Goal {i}: ({goalsList[i].X},{goalsList[i].Y})");
                 }
 
-                // Run pathfinding in background thread
-                var searchTask = Task.Run(() => FindPathInternal(start, goalsList, _searchCts.Token), _searchCts.Token);
+                // Run pathfinding in background thread with the token
+                var searchTask = Task.Run(() => FindPathInternal(start, goalsList, token), token);
 
                 // Wait for completion with timeout
-                var completedTask = await Task.WhenAny(searchTask, Task.Delay(SEARCH_TIMEOUT_MS));
+                var completedTask = await Task.WhenAny(searchTask, Task.Delay(SEARCH_TIMEOUT_MS * 2, token));
 
                 if (completedTask != searchTask)
                 {
-                    _searchCts.Cancel();
-                    MessageBox.Show(
-                        "Pathfinding timeout. The map may be too complex or no path exists.\n\n" +
-                        "Try reducing map size, adding more open space, or lowering Search Limit.",
-                        "Search Timeout",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-                    IsSearching = false;
-                    return;
+                    // Check if the task was cancelled
+                    if (token.IsCancellationRequested)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Search was cancelled by user");
+                        MessageBox.Show("Pathfinding was cancelled.", "Search Cancelled",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        IsSearching = false;
+                        return;
+                    }
+
+                    // Timeout occurred
+                    if (!searchTask.IsCompleted)
+                    {
+                        _searchCts.Cancel();
+                        MessageBox.Show(
+                            "Pathfinding timeout. The map may be too complex or no path exists.\n\n" +
+                            "Try reducing map size, adding more open space, or lowering Search Limit.",
+                            "Search Timeout",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        IsSearching = false;
+                        return;
+                    }
                 }
 
                 var result = await searchTask;
@@ -367,8 +412,13 @@ namespace SallamPathFinder4.WinForms.ViewModels
             }
             catch (OperationCanceledException)
             {
-                System.Diagnostics.Debug.WriteLine("FindPathAsync CANCELLED");
-                MessageBox.Show("Pathfinding was cancelled.", "Search Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                System.Diagnostics.Debug.WriteLine("FindPathAsync CANCELLED - Operation was cancelled");
+                // This is expected when user cancels - don't show error message
+                if (!token.IsCancellationRequested)
+                {
+                    MessageBox.Show("Pathfinding was cancelled.", "Search Cancelled",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -379,12 +429,14 @@ namespace SallamPathFinder4.WinForms.ViewModels
             finally
             {
                 IsSearching = false;
+                _currentFinder = null;
                 System.Diagnostics.Debug.WriteLine("FindPathAsync FINISHED");
             }
         }
 
         /// <summary>
         /// Internal pathfinding logic running on background thread
+        /// Processes all goals sequentially without timeouts for subsequent goals
         /// </summary>
         private PathfindingInternalResult FindPathInternal(Point start, List<Point> goalsList, CancellationToken token)
         {
@@ -395,8 +447,16 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
             for (int i = 0; i < goalsList.Count; i++)
             {
-                // Check for cancellation
-                token.ThrowIfCancellationRequested();
+                // ✅ Safe cancellation check - don't throw, just return
+                if (token.IsCancellationRequested)
+                {
+                    System.Diagnostics.Debug.WriteLine($"FindPathInternal: Cancellation requested at goal {i + 1}");
+                    return new PathfindingInternalResult
+                    {
+                        Success = false,
+                        Error = "Search cancelled by user"
+                    };
+                }
 
                 Point currentGoal = goalsList[i];
                 System.Diagnostics.Debug.WriteLine($"Processing goal {i + 1}/{goalsList.Count} at ({currentGoal.X},{currentGoal.Y})");
@@ -412,34 +472,80 @@ namespace SallamPathFinder4.WinForms.ViewModels
                     };
                 }
 
+                _currentFinder = finder;
+
+                // Debug event handler for visualization
+                finder.DebugUpdate += (fromX, fromY, x, y, type, totalCost, cost) =>
+                {
+                    if (_mapControl.InvokeRequired)
+                        _mapControl.Invoke(new Action(() => _mapControl.UpdateSearchCell(fromX, fromY, x, y, type, totalCost, cost)));
+                    else
+                        _mapControl.UpdateSearchCell(fromX, fromY, x, y, type, totalCost, cost);
+                };
+
+                // Apply visualization settings
+                finder.ShowDebugProgress = _enableVisualization;
+                finder.EnableVisualization = _enableVisualization;
+                finder.SpeedDelayMs = _visualizationSpeedDelayMs;
+
+                // Apply algorithm settings
                 finder.AllowDiagonals = AllowDiagonals;
                 finder.HeavyDiagonals = HeavyDiagonals;
                 finder.HeuristicWeight = HeuristicWeight;
-                finder.SearchLimit = SearchLimit;
+                finder.SearchLimit = SEGMENT_SEARCH_LIMIT;
                 finder.Metric = SelectedMetric;
 
                 System.Diagnostics.Debug.WriteLine($"Starting FindPath from ({currentPos.X},{currentPos.Y}) to goal {i + 1}");
-                System.Diagnostics.Debug.WriteLine($"Parameters: AllowDiagonals={AllowDiagonals}, HeavyDiagonals={HeavyDiagonals}, HeuristicWeight={HeuristicWeight}, SearchLimit={SearchLimit}, Metric={SelectedMetric}");
 
                 PathResult result = null;
 
-                // Run each segment with a timeout using a separate thread
-                var segmentTask = Task.Run(() => finder.FindPath(currentPos, currentGoal));
-                bool completed = segmentTask.Wait(SEGMENT_TIMEOUT_MS);
-
-                if (!completed)
+                try
                 {
-                    System.Diagnostics.Debug.WriteLine($"TIMEOUT on goal {i + 1}");
+                    // Only apply timeout for the first goal
+                    if (i == 0)
+                    {
+                        var segmentTask = Task.Run(() => finder.FindPath(currentPos, currentGoal));
+                        bool completed = segmentTask.Wait(SEARCH_TIMEOUT_MS);
+
+                        if (!completed)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"TIMEOUT on first goal {i + 1}");
+                            return new PathfindingInternalResult
+                            {
+                                Success = false,
+                                Error = $"Timeout finding path to first goal."
+                            };
+                        }
+                        result = segmentTask.Result;
+                    }
+                    else
+                    {
+                        // No timeout for subsequent goals
+                        result = finder.FindPath(currentPos, currentGoal);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Exception in FindPath: {ex.Message}");
                     return new PathfindingInternalResult
                     {
                         Success = false,
-                        Error = $"Timeout finding path to goal {i + 1}.\n\nTry increasing Search Limit or simplifying the map."
+                        Error = $"Error finding path: {ex.Message}"
                     };
                 }
 
-                result = segmentTask.Result;
+                // ✅ Check cancellation after each goal
+                if (token.IsCancellationRequested)
+                {
+                    System.Diagnostics.Debug.WriteLine($"FindPathInternal: Cancellation requested after goal {i + 1}");
+                    return new PathfindingInternalResult
+                    {
+                        Success = false,
+                        Error = "Search cancelled by user"
+                    };
+                }
 
-                System.Diagnostics.Debug.WriteLine($"FindPath result for goal {i + 1}: Success={result.Success}, PathLength={result.PathLength}, NodesExplored={result.NodesExplored}, ComputationTime={result.ComputationTimeSeconds}s");
+                System.Diagnostics.Debug.WriteLine($"FindPath result for goal {i + 1}: Success={result.Success}, PathLength={result.PathLength}");
 
                 if (!result.Success)
                 {
@@ -450,7 +556,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                     };
                 }
 
-                // Get goal color from original Goals list (using position matching)
+                // Get goal color
                 Color goalColor = Color.Gold;
                 var matchingGoal = Goals.FirstOrDefault(g => g.Location.X == currentGoal.X && g.Location.Y == currentGoal.Y);
                 if (matchingGoal != null)
@@ -471,7 +577,7 @@ namespace SallamPathFinder4.WinForms.ViewModels
                 System.Diagnostics.Debug.WriteLine($"Goal {i + 1} completed. Total path so far: {fullPath.Count} cells");
             }
 
-            // Return path to nearest parking (dashed green line)
+            // Return path to nearest parking
             if (ParkingPoints.Count > 0 && goalsList.Count > 0)
             {
                 Point lastGoal = goalsList.Last();
@@ -488,29 +594,17 @@ namespace SallamPathFinder4.WinForms.ViewModels
                     if (returnFinder != null)
                     {
                         returnFinder.AllowDiagonals = AllowDiagonals;
+                        returnFinder.SearchLimit = SEGMENT_SEARCH_LIMIT;
 
-                        var returnTask = Task.Run(() => returnFinder.FindPath(lastGoal, nearestParking.Location));
-                        bool completed = returnTask.Wait(SEGMENT_TIMEOUT_MS);
+                        var returnResult = returnFinder.FindPath(lastGoal, nearestParking.Location);
 
-                        if (completed)
+                        if (returnResult.Success && returnResult.Path.Count > 0)
                         {
-                            var returnResult = returnTask.Result;
-                            if (returnResult.Success && returnResult.Path.Count > 0)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Return path found: Length={returnResult.PathLength}");
-                                Color returnPathColor = Color.FromArgb(200, Color.Green);
-                                coloredSegments.Add(new ColoredPath(returnResult.Path.ToList(), returnPathColor, true));
-                                fullPath.AddRange(returnResult.Path.Skip(1));
-                                totalTime += returnResult.ComputationTimeSeconds;
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Return path NOT found");
-                            }
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Return path TIMEOUT");
+                            System.Diagnostics.Debug.WriteLine($"Return path found: Length={returnResult.PathLength}");
+                            Color returnPathColor = Color.FromArgb(200, Color.Green);
+                            coloredSegments.Add(new ColoredPath(returnResult.Path.ToList(), returnPathColor, true));
+                            fullPath.AddRange(returnResult.Path.Skip(1));
+                            totalTime += returnResult.ComputationTimeSeconds;
                         }
                     }
                 }
@@ -2313,6 +2407,25 @@ namespace SallamPathFinder4.WinForms.ViewModels
             HasPath = false;
             OnPropertyChanged(nameof(HasPath));
             System.Diagnostics.Debug.WriteLine("[MainViewModel] Cached path cleared");
+        }
+
+        public void PauseSearch()
+        {
+            System.Diagnostics.Debug.WriteLine("PauseSearch called");
+            _currentFinder?.PauseSearch();
+        }
+
+        public void ResumeSearch()
+        {
+            System.Diagnostics.Debug.WriteLine("ResumeSearch called");
+            _currentFinder?.ResumeSearch();
+        }
+        public void StopSearch()
+        {
+            System.Diagnostics.Debug.WriteLine("StopSearch called");
+            _currentFinder?.Stop();
+            _searchCts?.Cancel();
+            IsSearching = false;
         }
     }
 

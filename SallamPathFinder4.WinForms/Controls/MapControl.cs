@@ -70,6 +70,8 @@ namespace SallamPathFinder4.WinForms.Controls
         private float _zoomLevel;
         private PointF _viewOffset;
         private Point? _highlightedCell;
+        private bool _showOrderNumbers = false;  
+
         #endregion
 
         #region Private Fields - Robot
@@ -157,7 +159,11 @@ namespace SallamPathFinder4.WinForms.Controls
         #endregion
 
         #region Public Properties - Core
-
+        public bool ShowOrderNumbers
+        {
+            get => _showOrderNumbers;
+            set { _showOrderNumbers = value; Invalidate(); }
+        }
         public double ScaleCmPerCell { get; set; }
 
         public MapGrid MapGrid
@@ -631,6 +637,8 @@ namespace SallamPathFinder4.WinForms.Controls
                     DrawDetectionZone(g, x, y, rect);
                     DrawGridLines(g, rect);
                     DrawSpecialCells(g, x, y, rect);
+                    DrawPathArrows(g);
+
                     // Add this line
                     // Draw coordinates if enabled
                     if (_showCoordinates)
@@ -645,6 +653,8 @@ namespace SallamPathFinder4.WinForms.Controls
 
             // Draw robot on top
             DrawRobot(g);
+
+            DrawSearchCells(g);
 
             base.OnPaint(e);
         }
@@ -1257,5 +1267,366 @@ namespace SallamPathFinder4.WinForms.Controls
         }
 
         #endregion
+
+        #region Private Fields - Search Visualization
+        private HashSet<Point> _openCells = new HashSet<Point>();
+        private HashSet<Point> _closedCells = new HashSet<Point>();
+        private Point? _currentCell = null;
+        private List<Point> _pathCells = new List<Point>();
+        private Dictionary<Point, Point> _cellParents = new Dictionary<Point, Point>();
+        private Dictionary<Point, int> _cellOrder = new Dictionary<Point, int>();
+        private int _currentOrder = 0;
+
+        #endregion
+
+        #region Public Methods - Search Visualization
+        public void ClearSearchCells()
+        {
+            _openCells?.Clear();
+            _closedCells?.Clear();
+            _currentCell = null;
+            _pathCells?.Clear();
+            _cellParents?.Clear();
+            _currentOrder = 0; 
+            Invalidate(); ;
+        }
+        private int _arrowDrawCounter = 0;
+        private const int ARROW_DRAW_INTERVAL = 10;
+        public void UpdateSearchCell(int fromX, int fromY, int x, int y, PathFinderNodeType type, int totalCost, int cost)
+        {
+            var cell = new Point(x, y);
+            var parentCell = new Point(fromX, fromY);
+
+            // 🔴 احسب المنطقة المتغيرة فقط
+            var rect = GetCellRect(cell.X, cell.Y);
+            rect.Inflate(2, 2);  // أضف هامش بسيط
+
+            switch (type)
+            {
+                case PathFinderNodeType.Open:
+                    _openCells.Add(cell);
+                    _cellParents[cell] = parentCell;
+                    break;
+                case PathFinderNodeType.Close:
+                    _openCells.Remove(cell);
+                    _closedCells.Add(cell);
+                    if (!_cellParents.ContainsKey(cell))
+                        _cellParents[cell] = parentCell;
+                    break;
+                case PathFinderNodeType.Current:
+                    // Clear previous current cell if exists
+                    if (_currentCell.HasValue)
+                    {
+                        var oldRect = GetCellRect(_currentCell.Value.X, _currentCell.Value.Y);
+                        oldRect.Inflate(2, 2);
+                        Invalidate(oldRect);
+                    }
+                    _currentCell = cell;
+                    if (!_cellParents.ContainsKey(cell))
+                        _cellParents[cell] = parentCell;
+                    break;
+                case PathFinderNodeType.Path:
+                    _pathCells.Add(cell);
+                    if (!_cellParents.ContainsKey(cell))
+                        _cellParents[cell] = parentCell;
+                    break;
+            }
+
+             _arrowDrawCounter++;
+            if (_arrowDrawCounter % ARROW_DRAW_INTERVAL == 0)
+            {
+                Invalidate(rect);  // رسم كامل مع السهم
+            }
+            else
+            {
+                // رسم بدون سهم (أسرع)
+                Invalidate(rect);
+            }
+        }
+        #endregion
+
+        #region Private Methods - Draw Search Cells
+        private void DrawSearchCells(Graphics g)
+        {
+            if (_mapGrid == null) return;
+
+            float scaledCellSize = _cellSize * _zoomLevel;
+
+            // ========== 1. Open Cells - Green ==========
+            foreach (var cell in _openCells)
+            {
+                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
+                if (IsImportantCell(cell)) continue;
+
+                var rect = GetCellRect(cell.X, cell.Y);
+
+                // Draw background
+                using (var brush = new SolidBrush(Color.FromArgb(200, 100, 255, 100)))
+                {
+                    g.FillRectangle(brush, rect);
+                }
+
+                // Draw direction arrow
+                if (_cellParents.ContainsKey(cell))
+                {
+                    DrawDirectionArrow(g, rect, _cellParents[cell], cell);
+                }
+            }
+
+            // ========== 2. Closed Cells - Red ==========
+            foreach (var cell in _closedCells)
+            {
+                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
+                if (IsImportantCell(cell)) continue;
+
+                var rect = GetCellRect(cell.X, cell.Y);
+
+                // Draw background
+                using (var brush = new SolidBrush(Color.FromArgb(200, 255, 100, 100)))
+                {
+                    g.FillRectangle(brush, rect);
+                }
+
+                // Draw direction arrow
+                if (_cellParents.ContainsKey(cell))
+                {
+                    DrawDirectionArrow(g, rect, _cellParents[cell], cell);
+                }
+            }
+
+            // ========== 3. Current Cell - Blue ==========
+            if (_currentCell.HasValue && _mapGrid.IsValidCoordinate(_currentCell.Value.X, _currentCell.Value.Y))
+            {
+                var rect = GetCellRect(_currentCell.Value.X, _currentCell.Value.Y);
+
+                // Draw background (lighter if important cell)
+                if (IsImportantCell(_currentCell.Value))
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(150, 100, 100, 255)))
+                    {
+                        g.FillRectangle(brush, rect);
+                    }
+                }
+                else
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(220, 100, 100, 255)))
+                    {
+                        g.FillRectangle(brush, rect);
+                    }
+                }
+
+                // Draw direction arrow
+                if (_cellParents.ContainsKey(_currentCell.Value))
+                {
+                    DrawDirectionArrow(g, rect, _cellParents[_currentCell.Value], _currentCell.Value);
+                }
+            }
+
+            // ========== 4. Path Cells - Yellow (no arrows) ==========
+            foreach (var cell in _pathCells)
+            {
+                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
+                if (IsImportantCell(cell)) continue;
+
+                var rect = GetCellRect(cell.X, cell.Y);
+
+                // Draw background
+                using (var brush = new SolidBrush(Color.FromArgb(200, 255, 215, 0)))
+                {
+                    g.FillRectangle(brush, rect);
+                }
+
+                // No arrows on path cells (they will be drawn separately by DrawPathArrows)
+            }
+        }
+        /// <summary>
+               /// Check if a cell contains an important point (Goal, Parking, or Start Point)
+               /// </summary>
+        private bool IsImportantCell(Point cell)
+        {
+            return IsGoalCell(cell) || IsParkingCell(cell) || IsStartPointCell(cell);
+        }
+        /// <summary>
+        /// Check if a cell contains the start point
+        /// </summary>
+        private bool IsStartPointCell(Point cell)
+        {
+            return _startPoint.X == cell.X && _startPoint.Y == cell.Y;
+        }
+        /// <summary>
+        /// Check if a cell contains a parking point
+        /// </summary>
+        private bool IsParkingCell(Point cell)
+        {
+            if (_parkingPoints == null) return false;
+            return _parkingPoints.Any(p => p.Location.X == cell.X && p.Location.Y == cell.Y);
+        }
+        /// <summary>
+        /// Check if a cell contains a goal point
+        /// </summary>
+        private bool IsGoalCell(Point cell)
+        {
+            if (_goals == null) return false;
+            return _goals.Any(g => g.Location.X == cell.X && g.Location.Y == cell.Y);
+        }
+
+        #endregion
+        /// <summary>
+        /// Draw an arrow inside a cell indicating direction
+        /// </summary>
+        private void DrawDirectionArrow(Graphics g, Rectangle rect, Point from, Point to)
+        {
+            if (from.X == to.X && from.Y == to.Y) return;
+
+            int centerX = rect.X + rect.Width / 2;
+            int centerY = rect.Y + rect.Height / 2;
+
+            // Calculate direction
+            int dx = to.X - from.X;
+            int dy = to.Y - from.Y;
+
+            // Normalize
+            if (dx > 0) dx = 1;
+            if (dx < 0) dx = -1;
+            if (dy > 0) dy = 1;
+            if (dy < 0) dy = -1;
+
+            // 🔴 أصغر حجماً: 1/6 حجم الخلية (بدلاً من 1/4)
+            int arrowSize = Math.Min(rect.Width, rect.Height) / 6;
+            int arrowHeadSize = arrowSize / 2;
+
+            // 🔴 تأكد من أن السهم ليس صغيراً جداً
+            if (arrowSize < 3) arrowSize = 3;
+            if (arrowHeadSize < 2) arrowHeadSize = 2;
+
+            Point start = new Point(centerX, centerY);
+            Point end = new Point(centerX + dx * arrowSize, centerY + dy * arrowSize);
+
+            using (var pen = new Pen(Color.Black, 1.5f))  // 🔴 سمك أقل
+            {
+                g.DrawLine(pen, start, end);
+
+                // Draw arrow head
+                if (dx == 1) // Right
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dx == -1) // Left
+                {
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dy == 1) // Down
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                }
+                else if (dy == -1) // Up
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+            }
+        }
+        /// <summary>
+        /// Draw search order number inside a cell
+        /// </summary>
+        private void DrawOrderNumber(Graphics g, Rectangle rect, Point cell)
+        {
+            if (!_cellOrder.ContainsKey(cell)) return;
+
+            int order = _cellOrder[cell];
+
+            using (var font = new Font("Arial", 8, FontStyle.Bold))
+            using (var brush = new SolidBrush(Color.Black))
+            using (var backBrush = new SolidBrush(Color.White))
+            {
+                string text = order.ToString();
+                SizeF textSize = g.MeasureString(text, font);
+
+                // Position in top-right corner of the cell
+                float textX = rect.X + rect.Width - textSize.Width - 2;
+                float textY = rect.Y + 2;
+
+                // Draw background
+                g.FillRectangle(backBrush, textX - 1, textY - 1, textSize.Width + 2, textSize.Height + 2);
+
+                // Draw border
+                using (var borderPen = new Pen(Color.Gray, 1))
+                {
+                    g.DrawRectangle(borderPen, textX - 1, textY - 1, textSize.Width + 2, textSize.Height + 2);
+                }
+
+                // Draw text
+                g.DrawString(text, font, brush, textX, textY);
+            }
+        }
+
+        /// <summary>
+        /// Draw arrow on final path to show movement direction
+        /// </summary>
+        private void DrawPathArrow(Graphics g, Rectangle rect, Point current, Point next)
+        {
+            if (current.X == next.X && current.Y == next.Y) return;
+
+            int centerX = rect.X + rect.Width / 2;
+            int centerY = rect.Y + rect.Height / 2;
+
+            // Calculate direction
+            int dx = next.X - current.X;
+            int dy = next.Y - current.Y;
+
+            // Arrow size
+            int arrowSize = Math.Min(rect.Width, rect.Height) / 3;
+            int arrowHeadSize = arrowSize / 2;
+
+            Point start = new Point(centerX, centerY);
+            Point end = new Point(centerX + dx * arrowSize, centerY + dy * arrowSize);
+
+            using (var pen = new Pen(Color.DarkOrange, 2))
+            {
+                g.DrawLine(pen, start, end);
+
+                // Draw arrow head
+                if (dx == 1) // Right
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dx == -1) // Left
+                {
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dy == 1) // Down
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                }
+                else if (dy == -1) // Up
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+            }
+        }
+        private void DrawPathArrows(Graphics g)
+        {
+            if (_pathCells == null || _pathCells.Count < 2) return;
+
+            for (int i = 0; i < _pathCells.Count - 1; i++)
+            {
+                var current = _pathCells[i];
+                var next = _pathCells[i + 1];
+
+                if (!_mapGrid.IsValidCoordinate(current.X, current.Y)) continue;
+                if (!_mapGrid.IsValidCoordinate(next.X, next.Y)) continue;
+
+                var rect = GetCellRect(current.X, current.Y);
+                DrawPathArrow(g, rect, current, next);
+            }
+        }
+
     }
 }

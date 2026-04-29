@@ -127,10 +127,13 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         /// <inheritdoc/>
         public virtual void Stop()
         {
-            lock (_lockObject)
+            lock (_pauseLock)
             {
                 _isStopped = true;
+                _isPaused = false;
                 _cts?.Cancel();
+                Monitor.Pulse(_pauseLock);
+                System.Diagnostics.Debug.WriteLine("Stop: _isStopped = true");
             }
         }
 
@@ -144,14 +147,15 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         }
 
         /// <inheritdoc/>
-        public virtual void Resume()
+        public virtual void ResumeSearch()
         {
-            lock (_lockObject)
+            lock (_pauseLock)
             {
                 _isPaused = false;
+                Monitor.Pulse(_pauseLock);
+                System.Diagnostics.Debug.WriteLine("ResumeSearch: _isPaused = false, search resumed");
             }
         }
-
         /// <summary>
         /// Records an invalid move attempt (trying to walk through a wall)
         /// </summary>
@@ -174,8 +178,8 @@ namespace SallamPathFinder4.Core.Algorithms.Base
                 _invalidPathCells.Clear();
             }
         }
-        #endregion
-
+        #endregion 
+ 
         #region Protected Methods - Heuristic
         /// <summary>
         /// Calculates heuristic distance between two points
@@ -315,15 +319,31 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         /// <summary>
         /// Raises debug event for visualization
         /// </summary>
-        protected void RaiseDebugEvent(int fromX, int fromY, int x, int y, PathFinderNodeType type, int totalCost, int cost)
+        protected void RaiseDebugEvent(int fromX, int fromY, int x, int y,
+            PathFinderNodeType type, int totalCost, int cost)
         {
             if (this.ShowDebugProgress)
             {
+                // 🔴 أضف هذا الجزء للتعامل مع الإيقاف المؤقت
+                lock (_pauseLock)
+                {
+                    while (_isPaused && !_isStopped)
+                    {
+                        Monitor.Wait(_pauseLock);
+                    }
+                }
+
+                if (_isStopped) return;
+
                 var handler = this.DebugUpdate;
                 handler?.Invoke(fromX, fromY, x, y, type, totalCost, cost);
+
+                if (_enableVisualization && _speedDelayMs > 0)
+                {
+                    Thread.Sleep(_speedDelayMs);
+                }
             }
         }
-
         /// <summary>
         /// Checks if algorithm should stop (stopped or paused)
         /// </summary>
@@ -369,6 +389,48 @@ namespace SallamPathFinder4.Core.Algorithms.Base
                 _cts = null;
             }
         }
+        #endregion
+
+        #region Private Fields - Visualization
+        private bool _enableVisualization = false;
+        private int _speedDelayMs = 0;
+        #endregion
+
+        #region Public Properties - Visualization
+        /// <summary>
+        /// تفعيل/إيقاف تصور عملية البحث
+        /// </summary>
+        public bool EnableVisualization
+        {
+            get => _enableVisualization;
+            set => _enableVisualization = value;
+        }
+
+        /// <summary>
+        /// سرعة العرض بالمللي ثانية
+        /// </summary>
+        public int SpeedDelayMs
+        {
+            get => _speedDelayMs;
+            set => _speedDelayMs = Math.Max(0, Math.Min(500, value));
+        }
+        #endregion
+        #region Private Fields - Pause/Resume
+         private readonly object _pauseLock = new object();
+        #endregion
+
+        #region Public Methods - Pause/Resume
+        public virtual void PauseSearch()
+        {
+            lock (_pauseLock)
+            {
+                _isPaused = true;
+                System.Diagnostics.Debug.WriteLine("PauseSearch: _isPaused = true");
+            }
+        }
+
+       
+       
         #endregion
     }
 }

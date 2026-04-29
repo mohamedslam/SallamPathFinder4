@@ -255,6 +255,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 }
 
                 path.Add(new Point(newX, newY));
+                // Open node - initial candidate cell
+                RaiseDebugEvent(path[path.Count - 2].X, path[path.Count - 2].Y, newX, newY, PathFinderNodeType.Open, 0, 0);
             }
 
             path.Add(_goal);
@@ -268,12 +270,21 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             foreach (var particle in _particles)
             {
                 particle.CurrentCost = CalculatePathCost(particle.Position);
-
+                // Close node - closed cells in particle's path
+                foreach (var point in particle.Position)
+                {
+                    RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Close, 0, 0);
+                }
                 // Update personal best
                 if (particle.CurrentCost < particle.BestCost)
                 {
                     particle.BestCost = particle.CurrentCost;
                     particle.BestPosition = new List<Point>(particle.Position);
+                    // Path nodes - personal best path found
+                    foreach (var point in particle.BestPosition)
+                    {
+                        RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Path, 0, 0);
+                    }
                 }
 
                 // Update global best
@@ -281,6 +292,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 {
                     _globalBestCost = particle.CurrentCost;
                     _globalBestPosition = new List<Point>(particle.Position);
+                    // Path nodes - new global best path found
+                    foreach (var point in _globalBestPosition)
+                    {
+                        RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Path, 0, 0);
+                    }
                 }
             }
         }
@@ -389,6 +405,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     if (i < particle.Position.Count)
                     {
                         particle.Position[i] = new Point(newX, newY);
+                        // Current node - particle position update
+                        RaiseDebugEvent(particle.Position[i - 1].X, particle.Position[i - 1].Y, newX, newY, PathFinderNodeType.Current, 0, 0);
                     }
                 }
 

@@ -208,6 +208,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 var node = new PRMNode(sample.X, sample.Y, _nodes.Count);
                 _nodes.Add(node);
                 _nodePositionMap[sample] = node.Index;
+                // Open node - new sample point added to roadmap
+                RaiseDebugEvent(sample.X, sample.Y, sample.X, sample.Y, PathFinderNodeType.Open, 0, 0);
             }
 
             System.Diagnostics.Debug.WriteLine($"PRM sampling: Generated {_nodes.Count} valid nodes");
@@ -307,6 +309,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     {
                         nodeA.Neighbors.Add(candidate.index);
                         nodeB.Neighbors.Add(i);
+                        // Current node - connection being established
+                        RaiseDebugEvent(nodeA.X, nodeA.Y, nodeB.X, nodeB.Y, PathFinderNodeType.Current, 0, 0);
                     }
                 }
             }
@@ -342,6 +346,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
             _nodes.Add(startNode);
             _nodes.Add(goalNode);
+            // Close node - start and goal added to roadmap
+            RaiseDebugEvent(start.X, start.Y, start.X, start.Y, PathFinderNodeType.Close, 0, 0);
+            RaiseDebugEvent(goal.X, goal.Y, goal.X, goal.Y, PathFinderNodeType.Close, 0, 0);
         }
 
         private int FindNearestNodeIndex(Point point)
@@ -444,6 +451,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         distances[neighborIdx] = newDist;
                         previous[neighborIdx] = current.index;
                         priorityQueue.Add((newDist, neighborIdx));
+                        // Current node - exploring neighbor during search
+                        RaiseDebugEvent(currentNode.X, currentNode.Y, neighborNode.X, neighborNode.Y, PathFinderNodeType.Current, 0, 0);
                     }
                 }
             }
@@ -461,7 +470,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 path.Insert(0, new PathNode(node.X, node.Y));
                 currentIdx = previous[currentIdx];
             }
-
+            // Path nodes - final path
+            foreach (var node in path)
+            {
+                RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
+            }
             return path;
         }
         #endregion

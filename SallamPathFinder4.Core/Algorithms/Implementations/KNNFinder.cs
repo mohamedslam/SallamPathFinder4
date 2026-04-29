@@ -9,6 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Algorithms.Base;
+using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
 using System.Drawing;
@@ -80,6 +81,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     var best = candidates
                         .OrderBy(p => Math.Abs(p.X - end.X) + Math.Abs(p.Y - end.Y))
                         .First();
+                    // Current node visualization
+                    RaiseDebugEvent(current.X, current.Y, best.X, best.Y, PathFinderNodeType.Current, 0, 0);
 
                     int stepX = Math.Sign(best.X - current.X);
                     int stepY = Math.Sign(best.Y - current.Y);
@@ -104,6 +107,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         {
                             path.Add(new PathNode(tempX, tempY));
                             visited.Add((tempX, tempY));
+                            // Close node visualization
+                            RaiseDebugEvent(current.X, current.Y, tempX, tempY, PathFinderNodeType.Close, 0, 0);
                         }
                     }
 
@@ -120,6 +125,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     {
                         if (uniquePath.Count == 0 || uniquePath.Last().X != node.X || uniquePath.Last().Y != node.Y)
                             uniquePath.Add(node);
+                    }
+                    // Path visualization
+                    foreach (var node in uniquePath)
+                    {
+                        RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
                     }
                     return new PathResult(uniquePath, stopwatch.Elapsed.TotalSeconds, iterations);
                 }

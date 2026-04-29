@@ -251,8 +251,13 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 }
 
                 _nodes.Add(newNode);
+                // Open node - new node added to tree
+                RaiseDebugEvent(nearestNode.X, nearestNode.Y, newPoint.X, newPoint.Y, PathFinderNodeType.Open, 0, 0);
+
                 _nodePositions.Add(newPoint);
 
+                // Current node - currently expanding node
+                RaiseDebugEvent(nearestNode.X, nearestNode.Y, newPoint.X, newPoint.Y, PathFinderNodeType.Current, 0, 0);
                 // Check if reached goal
                 if (IsReachedGoal(newPoint))
                 {
@@ -266,7 +271,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             if (goalNode != null)
             {
                 var path = ReconstructPath(goalNode);
-
+                // Path nodes - final path
+                foreach (var node in path)
+                {
+                    RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
+                }
                 // Smooth path if enabled
                 if (_config.SmoothPath && path.Count > 2)
                 {
@@ -460,6 +469,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 {
                     node.Parent = newNode;
                     node.Cost = newCost;
+                    // Close node - rewired node
+                    RaiseDebugEvent(newNode.X, newNode.Y, node.X, node.Y, PathFinderNodeType.Close, 0, 0);
                 }
             }
 

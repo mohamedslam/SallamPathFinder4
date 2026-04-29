@@ -9,6 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Algorithms.Base;
+using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
 using System.Drawing;
@@ -131,6 +132,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                                     {
                                         if (!ant.Path.Any(p => p.X == nx && p.Y == ny))
                                             possibleMoves.Add(d);
+                                        // Open node - potential cell to explore
+                                        RaiseDebugEvent(current.X, current.Y, nx, ny, PathFinderNodeType.Open, 0, 0);
                                     }
                                     else
                                     {
@@ -142,6 +145,10 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                             if (possibleMoves.Count == 0) break;
 
                             int nextDir = SelectNextMove(current, end, possibleMoves, dx, dy);
+                            int newX = current.X + dx[nextDir];
+                            int newY = current.Y + dy[nextDir];
+                            // Current node - ant moving to this cell
+                            RaiseDebugEvent(current.X, current.Y, newX, newY, PathFinderNodeType.Current, 0, 0);
                             current = new Point(current.X + dx[nextDir], current.Y + dy[nextDir]);
                             ant.Path.Add(current);
                             ant.PathLength += CalculateStepCost(ant.Path[ant.Path.Count - 2], current);
@@ -151,6 +158,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         {
                             ant.Completed = true;
                             ants.Add(ant);
+                            // Close node - record all cells visited by this ant
+                            foreach (var point in ant.Path)
+                            {
+                                RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Close, 0, 0);
+                            }
 
                             if (globalBestAnt == null || ant.PathLength < globalBestAnt.PathLength)
                                 globalBestAnt = ant;
@@ -181,6 +193,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 if (globalBestAnt != null && globalBestAnt.Path.Count > 0)
                 {
                     var pathNodes = globalBestAnt.Path.Select(p => new PathNode(p.X, p.Y)).ToList();
+                    // Path nodes - best path found so far
+                    foreach (var point in globalBestAnt.Path)
+                    {
+                        RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Path, 0, 0);
+                    }
                     return new PathResult(pathNodes, stopwatch.Elapsed.TotalSeconds, _numberOfAnts * _maxIterations);
                 }
 

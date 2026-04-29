@@ -205,6 +205,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     // Create new node
                     double stepCost = CalculateStepCost(nearestNode.ToPoint(), newPoint);
                     var newNode = new RRTStarNode(newPoint.X, newPoint.Y, nearestNode, nearestNode.Cost + stepCost);
+                    RaiseDebugEvent(nearestNode.X, nearestNode.Y, newPoint.X, newPoint.Y, PathFinderNodeType.Open, 0, 0);
 
                     // RRT*: Find near neighbors for rewiring
                     var nearNodes = FindNearNodes(newNode);
@@ -221,11 +222,13 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     }
 
                     _nodes.Add(newNode);
+                    // Open node - new node added to tree
                     _nodeMap[newPoint] = newNode;
 
                     // RRT*: Rewire near nodes
                     RewireNearNodes(newNode, nearNodes);
-
+                    // Current node - currently expanding node
+                    RaiseDebugEvent(nearestNode.X, nearestNode.Y, newPoint.X, newPoint.Y, PathFinderNodeType.Current, 0, 0);
                     // Check if reached goal
                     if (IsReachedGoal(newPoint))
                     {
@@ -236,6 +239,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         {
                             _bestPathCost = currentCost;
                             _bestPath = ReconstructPath(newNode);
+                            // Path nodes - updated best path
+                            foreach (var node in _bestPath)
+                            {
+                                RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
+                            }
                             System.Diagnostics.Debug.WriteLine($"RRT* found better path: Cost = {_bestPathCost:F2}, Nodes = {_nodes.Count}");
 
                             // Update sampling region for informed RRT*
@@ -261,6 +269,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     if (_config.SmoothPath && path.Count > 2)
                     {
                         path = SmoothPath(path);
+                    }
+                    // Final path visualization (in case it wasn't updated during search)
+                    foreach (var node in path)
+                    {
+                        RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
                     }
                     return new PathResult(path, stopwatch.Elapsed.TotalSeconds, _nodes.Count);
                 }
@@ -384,6 +397,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 {
                     minCost = potentialCost;
                     bestParent = node;
+                    // Close node - better parent found, old parent replaced
+                    RaiseDebugEvent(node.X, node.Y, newNode.X, newNode.Y, PathFinderNodeType.Close, 0, 0);
                 }
             }
 
@@ -406,7 +421,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     node.Parent = newNode;
                     node.Cost = potentialCost;
                     newNode.Children.Add(node);
-
+                    // Rewire - improved connection
+                    RaiseDebugEvent(newNode.X, newNode.Y, node.X, node.Y, PathFinderNodeType.Close, 0, 0);
                     // Update costs of all descendants
                     UpdateDescendantCosts(node);
                 }

@@ -14,6 +14,7 @@ using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
 using System.Drawing;
+using System.IO;
 #endregion
 
 namespace SallamPathFinder4.Core.Algorithms.Implementations
@@ -199,10 +200,17 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 if (_bestChromosome != null && _bestChromosome.Path.Count > 0)
                 {
                     var path = SmoothPath(_bestChromosome.Path);
+                    // Final path visualization
+                    foreach (var point in path)
+                    {
+                        RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Path, 0, 0);
+                    }
+
                     return new PathResult(path.Select(p => new PathNode(p.X, p.Y)).ToList(),
                         stopwatch.Elapsed.TotalSeconds, _config.PopulationSize * _config.MaxGenerations);
-                }
 
+                }
+               
                 return PathResult.Fail("No path found", stopwatch.Elapsed.TotalSeconds);
             }
             catch (Exception ex)
@@ -255,6 +263,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 }
 
                 path.Add(new Point(newX, newY));
+                // Open node - initial chromosome cell
+                RaiseDebugEvent(path[path.Count - 2].X, path[path.Count - 2].Y, newX, newY, PathFinderNodeType.Open, 0, 0);
             }
 
             path.Add(_goal);
@@ -271,6 +281,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             {
                 chromosome.Cost = CalculatePathCost(chromosome.Path);
                 chromosome.Fitness = 1.0 / (1.0 + chromosome.Cost);
+                // Close node - all cells in this chromosome
+                foreach (var point in chromosome.Path)
+                {
+                    RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Close, 0, 0);
+                }
                 totalFitness += chromosome.Fitness;
             }
 
@@ -280,6 +295,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             if (_bestChromosome == null || best.Fitness > _bestChromosome.Fitness)
             {
                 _bestChromosome = best.Clone();
+                // Path nodes - new best chromosome found
+                foreach (var point in _bestChromosome.Path)
+                {
+                    RaiseDebugEvent(point.X, point.Y, point.X, point.Y, PathFinderNodeType.Path, 0, 0);
+                }
             }
         }
 
@@ -367,6 +387,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 for (int i = crossoverPoint; i < parent2.Path.Count; i++)
                 {
                     offspring.Path.Add(parent2.Path[i]);
+                    // Current node - crossover point
+                    RaiseDebugEvent(parent1.Path[i - 1].X, parent1.Path[i - 1].Y, parent2.Path[i].X, parent2.Path[i].Y, PathFinderNodeType.Current, 0, 0);
                 }
             }
             else
@@ -402,6 +424,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     if (_grid[newX, newY].IsWalkable)
                     {
                         chromosome.Path[i] = new Point(newX, newY);
+                        // Open node - mutated cell
+                        RaiseDebugEvent(chromosome.Path[i - 1].X, chromosome.Path[i - 1].Y, newX, newY, PathFinderNodeType.Open, 0, 0);
                     }
                 }
             }

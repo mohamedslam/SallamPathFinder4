@@ -268,9 +268,13 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     found = true;
                     break;
                 }
+                // Current node visualization
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Current, currentNode.F, currentNode.G);
 
                 currentNode.IsClosed = true;
                 closedDict[key] = currentNode;
+                // Close node visualization
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Close, currentNode.F, currentNode.G);
                 iterations++;
 
                 for (int i = 0; i < dx.Length; i++)
@@ -340,6 +344,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     {
                         openDict[neighborKey] = neighbor;
                         openHeap.Add(Tuple.Create(neighbor.F, neighbor.X, neighbor.Y));
+                        // Open node visualization
+                        RaiseDebugEvent(currentNode.X, currentNode.Y, nx, ny, PathFinderNodeType.Open, neighbor.F, neighbor.G);
                     }
                 }
             }
@@ -362,7 +368,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         }
                     }
                 }
-
+                // Path visualization
+                foreach (var node in path)
+                {
+                    RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
+                }
                 return new PathResult(path, stopwatch.Elapsed.TotalSeconds, iterations);
             }
 
