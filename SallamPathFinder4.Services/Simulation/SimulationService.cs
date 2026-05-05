@@ -47,7 +47,7 @@ namespace SallamPathFinder4.Services.Simulation
         private bool _enableDetection = true;
         private Point _lastRobotPosition;
         private float _lastRobotAngle;
-
+        private double _currentSpeed = 10.0;
         private bool _isDisposed;
         private List<Point> _goalPositions;
         private bool[] _reachedGoals;
@@ -75,7 +75,8 @@ namespace SallamPathFinder4.Services.Simulation
         private List<PathNode> _originalPath;
         private int _originalPathIndex;
         private List<Point> _parkingPoints;
-        private double _lastBatteryCheckTime;
+        private double _lastBatteryCheckTime; 
+        private CancellationTokenSource _cts;
         #endregion
 
         #region Constructor
@@ -142,7 +143,7 @@ namespace SallamPathFinder4.Services.Simulation
         #endregion
 
         #region Events
-        public event Action<Point, float> RobotMoved;
+        public event Action<Point, float, double> RobotMoved;
         public event Action<ObstacleData, Point> ObstacleCollision;
         public event Action<Point, ObstacleType, double> ObstacleDetected;
         public event Action<double> BatteryChanged;
@@ -157,8 +158,23 @@ namespace SallamPathFinder4.Services.Simulation
         #endregion
 
         #region Public Methods - Control
-        private CancellationTokenSource _cts;
 
+        /// <summary>
+        /// تعيين سرعة الروبوت من الإعدادات
+        /// </summary>
+        public void SetRobotSpeedFromSettings(double speedCmPerSec)
+        {
+            _currentSpeed = Math.Max(0.1, Math.Min(100, speedCmPerSec));
+
+            // حساب زمن الخطوة بناءً على السرعة
+            // المسافة لكل خطوة = 10 سم (حجم الخلية الافتراضي)
+            double cellSizeCm = 10.0;  // يجب أن تأخذ القيمة من ScaleCmPerCell
+            double stepTimeSeconds = cellSizeCm / _currentSpeed;
+
+            _stepDelaySeconds = Math.Max(0.05, Math.Min(2.0, stepTimeSeconds));
+
+            System.Diagnostics.Debug.WriteLine($"[SimulationService] Speed={_currentSpeed} cm/s, StepDelay={_stepDelaySeconds:F3}s");
+        }
         public void Start(IReadOnlyList<PathNode> path)
         {
             if (path == null || path.Count == 0)
@@ -208,7 +224,6 @@ namespace SallamPathFinder4.Services.Simulation
 
         private async Task SimulationLoop(CancellationToken token)
         {
-            System.Diagnostics.Debug.WriteLine("SimulationLoop started");
             DateTime lastObstacleUpdate = DateTime.UtcNow;
 
             while (_isRunning && !token.IsCancellationRequested)
@@ -231,8 +246,7 @@ namespace SallamPathFinder4.Services.Simulation
 
                     if (_currentStep >= _currentPath.Count - 1)
                     {
-                        Stop();
-                        System.Diagnostics.Debug.WriteLine("Simulation loop ended - path completed");
+                        Stop(); 
                         break;
                     }
 
@@ -243,11 +257,10 @@ namespace SallamPathFinder4.Services.Simulation
                     if (IsDoorBlocked(new Point(to.X, to.Y)))
                     {
                         _isWaitingForDoor = true;
-                        _waitingDoorCell = new Point(to.X, to.Y);
-                        System.Diagnostics.Debug.WriteLine($"Waiting for door at ({to.X},{to.Y}) to open");
+                        _waitingDoorCell = new Point(to.X, to.Y); 
 
                         // Raise event to update UI status
-                        _uiContext.Post(_ => RobotMoved?.Invoke(_lastRobotPosition, _lastRobotAngle), null);
+                        _uiContext.Post(_ => RobotMoved?.Invoke(_lastRobotPosition, _lastRobotAngle, _currentSpeed), null);
                         continue;
                     }
 
@@ -268,7 +281,8 @@ namespace SallamPathFinder4.Services.Simulation
                     {
                         var pos = _lastRobotPosition;
                         var ang = _lastRobotAngle;
-                        _uiContext.Post(_ => handler(pos, ang), null);
+                        var speed=  _currentSpeed;
+                        _uiContext.Post(_ => handler(pos, ang,speed), null);
                     }
 
                     _currentStep++;
@@ -291,9 +305,7 @@ namespace SallamPathFinder4.Services.Simulation
                     // Wait while paused
                     await Task.Delay(50, token);
                 }
-            }
-
-            System.Diagnostics.Debug.WriteLine("Simulation loop ended");
+            } 
         }
 
         public void MoveRobotManually(RobotCommand command, int stepSize = 1, float rotationAngle = 15f)
@@ -340,7 +352,7 @@ namespace SallamPathFinder4.Services.Simulation
                 {
                     _lastRobotPosition = newPosition;
                     _lastRobotAngle = newAngle;
-                    RobotMoved?.Invoke(_lastRobotPosition, _lastRobotAngle);
+                    RobotMoved?.Invoke(_lastRobotPosition, _lastRobotAngle, _currentSpeed);
                 }
                 else
                 {
@@ -676,7 +688,7 @@ namespace SallamPathFinder4.Services.Simulation
                     _waitingDoorCell = Point.Empty;
 
                     // Trigger UI update to resume simulation
-                    _uiContext.Post(_ => RobotMoved?.Invoke(_lastRobotPosition, _lastRobotAngle), null);
+                    _uiContext.Post(_ => RobotMoved?.Invoke(_lastRobotPosition, _lastRobotAngle, _currentSpeed), null);
                 }
             }
         }

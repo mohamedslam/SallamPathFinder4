@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using SallamPathFinder4.Core.Enums;
+using SallamPathFinder4.WinForms.Helpers;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Panels
@@ -87,6 +88,7 @@ namespace SallamPathFinder4.WinForms.Panels
         private NumericUpDown _nudBFIterations;
         private Panel _pnlBruteForceSettings;
         #endregion
+      
         #region Private Fields - RRT Settings
         private NumericUpDown _nudRRTIterations;
         private NumericUpDown _nudRRTStepSize;
@@ -136,6 +138,7 @@ namespace SallamPathFinder4.WinForms.Panels
         private CheckBox _chkRRTStarSmoothPath;
         private Panel _pnlRRTStarSettings;
         #endregion
+        
         #region Private Fields - Visualization
         private CheckBox _chkEnableVisualization;
         private TrackBar _speedSlider;
@@ -150,6 +153,14 @@ namespace SallamPathFinder4.WinForms.Panels
         private Button _btnFindPath;
         #endregion
 
+        #region Private Fields - GIF Recording
+        private Button _btnStartRecording;
+        private Button _btnStopRecording;
+        private Label _lblRecordingStatus;
+        private GifRecorder _gifRecorder;
+        private bool _isRecording = false;
+        #endregion
+
         #region Events
         public event EventHandler SettingsChanged;
         public event EventHandler FindPathRequested;
@@ -157,6 +168,8 @@ namespace SallamPathFinder4.WinForms.Panels
         public event EventHandler PauseRequested;
         public event EventHandler ResumeRequested;
         public event EventHandler StopRequested;
+        public event EventHandler StartRecordingRequested;
+        public event EventHandler StopRecordingRequested;
         #endregion
 
         #region Properties
@@ -724,6 +737,7 @@ namespace SallamPathFinder4.WinForms.Panels
             _pnlVisualization.Controls.Add(_btnStop);
 
             _pnlSettingsContainer.Controls.Add(_pnlVisualization);
+            CreateRecordingControls();
         }
 
         private void UpdateSpeedLabel()
@@ -1267,6 +1281,100 @@ namespace SallamPathFinder4.WinForms.Panels
             _nudRRTStarGoalRadius.ValueChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
             _chkRRTStarInformedSampling.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
             _chkRRTStarSmoothPath.CheckedChanged += (s, e) => SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+        #endregion
+         
+        #region Private Methods - Recording Controls
+        private void CreateRecordingControls()
+        {
+            int y = _btnStop.Bottom + 15;
+
+            var lblSeparator = new Label
+            {
+                Text = "═══════════ GIF RECORDING ═══════════",
+                Location = new Point(10, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                ForeColor = Color.FromArgb(100, 100, 100)
+            };
+            _pnlVisualization.Controls.Add(lblSeparator);
+            y += 25;
+
+            _btnStartRecording = new Button
+            {
+                Text = "● بدء التسجيل",
+                Location = new Point(10, y),
+                Size = new Size(100, 30),
+                BackColor = Color.FromArgb(231, 76, 60),
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.White,
+                Enabled = false,
+                Cursor = Cursors.Hand
+            };
+            _btnStartRecording.Click += (s, e) => StartRecordingRequested?.Invoke(this, EventArgs.Empty);
+            _pnlVisualization.Controls.Add(_btnStartRecording);
+
+            _btnStopRecording = new Button
+            {
+                Text = "■ إيقاف التسجيل",
+                Location = new Point(120, y),
+                Size = new Size(100, 30),
+                BackColor = Color.FromArgb(149, 165, 166),
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.White,
+                Enabled = false,
+                Cursor = Cursors.Hand
+            };
+            _btnStopRecording.Click += (s, e) => StopRecordingRequested?.Invoke(this, EventArgs.Empty);
+            _pnlVisualization.Controls.Add(_btnStopRecording);
+
+            _lblRecordingStatus = new Label
+            {
+                Text = "⚫ غير نشط",
+                Location = new Point(230, y + 8),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                ForeColor = Color.Gray
+            };
+            _pnlVisualization.Controls.Add(_lblRecordingStatus);
+
+            // تحديث حالة الأزرار عند تفعيل التصور
+            _chkEnableVisualization.CheckedChanged += (s, e) =>
+            {
+                bool enabled = _chkEnableVisualization.Checked;
+                _btnStartRecording.Enabled = enabled && !_isRecording;
+                _btnStopRecording.Enabled = enabled && _isRecording;
+            };
+        }
+
+        public  void UpdateRecordingStatus(bool isRecording, int frameCount = 0)
+        {
+            _isRecording = isRecording;
+
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateRecordingStatus(isRecording, frameCount)));
+                return;
+            }
+
+            _btnStartRecording.Enabled = _chkEnableVisualization.Checked && !isRecording;
+            _btnStopRecording.Enabled = _chkEnableVisualization.Checked && isRecording;
+
+            if (isRecording)
+            {
+                _lblRecordingStatus.Text = $"🔴 Record... {frameCount} Fram";
+                _lblRecordingStatus.ForeColor = Color.FromArgb(231, 76, 60);
+            }
+            else if (frameCount > 0)
+            {
+                _lblRecordingStatus.Text = $"✅ Saved {frameCount} Fram";
+                _lblRecordingStatus.ForeColor = Color.FromArgb(46, 204, 113);
+            }
+            else
+            {
+                _lblRecordingStatus.Text = "⚫ UnActive";
+                _lblRecordingStatus.ForeColor = Color.Gray;
+            }
         }
         #endregion
     }

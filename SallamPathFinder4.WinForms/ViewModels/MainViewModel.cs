@@ -63,15 +63,15 @@ namespace SallamPathFinder4.WinForms.ViewModels
         private List<bool> _visitedGoals;
         private List<Point> _traveledPath;
         private CancellationTokenSource _searchCts;
-            #region Private Fields - Dynamic Charging
-                private System.Windows.Forms.Timer _batteryCheckTimer;
-                private bool _isChargingInProgress;
-                private Point _chargingParkingPoint;
-                private List<PathNode> _originalFullPath;
-                private int _originalPathStepWhenChargingStarted;
-                private List<Point> _cachedParkingPoints;
-                private DateTime _chargingStartTime;
-                private bool _isWaitingForCharging;
+        #region Private Fields - Dynamic Charging
+        private System.Windows.Forms.Timer _batteryCheckTimer;
+        private bool _isChargingInProgress;
+        private Point _chargingParkingPoint;
+        private List<PathNode> _originalFullPath;
+        private int _originalPathStepWhenChargingStarted;
+        private List<Point> _cachedParkingPoints;
+        private DateTime _chargingStartTime;
+        private bool _isWaitingForCharging;
         #endregion
         #endregion
         private IPathFinder _currentFinder;
@@ -624,11 +624,10 @@ namespace SallamPathFinder4.WinForms.ViewModels
         #region Public Methods - Simulation
         public void StartSimulation()
         {
-            System.Diagnostics.Debug.WriteLine($"StartSimulation: _simulationService type = {_simulationService?.GetType()}");
-
+ 
             if (_simulationService is SimulationService simSvc)
-            {
-                System.Diagnostics.Debug.WriteLine($"StartSimulation: DoorGroups count before start = {simSvc.GetDoorGroupsCount()}");
+            { 
+                simSvc.SetRobotSpeedFromSettings(RobotState.Speed);
                 simSvc.StartDoorManager();
             }
 
@@ -637,17 +636,14 @@ namespace SallamPathFinder4.WinForms.ViewModels
 
             var goalsList = Goals.Select(g => g.Location).ToList();
             _simulationService.SetGoals(goalsList);
-            System.Diagnostics.Debug.WriteLine($"StartSimulation: SetGoals called with {goalsList.Count} goals");
-
+ 
             // ========== NEW: Reset charging statistics at simulation start ==========
             ResetChargingStatistics();
 
             // ========== NEW: Record initial battery and cell size ==========
             _initialBatteryPercent = this.RobotState.BatteryLevel;
-            _cellSizeCm = _mapControl.ScaleCmPerCell;
-
-            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Simulation started with {_initialBatteryPercent:F1}% battery, cell size={_cellSizeCm}cm");
-
+            _cellSizeCm = _mapControl.ScaleCmPerCell; 
+ 
             // Load charging settings and start monitoring
             LoadChargingSettings();
             UpdateParkingPointsForCharging();
@@ -1061,13 +1057,17 @@ namespace SallamPathFinder4.WinForms.ViewModels
  
 
         #region Private Methods - Event Handlers
-        private void OnRobotMoved(Point position, float angle)
+        private void OnRobotMoved(  Point position, float angle,double speed)
         {
             RobotState.Position = position;
             RobotState.Angle = angle;
+            RobotState.Speed = speed; 
+            _mapControl.UpdateRobot(speed, position, angle);
+            if (_simulationService is SimulationService simSvc)
+            {
+                simSvc.SetRobotSpeedFromSettings(speed);
+            }
             ConsumeBattery(1.0);
-
-            _mapControl.UpdateRobotPosition(position, angle);
 
             if (_traveledPath != null)
             {

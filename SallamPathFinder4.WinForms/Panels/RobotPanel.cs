@@ -68,6 +68,9 @@ namespace SallamPathFinder4.WinForms.Panels
         public event EventHandler BatteryLevelChanged;
         public event EventHandler ChargingSettingsChanged;
         public event Action ChargingCompleted;
+        public event Action<double> SpeedChanged;
+        public event Action<int, int, int> RobotDimensionsChanged;  // width, length, height
+
         #endregion
 
         #region Constructor
@@ -110,6 +113,7 @@ namespace SallamPathFinder4.WinForms.Panels
                 Value = 10,
                 DecimalPlaces = 1
             };
+            _nudSpeed.ValueChanged += _nudSpeed_ValueChanged;
             this.Controls.Add(_lblSpeed);
             this.Controls.Add(_nudSpeed);
             y += SPACING;
@@ -120,9 +124,9 @@ namespace SallamPathFinder4.WinForms.Panels
             {
                 Location = new Point(120, y - 3),
                 Width = CONTROL_WIDTH,
-                Minimum = 20,
+                Minimum = 1,
                 Maximum = 200,
-                Value = 60
+                Value = 20
             };
             this.Controls.Add(_lblWidth);
             this.Controls.Add(_nudWidth);
@@ -134,9 +138,9 @@ namespace SallamPathFinder4.WinForms.Panels
             {
                 Location = new Point(120, y - 3),
                 Width = CONTROL_WIDTH,
-                Minimum = 20,
+                Minimum = 1,
                 Maximum = 200,
-                Value = 60
+                Value = 20
             };
             this.Controls.Add(_lblLength);
             this.Controls.Add(_nudLength);
@@ -324,13 +328,29 @@ namespace SallamPathFinder4.WinForms.Panels
             this.Controls.Add(_btnSimulate);
             this.Controls.Add(_btnPause);
             this.Controls.Add(_btnStop);
+            _nudWidth.ValueChanged += (s, e) => UpdateDimensions();
+            _nudLength.ValueChanged += (s, e) => UpdateDimensions();
+        }
+        private void UpdateDimensions()
+        {
+            int width = (int)_nudWidth.Value;
+            int length = (int)_nudLength.Value;
+            int height = 30;  // قيمة ثابتة (30 سم) افتراضياً
+
+            RobotDimensionsChanged?.Invoke(width, length, height);
+        }
+        private void _nudSpeed_ValueChanged(object? sender, EventArgs e)
+        {
+            decimal speed = _nudSpeed.Value;   
+            double actualSpeed =(double ) speed;    
+            SpeedChanged?.Invoke(actualSpeed); 
         }
 
         private void SetDefaultValues()
         {
             _chkDynamicCharging.Checked = false;
             _nudChargingMinutes.Value = 0;
-            _nudChargingSeconds.Value = 15;
+            _nudChargingSeconds.Value = 10;
             _nudSafetyMargin.Value = 10;
         }
         #endregion
@@ -470,6 +490,7 @@ namespace SallamPathFinder4.WinForms.Panels
         #endregion
 
         #region Private Methods - Event Handlers
+   
         private void OnSimulateClick(object sender, EventArgs e)
         {
             SimulateClick?.Invoke(this, EventArgs.Empty);

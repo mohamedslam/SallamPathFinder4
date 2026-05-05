@@ -13,6 +13,7 @@ using SallamPathFinder4.Core.Models.Goals;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
+using SallamPathFinder4.WinForms.Helpers;
 using System.Drawing.Drawing2D;
 #endregion
 
@@ -76,8 +77,15 @@ namespace SallamPathFinder4.WinForms.Controls
 
         #region Private Fields - Robot
         private Point _robotPosition;
-        private float _robotAngle;
-        private bool _showRobot;
+        private float _robotAngle=0;
+        private bool _showRobot; 
+        private double _robotSpeed = 10.0;
+        private bool _isMovingForward = false;
+        private bool _isMovingBackward = false;
+        private int _robotWidthCm = 20;
+        private int _robotLengthCm = 20;
+        private int _robotHeightCm = 30;   
+        private double _scaleCmPerCell = 10.0;
         #endregion
 
         #region Private Fields - Obstacles
@@ -100,6 +108,16 @@ namespace SallamPathFinder4.WinForms.Controls
 
         #region Private Fields - Start Point
         private Point _robotStartPoint;
+        #region Private Fields - Robot Friction
+        private double _currentSpeed = 0;
+        private System.Windows.Forms. Timer _frictionTimer;
+        private bool _isMoving = false;
+        #endregion
+        #endregion
+        
+        #region Private Fields - GIF Recording
+        private GifRecorder _gifRecorder;
+        private bool _isRecording = false;
         #endregion
 
         #region Constructor
@@ -244,6 +262,19 @@ namespace SallamPathFinder4.WinForms.Controls
         {
             get => _showRobot;
             set { _showRobot = value; Invalidate(); }
+        }
+
+        /// <summary>
+        /// الحصول على أو تعيين سرعة الروبوت الحالية (سم/ثانية)
+        /// </summary>
+        public double RobotSpeed
+        {
+            get => _robotSpeed;
+            set
+            {
+                _robotSpeed = value;
+                Invalidate();
+            }
         }
         #endregion
 
@@ -493,50 +524,106 @@ namespace SallamPathFinder4.WinForms.Controls
         #endregion
 
         #region Public Methods - Robot
-        public void UpdateRobotPosition(Point position, float angle)
+        public void UpdateRobot(double speed, Point position, float angle)
         {
+            _robotSpeed = speed;
             _robotPosition = position;
             _robotAngle = angle;
+
+            // 🔴 Debug - تحقق من القيمة
+            System.Diagnostics.Debug.WriteLine($"[MapControl] UpdateRobot: Speed={_robotSpeed} cm/s, Position=({position.X},{position.Y})");
+
             Invalidate();
         }
 
-        public void MoveRobotManually(Keys key, int stepSize = 1, float rotationAngle = 15f)
+        /// <summary>
+        /// التحكم اليدوي في الروبوت (WASD + Q/E/R)
+        /// </summary>
+        public void MoveRobotManually(Keys key, double currentSpeed = 10.0)
         {
             if (_mapGrid == null || !_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y)) return;
 
             Point newPosition = _robotPosition;
             float newAngle = _robotAngle;
 
+            // حجم الخطوة الأساسي (خلية واحدة)
+            int stepSize = 1;
+
+            // زوايا الدوران
+            float tankTurnAngle = 22.5f;   // دوران حول عجلة (Tank Turn)
+            float pivotTurnAngle = 45f;     // دوران حول المركز (Pivot Turn)
+
+            // سرعة الحركة تعتمد على السرعة الحالية
+            double moveDistance = currentSpeed / 50.0;  // 10 سم/ث = 0.2، 50 سم/ث = 1.0
+            moveDistance = Math.Max(0.2, Math.Min(1.5, moveDistance));
+
             switch (key)
             {
-                case Keys.W:
+                // ========== الحركة الأمامية والخلفية (باتجاه مقدمة الروبوت) ==========
+                case Keys.W:  // للأمام - باتجاه الزاوية الحالية
                     newPosition = new Point(
                         _robotPosition.X + (int)(stepSize * Math.Cos(_robotAngle * Math.PI / 180)),
                         _robotPosition.Y + (int)(stepSize * Math.Sin(_robotAngle * Math.PI / 180)));
+                    System.Diagnostics.Debug.WriteLine($"[Robot] Moving FORWARD at angle {_robotAngle}°");
                     break;
-                case Keys.S:
+
+                case Keys.S:  // للخلف - عكس اتجاه الزاوية الحالية
                     newPosition = new Point(
                         _robotPosition.X - (int)(stepSize * Math.Cos(_robotAngle * Math.PI / 180)),
                         _robotPosition.Y - (int)(stepSize * Math.Sin(_robotAngle * Math.PI / 180)));
+                    System.Diagnostics.Debug.WriteLine($"[Robot] Moving BACKWARD at angle {_robotAngle}°");
                     break;
+
+                // ========== نوع الدوران الأول: Tank Turn (دوران حول عجلة) ==========
+                // العجلة اليمنى تتحرك، العجلة اليسرى ثابتة → دوران يسار مع حركة
                 case Keys.A:
-                    newAngle = _robotAngle - rotationAngle;
+                    newAngle = _robotAngle - tankTurnAngle;
+                    // حركة طفيفة للأمام أثناء الدوران
+                    newPosition = new Point(
+                        _robotPosition.X + (int)(0.5 * Math.Cos((_robotAngle - 15) * Math.PI / 180)),
+                        _robotPosition.Y + (int)(0.5 * Math.Sin((_robotAngle - 15) * Math.PI / 180)));
+                    System.Diagnostics.Debug.WriteLine($"[Robot] TANK TURN LEFT: angle {_robotAngle}° -> {newAngle}°");
                     break;
+
                 case Keys.D:
-                    newAngle = _robotAngle + rotationAngle;
+                    newAngle = _robotAngle + tankTurnAngle;
+                    newPosition = new Point(
+                        _robotPosition.X + (int)(0.5 * Math.Cos((_robotAngle + 15) * Math.PI / 180)),
+                        _robotPosition.Y + (int)(0.5 * Math.Sin((_robotAngle + 15) * Math.PI / 180)));
+                    System.Diagnostics.Debug.WriteLine($"[Robot] TANK TURN RIGHT: angle {_robotAngle}° -> {newAngle}°");
                     break;
+
+                // ========== نوع الدوران الثاني: Pivot Turn (دوران حول المركز) ==========
+                // العجلتان في اتجاهين متعاكسين → دوران في المكان
                 case Keys.Q:
-                    newPosition = new Point(
-                        _robotPosition.X + (int)(stepSize * Math.Cos((_robotAngle - 90) * Math.PI / 180)),
-                        _robotPosition.Y + (int)(stepSize * Math.Sin((_robotAngle - 90) * Math.PI / 180)));
+                    newAngle = _robotAngle - pivotTurnAngle;
+                    newPosition = _robotPosition;  // بدون حركة
+                    System.Diagnostics.Debug.WriteLine($"[Robot] PIVOT LEFT: angle {_robotAngle}° -> {newAngle}°");
                     break;
+
                 case Keys.E:
+                    newAngle = _robotAngle + pivotTurnAngle;
+                    newPosition = _robotPosition;  // بدون حركة
+                    System.Diagnostics.Debug.WriteLine($"[Robot] PIVOT RIGHT: angle {_robotAngle}° -> {newAngle}°");
+                    break;
+
+                // ========== انزلاق جانبي (العجلة الأمامية توجه) ==========
+                case Keys.R:  // انزلاق لليمين
                     newPosition = new Point(
-                        _robotPosition.X + (int)(stepSize * Math.Cos((_robotAngle + 90) * Math.PI / 180)),
-                        _robotPosition.Y + (int)(stepSize * Math.Sin((_robotAngle + 90) * Math.PI / 180)));
+                        _robotPosition.X + (int)(moveDistance * Math.Cos((_robotAngle + 90) * Math.PI / 180)),
+                        _robotPosition.Y + (int)(moveDistance * Math.Sin((_robotAngle + 90) * Math.PI / 180)));
+                    System.Diagnostics.Debug.WriteLine($"[Robot] STRAFE RIGHT");
+                    break;
+
+                case Keys.F:  // انزلاق لليسار
+                    newPosition = new Point(
+                        _robotPosition.X + (int)(moveDistance * Math.Cos((_robotAngle - 90) * Math.PI / 180)),
+                        _robotPosition.Y + (int)(moveDistance * Math.Sin((_robotAngle - 90) * Math.PI / 180)));
+                    System.Diagnostics.Debug.WriteLine($"[Robot] STRAFE LEFT");
                     break;
             }
 
+            // التحقق من صحة الموقع الجديد
             if (_mapGrid.IsValidCoordinate(newPosition.X, newPosition.Y))
             {
                 var cell = _mapGrid[newPosition.X, newPosition.Y];
@@ -544,10 +631,66 @@ namespace SallamPathFinder4.WinForms.Controls
                 {
                     _robotPosition = newPosition;
                     _robotAngle = newAngle;
+
+                    // تطبيع الزاوية إلى 0-360
+                    if (_robotAngle < 0) _robotAngle += 360;
+                    if (_robotAngle >= 360) _robotAngle -= 360;
+
+                    OnRobotManuallyMoved?.Invoke(_robotPosition, _robotAngle, currentSpeed);
                     Invalidate();
                 }
             }
         }
+
+        
+        /// <summary>
+        /// تدوير الروبوت بزاوية محددة (اختبار)
+        /// </summary>
+        public void RotateRobot(float deltaAngle)
+        {
+            _robotAngle += deltaAngle;
+
+            // تطبيع الزاوية إلى 0-360
+            if (_robotAngle < 0) _robotAngle += 360;
+            if (_robotAngle >= 360) _robotAngle -= 360;
+
+            System.Diagnostics.Debug.WriteLine($"[RotateRobot] New Angle={_robotAngle}");
+
+            OnRobotManuallyMoved?.Invoke(_robotPosition, _robotAngle, _robotSpeed);
+            Invalidate();
+        }
+        // حساب زاوية الدوران بناءً على السرعة
+        // السرعة 10 سم/ث → زاوية 30°
+        // السرعة 50 سم/ث → زاوية 15°
+        // السرعة 100 سم/ث → زاوية 5°
+        double GetRotationAngle(double speed)
+        {
+            if (speed <= 10) return 30f;
+            if (speed <= 30) return 20f;
+            if (speed <= 60) return 10f;
+            return 5f;
+        }
+
+        private void StartFrictionTimer()
+        {
+            if (_frictionTimer == null)
+            {
+                _frictionTimer = new System.Windows.Forms. Timer();
+                _frictionTimer.Interval = 100;  // 100ms
+                _frictionTimer.Tick += (s, e) =>
+                {
+                    if (!_isMoving && _currentSpeed > 0)
+                    {
+                        _currentSpeed *= 0.9;  // تقليل السرعة بنسبة 10%
+                        if (_currentSpeed < 0.1) _currentSpeed = 0;
+                        OnRobotManuallyMoved?.Invoke(_robotPosition, _robotAngle, _currentSpeed);
+                        Invalidate();
+                    }
+                };
+                _frictionTimer.Start();
+            }
+        }
+
         #endregion
 
         #region Public Methods - Detection Zone
@@ -591,9 +734,25 @@ namespace SallamPathFinder4.WinForms.Controls
                 (int)scaledCellSize);
         }
         #endregion
+       
+        #region Public Methods - Recording
+        public void StartRecording(GifRecorder recorder)
+        {
+            _gifRecorder = recorder;
+            _isRecording = true;
+        }
+
+        public void StopRecording()
+        {
+            _isRecording = false;
+            _gifRecorder = null;
+        }
+        #endregion
+
 
         #region Events
-        public event EventHandler ViewChanged;  // حدث جديد
+        public event EventHandler ViewChanged;
+        public event Action<Point, float, double> OnRobotManuallyMoved;
         #endregion
 
         #region Protected Methods - Paint
@@ -1020,6 +1179,15 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
+        #region Private Methods - Draw Robot
+
+        public void SetRobotDimensions(int widthCm, int lengthCm, int heightCm)
+        {
+            _robotWidthCm = Math.Max(20, Math.Min(200, widthCm));
+            _robotLengthCm = Math.Max(20, Math.Min(200, lengthCm));
+            _robotHeightCm = Math.Max(10, Math.Min(150, heightCm));  // يُحفظ فقط
+            Invalidate();
+        }
         private void DrawRobot(Graphics g)
         {
             if (!_showRobot || _mapGrid == null || !_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y)) return;
@@ -1028,29 +1196,132 @@ namespace SallamPathFinder4.WinForms.Controls
             if (robotRect.Width <= 0 || robotRect.Height <= 0) return;
 
             var state = g.Save();
-            g.TranslateTransform(robotRect.X + robotRect.Width / 2, robotRect.Y + robotRect.Height / 2);
+
+            int centerX = robotRect.X + robotRect.Width / 2;
+            int centerY = robotRect.Y + robotRect.Height / 2;
+            g.TranslateTransform(centerX, centerY);
             g.RotateTransform(_robotAngle);
 
-            int size = Math.Min(robotRect.Width, robotRect.Height);
-            PointF[] triangle = new PointF[]
+            int cellSizePx = robotRect.Width;
+            double cellSizeCm = _scaleCmPerCell;
+            if (cellSizeCm <= 0) cellSizeCm = 10.0;
+
+            // 🔴 حساب الأبعاد بالنسبة إلى الخلية (بدون حد أقصى، مع حد أدنى 0.2)
+            double widthRatio = Math.Max(0.2, _robotWidthCm / cellSizeCm);
+            double lengthRatio = Math.Max(0.2, _robotLengthCm / cellSizeCm);
+
+            int robotWidthPx = (int)(widthRatio * cellSizePx);
+            int robotLengthPx = (int)(lengthRatio * cellSizePx);
+
+            // 🔴 الحد الأدنى: خلية واحدة (100%) أو 20 بكسل أيهما أكبر
+            int minSize = Math.Max(cellSizePx, 10);
+            if (robotWidthPx < minSize) robotWidthPx = minSize;
+            if (robotLengthPx < minSize) robotLengthPx = minSize; 
+ 
+            // ========== الجسم (مستطيل بالأبعاد المستقلة) ==========
+            int bodyWidth = robotWidthPx;
+            int bodyHeight = robotLengthPx;
+
+            RectangleF bodyRect = new RectangleF(
+                -bodyWidth / 2,
+                -bodyHeight / 2,
+                bodyWidth,
+                bodyHeight
+            );
+
+            using (var bodyBrush = new SolidBrush(Color.FromArgb(220, 41, 128, 185)))
             {
-                new PointF(size / 2, 0),
-                new PointF(-size / 2, -size / 2),
-                new PointF(-size / 2, size / 2)
+                g.FillRectangle(bodyBrush, bodyRect);
+            }
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+            {
+                g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
+            }
+
+            // ========== الرأس (مثلث أحمر) ==========
+            int headSize = Math.Min(robotWidthPx, robotLengthPx) / 2;
+            if (headSize < 4) headSize = 4;
+
+            PointF[] head = new PointF[]
+            {
+        new PointF(bodyWidth / 2 + headSize / 2, 0),
+        new PointF(bodyWidth / 2 - headSize / 2, -headSize / 2),
+        new PointF(bodyWidth / 2 - headSize / 2, headSize / 2)
             };
 
-            using (var brush = new SolidBrush(Color.FromArgb(200, 52, 73, 94)))
+            using (var headBrush = new SolidBrush(Color.FromArgb(220, 231, 76, 60)))
             {
-                g.FillPolygon(brush, triangle);
+                g.FillPolygon(headBrush, head);
             }
 
             using (var pen = new Pen(Color.White, 1))
             {
-                g.DrawPolygon(pen, triangle);
+                g.DrawPolygon(pen, head);
+            }
+
+            // ========== العجلات ==========
+            int wheelRadius = Math.Min(robotWidthPx, robotLengthPx) / 6;
+            if (wheelRadius < 2) wheelRadius = 2;
+
+            using (var wheelBrush = new SolidBrush(Color.FromArgb(220, 60, 60, 60)))
+            using (var wheelPen = new Pen(Color.FromArgb(200, 150, 150, 150), 1))
+            {
+                float topWheelY = -bodyHeight / 2 - wheelRadius;
+                float bottomWheelY = bodyHeight / 2 - wheelRadius;
+
+                g.FillEllipse(wheelBrush, -wheelRadius, topWheelY, wheelRadius * 2, wheelRadius * 2);
+                g.DrawEllipse(wheelPen, -wheelRadius, topWheelY, wheelRadius * 2, wheelRadius * 2);
+
+                g.FillEllipse(wheelBrush, -wheelRadius, bottomWheelY, wheelRadius * 2, wheelRadius * 2);
+                g.DrawEllipse(wheelPen, -wheelRadius, bottomWheelY, wheelRadius * 2, wheelRadius * 2);
+            }
+
+            // ========== العين ==========
+            using (var eyeBrush = new SolidBrush(Color.White))
+            {
+                float eyeSize = Math.Max(2, headSize / 6);
+                g.FillEllipse(eyeBrush, bodyWidth / 2 - headSize / 4, -eyeSize / 2, eyeSize, eyeSize);
             }
 
             g.Restore(state);
+
+           // DrawRobotSpeed(g, robotRect);
         }
+
+        /// <summary>
+        /// Draw robot speed above the robot cell
+        /// </summary>
+        private void DrawRobotSpeed(Graphics g, Rectangle robotRect)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MapControl] DrawRobotSpeed: Speed={_robotSpeed}");
+
+            if (_robotSpeed <= 0) return;
+
+            using (var font = new Font("Segoe UI", 8, FontStyle.Bold))
+            using (var backBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
+            using (var textBrush = new SolidBrush(Color.FromArgb(52, 73, 94)))
+            using (var pen = new Pen(Color.FromArgb(150, 150, 150), 1))
+            {
+                string speedText = $"{_robotSpeed:F1} cm/s";
+                SizeF textSize = g.MeasureString(speedText, font);
+
+                // موقع النص فوق الخلية
+                float textX = robotRect.X + (robotRect.Width - textSize.Width) / 2;
+                float textY = robotRect.Y - textSize.Height - 2;
+
+                // التحقق من أن النص داخل المنطقة المرئية
+                if (textY < 0) textY = robotRect.Y + robotRect.Height + 2;
+
+                // رسم خلفية بيضاء
+                g.FillRectangle(backBrush, textX - 2, textY - 1, textSize.Width + 4, textSize.Height + 2);
+                g.DrawRectangle(pen, textX - 2, textY - 1, textSize.Width + 4, textSize.Height + 2);
+
+                // رسم النص
+                g.DrawString(speedText, font, textBrush, textX, textY);
+            }
+        }
+        #endregion
         #endregion
 
         /// <summary>
@@ -1335,12 +1606,18 @@ namespace SallamPathFinder4.WinForms.Controls
              _arrowDrawCounter++;
             if (_arrowDrawCounter % ARROW_DRAW_INTERVAL == 0)
             {
-                Invalidate(rect);  // رسم كامل مع السهم
+                Invalidate(rect);   
             }
             else
             {
-                // رسم بدون سهم (أسرع)
+                // Drow without Arrow
                 Invalidate(rect);
+            }
+
+            // Recorde Gif Search
+            if (_isRecording && _gifRecorder != null)
+            {
+                _gifRecorder.CaptureFrame();
             }
         }
         #endregion

@@ -82,7 +82,7 @@ namespace SallamPathFinder4.Core.Interfaces.Services
 
         #region Events
         /// <summary>Event raised when robot moves to a new cell</summary>
-        event Action<Point, float> RobotMoved;
+        event Action< Point, float,double > RobotMoved;
 
         /// <summary>Event raised when robot collides with an obstacle</summary>
         event Action<ObstacleData, Point> ObstacleCollision;

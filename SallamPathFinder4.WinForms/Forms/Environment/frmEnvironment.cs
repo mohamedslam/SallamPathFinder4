@@ -20,6 +20,7 @@ using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentBrowser;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner;
 using SallamPathFinder4.WinForms.Forms.Settings.frmMapSettings;
 using SallamPathFinder4.WinForms.Forms.Settings.frmObstacleSettings;
+using SallamPathFinder4.WinForms.Helpers;
 using SallamPathFinder4.WinForms.Panels;
 using SallamPathFinder4.WinForms.ViewModels;
 #endregion
@@ -44,7 +45,8 @@ namespace SallamPathFinder4.WinForms.Forms
         private const Keys SHORTCUT_START_SIMULATION = Keys.F5;
         private const Keys SHORTCUT_PAUSE_SIMULATION = Keys.F6;
         private const Keys SHORTCUT_STOP_SIMULATION = Keys.F7;
-             
+        private GifRecorder _gifRecorder;
+        private string _recordingOutputPath;
         #endregion
 
         #region Private Fields
@@ -118,7 +120,7 @@ namespace SallamPathFinder4.WinForms.Forms
             mapGrid.UpdateAllCellProperties();
             mapControl.MapGrid = mapGrid;
             mapControl.RobotPosition = new Point(10, 10);
-            mapControl.RobotAngle = 0;
+            mapControl.RobotAngle = 180;
         }
 
         private void InitializeServicesAndViewModel()
@@ -217,6 +219,8 @@ namespace SallamPathFinder4.WinForms.Forms
                 robotPanel.SimulateClick += (s, e) => _viewModel.StartSimulation();
                 robotPanel.PauseClick += (s, e) => _viewModel.TogglePause();
                 robotPanel.StopClick += (s, e) => _viewModel.StopSimulation();
+                robotPanel.SpeedChanged += OnRobotSpeedChanged;
+                robotPanel.RobotDimensionsChanged += OnRobotDimensionsChanged;
             }
 
             if (algorithmSettingsPanel != null)
@@ -270,6 +274,9 @@ namespace SallamPathFinder4.WinForms.Forms
             // تعيين القيم الأولية
             _viewModel.EnableVisualization = algorithmSettingsPanel.IsVisualizationEnabled;
             _viewModel.VisualizationSpeedDelayMs = algorithmSettingsPanel.GetSpeedDelayMs();
+
+            algorithmSettingsPanel.StartRecordingRequested += OnStartRecording;
+            algorithmSettingsPanel.StopRecordingRequested += OnStopRecording;
         }
 
         private void UpdateAlgorithmSettings()
@@ -379,8 +386,8 @@ namespace SallamPathFinder4.WinForms.Forms
                 Invoke(new Action(UpdateRobotPositionDisplay));
                 return;
             }
-            lblRobotPos.Text = $"Robot: ({_viewModel.RobotState.Position.X},{_viewModel.RobotState.Position.Y}) {_viewModel.RobotState.Angle:F0}°";
-            mapControl.UpdateRobotPosition(_viewModel.RobotState.Position, _viewModel.RobotState.Angle);
+            lblRobotPos.Text = $"Robot: ({_viewModel.RobotState.Position.X},{_viewModel.RobotState.Position.Y}) {_viewModel.RobotState.Angle:F0}° | Speed: {_viewModel.RobotState.Speed:F1} cm/s";
+            mapControl.UpdateRobot(_viewModel.RobotState.Speed, _viewModel.RobotState.Position, _viewModel.RobotState.Angle);
         }
 
         /// <summary>
@@ -986,18 +993,42 @@ namespace SallamPathFinder4.WinForms.Forms
                 return true;
             }
 
-            // Manual robot control (WASD + QE)
+            // Manual robot control
             switch (keyData)
             {
+                // حركة أمامية وخلفية
                 case Keys.W:
                 case Keys.S:
+                // دوران حول عجلة (Tank)
+                // دوران يسار
                 case Keys.A:
+                    mapControl.RotateRobot(-30f);
+                    _viewModel.RobotState.Angle = mapControl.RobotAngle;
+                    UpdateRobotPositionDisplay();
+                    return true;
+
+                // دوران يمين
                 case Keys.D:
+                    mapControl.RotateRobot(30f);
+                    _viewModel.RobotState.Angle = mapControl.RobotAngle;
+                    UpdateRobotPositionDisplay();
+                    return true;
+                // دوران حول مركز (Pivot)
                 case Keys.Q:
                 case Keys.E:
-                    mapControl.MoveRobotManually(keyData);
-                    _viewModel.RobotState.Position = mapControl.RobotPosition;
-                    _viewModel.RobotState.Angle = mapControl.RobotAngle;
+                // انزلاق جانبي
+                case Keys.Z:
+                case Keys.C:
+                    double currentSpeed = _viewModel?.RobotState.Speed ?? 10.0;
+                    mapControl.MoveRobotManually(keyData, currentSpeed);
+
+                    if (_viewModel != null)
+                    {
+                        _viewModel.RobotState.Position = mapControl.RobotPosition;
+                        _viewModel.RobotState.Angle = mapControl.RobotAngle;
+                    }
+
+                    UpdateRobotPositionDisplay();
                     return true;
             }
 
@@ -1323,5 +1354,55 @@ namespace SallamPathFinder4.WinForms.Forms
             }
         }
         #endregion
+
+        private void OnRobotSpeedChanged(double newSpeed)
+        {
+            _viewModel.RobotState.Speed = newSpeed;
+
+            if (_simulationService is SimulationService simSvc)
+            {
+                simSvc.SetRobotSpeedFromSettings(newSpeed); 
+            }
+        }
+        private void OnRobotDimensionsChanged(int widthCm, int lengthCm, int heightCm)
+        {
+            mapControl.SetRobotDimensions(widthCm, lengthCm, heightCm);
+
+            System.Diagnostics.Debug.WriteLine($"[Robot] Dimensions: W={widthCm}cm, L={lengthCm}cm, H={heightCm}cm");
+        }
+
+        private void OnStartRecording(object sender, EventArgs e)
+        {
+            string recordingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Recordings");
+            if (!Directory.Exists(recordingsPath))
+                Directory.CreateDirectory(recordingsPath);
+
+            string fileName = $"Search_{DateTime.Now:yyyyMMdd_HHmmss}.gif";
+            _recordingOutputPath = Path.Combine(recordingsPath, fileName);
+
+            _gifRecorder = new GifRecorder(fps: 10);
+            _gifRecorder.FrameCaptured += (frameCount) =>
+            {
+                algorithmSettingsPanel.UpdateRecordingStatus(true, frameCount);
+            };
+
+            // 🔴 تصحيح: معامل واحد فقط (filePath)
+            _gifRecorder.RecordingCompleted += (filePath) =>
+            {
+                algorithmSettingsPanel.UpdateRecordingStatus(false, _gifRecorder.FrameCount);
+                MessageBox.Show($"تم حفظ الفيديو في:\n{filePath}", "تسجيل الفيديو",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            };
+
+            _gifRecorder.StartRecording(mapControl, _recordingOutputPath);
+            algorithmSettingsPanel.UpdateRecordingStatus(true, 0);
+        }
+
+        private void OnStopRecording(object sender, EventArgs e)
+        {
+            _gifRecorder?.StopRecording();
+            _gifRecorder?.Dispose();
+            _gifRecorder = null;
+        }
     }
 }
