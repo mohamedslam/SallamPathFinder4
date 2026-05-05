@@ -29,7 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Forms\Environment\Core\" />
     <Folder Include="Resources\" />
   </ItemGroup>
 
