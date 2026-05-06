@@ -179,8 +179,8 @@ namespace SallamPathFinder4.Core.Models.Map
                     break;
 
                 case MapElementType.Window:
-                    _isWalkable = true;
-                    _cost = _surfaceWeight * 1.5;
+                    _isWalkable = false;
+                    _cost = double.MaxValue;
                     break;
 
                 case MapElementType.Ramp:
@@ -227,7 +227,7 @@ namespace SallamPathFinder4.Core.Models.Map
                     _cost = _surfaceWeight;
                     break;
                 case MapElementType.Window:
-                    _cost = _surfaceWeight * 1.5;
+                    _cost = double.MaxValue;
                     break;
                 case MapElementType.Ramp:
                     double rampFactor = 1.0 + (_rampDifficulty / 100.0);

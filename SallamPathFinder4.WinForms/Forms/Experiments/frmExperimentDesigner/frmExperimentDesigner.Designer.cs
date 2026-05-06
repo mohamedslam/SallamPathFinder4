@@ -129,6 +129,19 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         private System.Windows.Forms.ProgressBar _prgTraining;
         private System.Windows.Forms.Label _lblTrainingStatus;
         #endregion
+      
+        #region Private Fields - Sensitivity Analysis
+        private System.Windows.Forms.TabPage _tabSensitivity;
+        private System.Windows.Forms.CheckBox _chkEnableSensitivity;
+        private System.Windows.Forms.Label _lblParameter;
+        private System.Windows.Forms.ComboBox _cboSensitivityParameter;
+        private System.Windows.Forms.Label _lblValues;
+        private System.Windows.Forms.TextBox _txtSensitivityValues;
+        private System.Windows.Forms.Button _btnValidateValues;
+        private System.Windows.Forms.DataGridView _dgvSensitivityResults;
+        private System.Windows.Forms.Button _btnRunSensitivity;
+        private System.Windows.Forms.Label _lblSensitivityStatus;
+        #endregion
 
         #region Dispose
         protected override void Dispose(bool disposing)
@@ -1252,8 +1265,159 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _bottomPanel.ResumeLayout(false);
             _buttonPanel.ResumeLayout(false);
             ResumeLayout(false);
+            InitializeSensitivityTab();
+        }
+        private void InitializeSensitivityTab()
+        {
+            _tabSensitivity = new TabPage("🔬 Sensitivity Analysis");
+
+            // Create panel
+            var pnlSensitivity = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(10),
+                AutoScroll = true
+            };
+
+            int y = 10;
+
+            // Enable CheckBox
+            _chkEnableSensitivity = new CheckBox
+            {
+                Text = "Enable Sensitivity Analysis",
+                Location = new Point(10, y),
+                Size = new Size(200, 25),
+                Checked = false
+            };
+            _chkEnableSensitivity.CheckedChanged += (s, e) => UpdateSensitivityControlsState();
+            pnlSensitivity.Controls.Add(_chkEnableSensitivity);
+            y += 35;
+
+            // Parameter selection
+            _lblParameter = new Label
+            {
+                Text = "Parameter to analyze:",
+                Location = new Point(10, y),
+                Size = new Size(150, 25),
+                Enabled = false
+            };
+            pnlSensitivity.Controls.Add(_lblParameter);
+
+            _cboSensitivityParameter = new ComboBox
+            {
+                Location = new Point(160, y),
+                Size = new Size(180, 25),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Enabled = false
+            };
+            _cboSensitivityParameter.Items.AddRange(new string[]
+            {
+        "Lambda (λ) - Obstacle weight",
+        "LearningRate (α) - Memory weight (SPPA-DL only)",
+        "PredictionWeight (β) - ML risk weight (SPPA-DL only)",
+        "Alpha_S - Static obstacle weight",
+        "Alpha_SS - Semi-static obstacle weight",
+        "Alpha_D - Dynamic obstacle weight"
+            });
+            _cboSensitivityParameter.SelectedIndex = 0;
+            pnlSensitivity.Controls.Add(_cboSensitivityParameter);
+            y += 35;
+
+            // Values input
+            _lblValues = new Label
+            {
+                Text = "Values (comma-separated):",
+                Location = new Point(10, y),
+                Size = new Size(150, 25),
+                Enabled = false
+            };
+            pnlSensitivity.Controls.Add(_lblValues);
+
+            _txtSensitivityValues = new TextBox
+            {
+                Location = new Point(160, y),
+                Size = new Size(200, 25),
+                Text = "1.0,1.5,2.0,2.5,3.0",
+                Enabled = false
+            };
+            pnlSensitivity.Controls.Add(_txtSensitivityValues);
+
+            _btnValidateValues = new Button
+            {
+                Text = "Validate",
+                Location = new Point(370, y),
+                Size = new Size(70, 25),
+                Enabled = false,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            _btnValidateValues.Click += BtnValidateValues_Click;
+            pnlSensitivity.Controls.Add(_btnValidateValues);
+            y += 35;
+
+            // Results DataGridView
+            _dgvSensitivityResults = new DataGridView
+            {
+                Location = new Point(10, y),
+                Size = new Size(550, 250),
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                ReadOnly = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells,
+                BackgroundColor = Color.White,
+                RowHeadersVisible = false
+            };
+
+            // Add columns
+            _dgvSensitivityResults.Columns.Add("ParamValue", "Parameter Value");
+            _dgvSensitivityResults.Columns.Add("PathLength", "Path Length (cells)");
+            _dgvSensitivityResults.Columns.Add("TimeMs", "Time (ms)");
+            _dgvSensitivityResults.Columns.Add("Success", "Success");
+            _dgvSensitivityResults.Columns.Add("Collisions", "Collisions");
+
+            pnlSensitivity.Controls.Add(_dgvSensitivityResults);
+            y += 260;
+
+            // Run button
+            _btnRunSensitivity = new Button
+            {
+                Text = "▶ Run Sensitivity Analysis",
+                Location = new Point(10, y),
+                Size = new Size(200, 35),
+                Enabled = false,
+                BackColor = Color.FromArgb(46, 204, 113),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            _btnRunSensitivity.Click += BtnRunSensitivity_Click;
+            pnlSensitivity.Controls.Add(_btnRunSensitivity);
+            y += 45;
+
+            // Status label
+            _lblSensitivityStatus = new Label
+            {
+                Text = "Ready",
+                Location = new Point(10, y),
+                Size = new Size(400, 25),
+                ForeColor = Color.Gray
+            };
+            pnlSensitivity.Controls.Add(_lblSensitivityStatus);
+
+            _tabSensitivity.Controls.Add(pnlSensitivity);
+            _mainTabControl.TabPages.Add(_tabSensitivity);
         }
 
+        private void UpdateSensitivityControlsState()
+        {
+            bool enabled = _chkEnableSensitivity.Checked;
+            _lblParameter.Enabled = enabled;
+            _cboSensitivityParameter.Enabled = enabled;
+            _lblValues.Enabled = enabled;
+            _txtSensitivityValues.Enabled = enabled;
+            _btnValidateValues.Enabled = enabled;
+            _btnRunSensitivity.Enabled = enabled;
+        }
         #endregion
     }
 }

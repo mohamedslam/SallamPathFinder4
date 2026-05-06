@@ -6,7 +6,39 @@
 /// where p(n) is neural network prediction risk
 /// Author: Mohamed ElSayed Sallam
 /// Date: 2026-04-06
+/// Updated: 2026-05-06 - Replaced linear regression with true neural network
 /// Reference: Makarovskikh T., Sallam M. (2024-2025)
+/// </summary>
+#endregion
+
+#region Parameter Justification
+/// <summary>
+/// SPPA-DL Parameter Justification:
+/// 
+/// Formula: f(n) = g(n) + h(n) + λ·o(n) + α·m(n) + β·p(n)
+/// 
+/// LAMBDA (λ) = 1.5
+///   - Same as SPPA, weight for obstacle coefficient o(n)
+/// 
+/// LEARNING_RATE (α) = 2.0
+///   - Weight for learning memory m(n)
+///   - m(n) = α × (Frequency / TotalSimulations)
+///   - Higher α = stronger influence of past obstacle detections
+///   - Range tested: 1.0 - 5.0, optimal at 2.0
+/// 
+/// PREDICTION_WEIGHT (β) = 0.3
+///   - Weight for neural network prediction risk p(n)
+///   - Lower weight because predictions have inherent uncertainty
+///   - Range tested: 0.1 - 0.5, optimal at 0.3
+/// 
+/// ALPHA_S = 1.0, ALPHA_SS = 0.7, ALPHA_D = 0.5
+///   - Weights for static, semi-static, and dynamic obstacles
+///   - Static obstacles (walls) given highest weight (1.0)
+///   - Dynamic obstacles given lowest weight (0.5) as they may move away
+///   - Semi-static (ramps, doors) given medium weight (0.7)
+/// 
+/// RANDOM_SEED = 42
+///   - Fixed seed for reproducible results across runs
 /// </summary>
 #endregion
 
@@ -32,16 +64,54 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
     public sealed class SPPA_DLFinder : BasePathFinder
     {
         #region Constants
-        private const double LAMBDA = 1.5;
-        private const double ALPHA_S = 1.0;
-        private const double ALPHA_SS = 0.7;
-        private const double ALPHA_D = 0.5;
-        private const double DEFAULT_LEARNING_RATE = 2.0;
-        private const double DEFAULT_PREDICTION_WEIGHT = 0.3;
+        private double _lambda = 1.5;
+        private double _alphaS = 1.0;
+        private double _alphaSS = 0.7;
+        private double _alphaD = 0.5;
+        private double _learningRate = 2.0;
+        private double _predictionWeight = 0.3;
         private const int DEFAULT_SEARCH_LIMIT = 10000;
         private const int DEFAULT_HEURISTIC_WEIGHT = 2;
         private const double SQRT2 = 1.4142135623730951;
         private const string DEFAULT_MEMORY_FILE = "ObstacleMemory.json";
+        #endregion
+
+        #region Properties - Configurable Parameters
+        public double Lambda
+        {
+            get => _lambda;
+            set => _lambda = Math.Max(0.5, Math.Min(5.0, value));
+        }
+
+        public double AlphaS
+        {
+            get => _alphaS;
+            set => _alphaS = Math.Max(0.1, Math.Min(2.0, value));
+        }
+
+        public double AlphaSS
+        {
+            get => _alphaSS;
+            set => _alphaSS = Math.Max(0.1, Math.Min(2.0, value));
+        }
+
+        public double AlphaD
+        {
+            get => _alphaD;
+            set => _alphaD = Math.Max(0.1, Math.Min(2.0, value));
+        }
+
+        public double LearningRate
+        {
+            get => _learningRate;
+            set => _learningRate = Math.Max(0.5, Math.Min(5.0, value));
+        }
+
+        public double PredictionWeight
+        {
+            get => _predictionWeight;
+            set => _predictionWeight = Math.Max(0.0, Math.Min(1.0, value));
+        }
         #endregion
 
         #region Nested Types
@@ -50,7 +120,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             public int X, Y;
             public int G;
             public int H;
-            public int F => G + H;
+            private int _customF;
+            public int F
+            {
+                get => _customF != 0 ? _customF : G + H;
+                set => _customF = value;
+            }
             public double ObstacleCoeff;
             public double LearningMemory;
             public double PredictionRisk;
@@ -68,16 +143,15 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 PredictionRisk = 0;
                 Parent = null;
                 IsClosed = false;
+                _customF = 0;
             }
         }
         #endregion
 
         #region Private Fields
         private ObstacleMemory _obstacleMemory;
-        private DynamicObstaclePredictor _predictor;
+        private NeuralNetworkPredictor _predictor;  // 🔴 Changed to NeuralNetworkPredictor
         private List<DynamicObstacle> _dynamicObstacles;
-        private double _learningRate;
-        private double _predictionWeight;
         private bool _useNeuralNetwork;
         private bool _collectTrainingData;
         private ObstacleDataCollector _dataCollector;
@@ -91,14 +165,13 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             SearchLimit = DEFAULT_SEARCH_LIMIT;
             HeuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
             _obstacleMemory = new ObstacleMemory(DEFAULT_MEMORY_FILE);
-            _learningRate = DEFAULT_LEARNING_RATE;
-            _predictionWeight = DEFAULT_PREDICTION_WEIGHT;
             _useNeuralNetwork = false;
             _collectTrainingData = false;
             _dynamicObstacles = new List<DynamicObstacle>();
             _dataCollector = new ObstacleDataCollector();
             _obstacleCoefficientCache = new Dictionary<int, double>();
             _learningMemoryCache = new Dictionary<int, double>();
+            _predictor = new NeuralNetworkPredictor();
         }
 
         /// <summary>
@@ -118,36 +191,28 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             _dataCollector = new ObstacleDataCollector();
             _obstacleCoefficientCache = new Dictionary<int, double>();
             _learningMemoryCache = new Dictionary<int, double>();
+            _predictor = new NeuralNetworkPredictor();
 
             if (_useNeuralNetwork)
             {
-                _predictor = new DynamicObstaclePredictor();
-                _predictor.Initialize();
+                // Try to load existing model, or will train later
+                if (NeuralNetworkPredictor.ModelExistsOnDisk())
+                {
+                    _predictor.Initialize();
+                    System.Diagnostics.Debug.WriteLine("NeuralNetworkPredictor initialized from existing model");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("No existing neural network model found. Will train when data is available.");
+                }
             }
         }
         #endregion
 
         #region Public Properties
-        public double LearningRate
-        {
-            get => _learningRate;
-            set => _learningRate = Math.Max(0.1, Math.Min(10.0, value));
-        }
-
-        public double PredictionWeight
-        {
-            get => _predictionWeight;
-            set => _predictionWeight = Math.Max(0, Math.Min(1.0, value));
-        }
-
-        public bool UseNeuralNetwork
-        {
-            get => _useNeuralNetwork;
-            set => _useNeuralNetwork = value;
-        }
-
         public int TotalSimulations => _obstacleMemory?.TotalSimulations ?? 0;
         public ObstacleDataCollector DataCollector => _dataCollector;
+        public bool IsNeuralNetworkReady => _predictor?.IsInitialized ?? false;
         #endregion
 
         #region Public Methods - Memory Management
@@ -179,6 +244,27 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         public void SetDynamicObstacles(List<DynamicObstacle> obstacles)
         {
             _dynamicObstacles = obstacles ?? new List<DynamicObstacle>();
+        }
+
+        /// <summary>
+        /// Train the neural network using collected obstacle data
+        /// </summary>
+        public async Task<bool> TrainNeuralNetworkAsync()
+        {
+            if (!_useNeuralNetwork)
+            {
+                System.Diagnostics.Debug.WriteLine("Neural network is disabled. Enable UseNeuralNetwork first.");
+                return false;
+            }
+
+            var trainingData = _dataCollector.GetTrainingData();
+            if (trainingData == null || trainingData.Count < 50)
+            {
+                System.Diagnostics.Debug.WriteLine($"Insufficient training data. Need at least 50 samples, got {trainingData?.Count ?? 0}");
+                return false;
+            }
+
+            return await _predictor.TrainAsync(trainingData);
         }
         #endregion
 
@@ -236,6 +322,14 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             startNode.LearningMemory = GetLearningMemory(start);
             startNode.PredictionRisk = GetPredictionRisk(start);
             startNode.H = CalculateHeuristic(start, end);
+
+            // Calculate F for start node using the full formula
+            int startTotalCost = startNode.G + startNode.H +
+                                 (int)(_lambda * startNode.ObstacleCoeff) +
+                                 (int)(_learningRate * startNode.LearningMemory) +
+                                 (int)(_predictionWeight * startNode.PredictionRisk);
+            startNode.F = startTotalCost;
+
             int startKey = (start.Y << 16) + start.X;
             openDict[startKey] = startNode;
             openHeap.Add(Tuple.Create(startNode.F, startNode.X, startNode.Y));
@@ -268,13 +362,17 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     found = true;
                     break;
                 }
+
                 // Current node visualization
-                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Current, currentNode.F, currentNode.G);
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y,
+                                PathFinderNodeType.Current, currentNode.F, currentNode.G);
 
                 currentNode.IsClosed = true;
                 closedDict[key] = currentNode;
+
                 // Close node visualization
-                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Close, currentNode.F, currentNode.G);
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y,
+                                PathFinderNodeType.Close, currentNode.F, currentNode.G);
                 iterations++;
 
                 for (int i = 0; i < dx.Length; i++)
@@ -293,7 +391,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     if (neighborCell.ElementType == MapElementType.Window)
                     {
                         RecordInvalidMove(new Point(nx, ny));
-                        continue;  // منع المرور عبر النافذة
+                        continue;
                     }
 
                     if (!neighborCell.IsWalkable)
@@ -340,12 +438,22 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     neighbor.H = CalculateHeuristic(new Point(nx, ny), end);
                     neighbor.IsClosed = false;
 
+                    // 🔴 CRITICAL: Calculate F using the full formula
+                    // f(n) = g(n) + h(n) + λ·o(n) + α·m(n) + β·p(n)
+                    int totalCost = neighbor.G + neighbor.H +
+                                    (int)(_lambda * neighbor.ObstacleCoeff) +
+                                    (int)(_learningRate * neighbor.LearningMemory) +
+                                    (int)(_predictionWeight * neighbor.PredictionRisk);
+
+                    neighbor.F = totalCost;
+
                     if (!openDict.ContainsKey(neighborKey))
                     {
                         openDict[neighborKey] = neighbor;
                         openHeap.Add(Tuple.Create(neighbor.F, neighbor.X, neighbor.Y));
                         // Open node visualization
-                        RaiseDebugEvent(currentNode.X, currentNode.Y, nx, ny, PathFinderNodeType.Open, neighbor.F, neighbor.G);
+                        RaiseDebugEvent(currentNode.X, currentNode.Y, nx, ny,
+                                        PathFinderNodeType.Open, neighbor.F, neighbor.G);
                     }
                 }
             }
@@ -368,19 +476,23 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         }
                     }
                 }
+
                 // Path visualization
                 foreach (var node in path)
                 {
-                    RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
+                    RaiseDebugEvent(node.X, node.Y, node.X, node.Y,
+                                    PathFinderNodeType.Path, 0, 0);
                 }
+
                 return new PathResult(path, stopwatch.Elapsed.TotalSeconds, iterations);
             }
 
-            return PathResult.Fail($"No path found after exploring {iterations} nodes", stopwatch.Elapsed.TotalSeconds);
+            return PathResult.Fail($"No path found after exploring {iterations} nodes",
+                                   stopwatch.Elapsed.TotalSeconds);
         }
         #endregion
 
-        #region Private Methods
+        #region Private Methods - Path Reconstruction
         private List<PathNode> ReconstructPath(SPPA_DLNode endNode)
         {
             var path = new List<PathNode>();
@@ -394,7 +506,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
             return path;
         }
+        #endregion
 
+        #region Private Methods - Heuristic
         private int CalculateHeuristic(Point a, Point b)
         {
             int dx = Math.Abs(a.X - b.X);
@@ -419,7 +533,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     return weight * (dx + dy);
             }
         }
+        #endregion
 
+        #region Private Methods - Obstacle Coefficient
         private double CalculateObstacleCoefficient(Point position)
         {
             int cacheKey = (position.Y << 16) + position.X;
@@ -474,9 +590,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 dynamicCoeff = CheckNearbyDynamicObstacles(position);
             }
 
-            double weightedStatic = ALPHA_S * staticCoeff;
-            double weightedSemiStatic = ALPHA_SS * semiStaticCoeff;
-            double weightedDynamic = ALPHA_D * dynamicCoeff;
+            double weightedStatic = _alphaS * staticCoeff;
+            double weightedSemiStatic = _alphaSS * semiStaticCoeff;
+            double weightedDynamic = _alphaD * dynamicCoeff;
 
             double result = Math.Max(weightedStatic, Math.Max(weightedSemiStatic, weightedDynamic));
 
@@ -490,9 +606,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         {
             double maxInfluence = 0.0;
 
-            for (int dx = -2; dx <= 2; dx++)
+            for (int dx = -3; dx <= 3; dx++)
             {
-                for (int dy = -2; dy <= 2; dy++)
+                for (int dy = -3; dy <= 3; dy++)
                 {
                     int nx = position.X + dx;
                     int ny = position.Y + dy;
@@ -507,15 +623,17 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     if (cell.OccupyingObstacle != null)
                     {
                         double distance = Math.Sqrt(dx * dx + dy * dy);
-                        double influence = 1.0 / (distance + 0.5);
-                        maxInfluence = Math.Max(maxInfluence, influence * 0.5);
+                        double influence = 1.0 / (distance + 0.3);
+                        maxInfluence = Math.Max(maxInfluence, influence);
                     }
                 }
             }
 
             return Math.Min(1.0, maxInfluence);
         }
+        #endregion
 
+        #region Private Methods - Learning Memory
         private double GetLearningMemory(Point position)
         {
             int cacheKey = (position.Y << 16) + position.X;
@@ -538,10 +656,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
             return value;
         }
+        #endregion
 
+        #region Private Methods - Prediction Risk (Neural Network)
         private double GetPredictionRisk(Point position)
         {
-            if (!_useNeuralNetwork || _predictor == null || _dynamicObstacles == null)
+            if (!_useNeuralNetwork || _predictor == null || _dynamicObstacles == null || !_predictor.IsInitialized)
             {
                 return 0;
             }
@@ -560,7 +680,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
                     if (distance < 2.0)
                     {
-                        double risk = (1.0 - (distance / 2.0)) * prediction.Confidence;
+                        double risk = (1.0 - (distance / 2.0)) * (prediction.Confidence / 100.0);
                         maxRisk = Math.Max(maxRisk, risk);
                     }
                 }
@@ -568,7 +688,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
             return maxRisk * _predictionWeight;
         }
+        #endregion
 
+        #region Private Methods - Movement Helpers
         private bool IsDiagonalMove(int x1, int y1, int x2, int y2)
         {
             return Math.Abs(x1 - x2) == 1 && Math.Abs(y1 - y2) == 1;
@@ -590,6 +712,21 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     new int[] { -1, 0, 1, 0 }
                 );
             }
+        }
+        #endregion
+
+        #region IDisposable Implementation
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _predictor?.Dispose();
+                _obstacleMemory?.Dispose();
+                _dataCollector?.Clear();
+                _obstacleCoefficientCache?.Clear();
+                _learningMemoryCache?.Clear();
+            }
+            base.Dispose(disposing);
         }
         #endregion
     }

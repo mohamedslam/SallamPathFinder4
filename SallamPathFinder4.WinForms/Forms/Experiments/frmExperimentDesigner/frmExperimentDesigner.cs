@@ -14,6 +14,7 @@ using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Interfaces.Services;
 using SallamPathFinder4.Core.Models.Experiments;
 using SallamPathFinder4.Core.Models.Map;
+using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
 using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.Services.Simulation;
@@ -42,7 +43,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         private readonly MainViewModel _viewModel;
         private readonly ExperimentDesignerLogic _logic;
         private string _currentOutputPath;
-        private bool _isRunning;
+        private MapGrid _currentMapGrid; 
         #endregion
 
         #region Private Fields - Iteration Tracking
@@ -1602,6 +1603,271 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             public string Message { get; set; }
             public Point Location { get; set; }
             public int StepIndex { get; set; }
+        }
+
+        private void BtnValidateValues_Click(object sender, EventArgs e)
+        {
+            string text = _txtSensitivityValues.Text;
+            var parts = text.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var validValues = new List<double>();
+
+            foreach (var part in parts)
+            {
+                if (double.TryParse(part.Trim(), out double value))
+                {
+                    validValues.Add(value);
+                }
+                else
+                {
+                    MessageBox.Show($"Invalid value: {part}", "Validation Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            if (validValues.Count < 2)
+            {
+                MessageBox.Show("Please enter at least 2 values for sensitivity analysis.",
+                    "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _lblSensitivityStatus.Text = $"✓ Validated: {validValues.Count} values ({string.Join(", ", validValues)})";
+            _lblSensitivityStatus.ForeColor = Color.Green;
+        }
+        private async void BtnRunSensitivity_Click(object sender, EventArgs e)
+        {
+            if (!_chkEnableSensitivity.Checked) return;
+
+            // ========== 1. التحقق من وجود أهداف ==========
+            List<Point> allGoals = _viewModel.Goals.Select(g => g.Location).ToList();
+            if (allGoals.Count == 0)
+            {
+                MessageBox.Show("No goals on the map. Please add goals first before running Sensitivity Analysis.",
+                    "Sensitivity Analysis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ========== 2. التحقق من الخوارزمية المختارة ==========
+            string currentAlgorithm = "";
+            if (_chkSPPA.Checked) currentAlgorithm = "SPPA";
+            else if (_chkSPPA_DL.Checked) currentAlgorithm = "SPPA-DL";
+            else
+            {
+                MessageBox.Show("Please select SPPA or SPPA-DL for sensitivity analysis.",
+                    "No Algorithm Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ========== 3. قراءة القيم المدخلة ==========
+            var parts = _txtSensitivityValues.Text.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var values = new List<double>();
+            foreach (var part in parts)
+            {
+                if (double.TryParse(part.Trim(), out double value))
+                    values.Add(value);
+                else
+                {
+                    MessageBox.Show($"Invalid value: {part}", "Validation Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            if (values.Count < 2)
+            {
+                MessageBox.Show("Please enter at least 2 values for sensitivity analysis.",
+                    "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ========== 4. قراءة المعامل المختار ==========
+            string parameter = _cboSensitivityParameter.SelectedItem?.ToString() ?? "";
+            string paramKey = parameter.Split(' ')[0]; // "Lambda", "LearningRate", etc.
+
+            // ========== 5. إعداد واجهة المستخدم ==========
+            _btnRunSensitivity.Enabled = false;
+            _dgvSensitivityResults.Rows.Clear();
+            _lblSensitivityStatus.Text = "Running sensitivity analysis...";
+            _lblSensitivityStatus.ForeColor = Color.Blue;
+            Application.DoEvents();
+
+            // ========== 6. الحصول على نقطة البداية ==========
+            Point startPoint = _mapControl.RobotPosition;
+
+            // ========== 7. الحصول على العوائق الديناميكية ==========
+            var dynamicObstacles = _mapControl.DynamicObstacles;
+
+            // ========== 8. تشغيل التحليل لكل قيمة ==========
+            var results = new List<(double value, int length, double time, bool success, int collisions)>();
+
+            foreach (double val in values)
+            {
+                _lblSensitivityStatus.Text = $"Testing {paramKey} = {val}...";
+                Application.DoEvents();
+
+                // إنشاء خوارزمية مع القيمة الجديدة
+                IPathFinder finder = null;
+
+                if (currentAlgorithm == "SPPA")
+                {
+                    var sppaFinder = new SPPAFinder(_mapGrid);
+                    ApplyParameterToFinder(sppaFinder, paramKey, val);
+                    finder = sppaFinder;
+                }
+                else if (currentAlgorithm == "SPPA-DL")
+                {
+                    var sppaDLFinder = new SPPA_DLFinder(_mapGrid, dynamicObstacles, false, false, 2.0, 0.3);
+                    ApplyParameterToFinder(sppaDLFinder, paramKey, val);
+                    finder = sppaDLFinder;
+                }
+
+                if (finder == null) continue;
+
+                // تطبيق الإعدادات العامة
+                finder.Metric = DistanceMetric.Manhattan;
+                finder.AllowDiagonals = true;
+                finder.SearchLimit = 50000;
+                finder.HeuristicWeight = 2;
+
+                // ========== 9. إيجاد المسار عبر جميع الأهداف (مثل Experiment Designer) ==========
+                var fullPath = new List<PathNode>();
+                Point currentPos = startPoint;
+                double totalTimeMs = 0;
+                bool pathSuccess = true;
+                string errorMessage = "";
+
+                for (int i = 0; i < allGoals.Count; i++)
+                {
+                    // تحقق من إلغاء العملية
+                    if (!_chkEnableSensitivity.Checked)
+                    {
+                        _lblSensitivityStatus.Text = "Sensitivity analysis cancelled.";
+                        _btnRunSensitivity.Enabled = true;
+                        return;
+                    }
+
+                    var goalResult = await Task.Run(() => finder.FindPath(currentPos, allGoals[i]));
+
+                    if (!goalResult.Success || goalResult.Path == null || goalResult.Path.Count == 0)
+                    {
+                        pathSuccess = false;
+                        errorMessage = $"No path to goal {i + 1}";
+                        System.Diagnostics.Debug.WriteLine($"[Sensitivity] Failed at goal {i + 1}: {errorMessage}");
+                        break;
+                    }
+
+                    if (fullPath.Count == 0)
+                        fullPath.AddRange(goalResult.Path);
+                    else
+                        fullPath.AddRange(goalResult.Path.Skip(1));
+
+                    totalTimeMs += goalResult.ComputationTimeSeconds * 1000;
+                    currentPos = allGoals[i];
+
+                    System.Diagnostics.Debug.WriteLine($"[Sensitivity] Goal {i + 1}/{allGoals.Count} completed. Path so far: {fullPath.Count} cells");
+                }
+
+                // ========== 10. إضافة مسار العودة لـ SPPA و SPPA-DL ==========
+                if (pathSuccess && (currentAlgorithm == "SPPA" || currentAlgorithm == "SPPA-DL"))
+                {
+                    // الحصول على نقاط الباركينج
+                    var parkingPoints = _viewModel.ParkingPoints.Select(p => p.Location).ToList();
+
+                    if (parkingPoints != null && parkingPoints.Count > 0)
+                    {
+                        // البحث عن أقرب نقطة باركينج لآخر هدف
+                        Point lastGoal = allGoals.Last();
+                        Point nearestParking = parkingPoints
+                            .OrderBy(p => Math.Abs(p.X - lastGoal.X) + Math.Abs(p.Y - lastGoal.Y))
+                            .FirstOrDefault();
+
+                        if (nearestParking != Point.Empty)
+                        {
+                            var returnResult = await Task.Run(() => finder.FindPath(lastGoal, nearestParking));
+                            if (returnResult.Success && returnResult.Path != null && returnResult.Path.Count > 0)
+                            {
+                                fullPath.AddRange(returnResult.Path.Skip(1));
+                                totalTimeMs += returnResult.ComputationTimeSeconds * 1000;
+                                System.Diagnostics.Debug.WriteLine($"[Sensitivity] Return path added: {returnResult.Path.Count} cells");
+                            }
+                        }
+                    }
+                }
+
+                // ========== 11. تسجيل النتائج ==========
+                int finalPathLength = pathSuccess ? fullPath.Count : 0;
+                results.Add((
+                    val,
+                    finalPathLength,
+                    totalTimeMs,
+                    pathSuccess,
+                    0
+                ));
+
+                // تحديث واجهة المستخدم
+                _dgvSensitivityResults.Rows.Add(
+                    val.ToString("F2"),
+                    finalPathLength,
+                    totalTimeMs.ToString("F2"),
+                    pathSuccess ? "✓" : "✗",
+                    0
+                );
+
+                Application.DoEvents();
+            }
+
+            // ========== 12. عرض النتائج النهائية ==========
+            _lblSensitivityStatus.Text = $"✓ Sensitivity analysis complete! Tested {values.Count} values on {allGoals.Count} goals.";
+            _lblSensitivityStatus.ForeColor = Color.Green;
+            _btnRunSensitivity.Enabled = true;
+
+            // عرض ملخص النتائج
+            ShowSensitivitySummary(results, paramKey);
+        }
+        private void ApplyParameterToFinder(IPathFinder finder, string paramKey, double value)
+        {
+            if (finder is SPPAFinder sppa)
+            {
+                switch (paramKey)
+                {
+                    case "Lambda": sppa.Lambda = value; break;
+                    case "Alpha_S": sppa.AlphaS = value; break;
+                    case "Alpha_SS": sppa.AlphaSS = value; break;
+                    case "Alpha_D": sppa.AlphaD = value; break;
+                }
+            }
+            else if (finder is SPPA_DLFinder sppaDL)
+            {
+                switch (paramKey)
+                {
+                    case "Lambda": sppaDL.Lambda = value; break;
+                    case "LearningRate": sppaDL.LearningRate = value; break;
+                    case "PredictionWeight": sppaDL.PredictionWeight = value; break;
+                }
+            }
+        }
+
+        private void ShowSensitivitySummary(List<(double value, int length, double time, bool success, int collisions)> results, string paramKey)
+        {
+            string summary = $"=== Sensitivity Analysis: {paramKey} ===\n\n";
+            summary += "Value\tPathLength\tTime(ms)\tSuccess\n";
+            summary += "-----\t----------\t--------\t-------\n";
+
+            foreach (var r in results)
+            {
+                summary += $"{r.value:F2}\t{r.length}\t\t{r.time:F2}\t\t{(r.success ? "Yes" : "No")}\n";
+            }
+
+            // Find optimal value
+            var optimal = results.Where(r => r.success).OrderBy(r => r.length).FirstOrDefault();
+            if (optimal.value != 0)
+            {
+                summary += $"\nOptimal value: {optimal.value:F2} (Path length: {optimal.length} cells)";
+            }
+
+            MessageBox.Show(summary, "Sensitivity Analysis Results",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 }

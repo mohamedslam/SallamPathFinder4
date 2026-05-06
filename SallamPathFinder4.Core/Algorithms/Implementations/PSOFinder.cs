@@ -89,7 +89,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         #region Constructor
         public PSOFinder(MapGrid grid) : base(grid)
         {
-            _random = new Random();
+            _random = new Random(42);
             _config = new PSOConfig();
             _particles = new List<Particle>();
             _globalBestPosition = new List<Point>();

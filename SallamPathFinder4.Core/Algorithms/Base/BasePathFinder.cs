@@ -31,6 +31,7 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         private const double SQRT2 = 1.4142135623730951;
         private const int DEFAULT_HEURISTIC_WEIGHT = 2;
         private const int DEFAULT_SEARCH_LIMIT = 50000;
+        private int _randomSeed = 42;
         #endregion
 
         #region Private Fields
@@ -69,6 +70,15 @@ namespace SallamPathFinder4.Core.Algorithms.Base
 
         #region Public Properties - Configuration
         /// <inheritdoc/>
+        public int RandomSeed
+        {
+            get => _randomSeed;
+            set
+            {
+                _randomSeed = value;
+                // إعادة تهيئة الـ Random في الخوارزميات المشتقة (تحتاج إلى إعادة تعيين)
+            }
+        }
         public DistanceMetric Metric { get; set; }
 
         /// <inheritdoc/>

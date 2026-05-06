@@ -54,12 +54,13 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         private double _initialPheromone = INITIAL_PHEROMONE;
         private int _maxIterations = DEFAULT_ITERATIONS;
         private double[,,] _pheromones;
-        private readonly Random _random = new Random();
+        private readonly Random _random;
         #endregion
 
         #region Constructor
         public ACOFinder(MapGrid grid) : base(grid)
         {
+            _random = new Random(42);  // seed ثابت
             _numberOfAnts = DEFAULT_ANTS;
             _evaporationRate = DEFAULT_EVAPORATION;
             _alpha = DEFAULT_ALPHA;

@@ -82,7 +82,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         #region Constructor
         public PRMFinder(MapGrid grid) : base(grid)
         {
-            _random = new Random();
+            _random = new Random(42);
             _config = new PRMConfig();
             _nodes = new List<PRMNode>();
             _nodePositionMap = new Dictionary<Point, int>();

@@ -95,7 +95,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         #region Constructor
         public RRTFinder(MapGrid grid) : base(grid)
         {
-            _random = new Random();
+            _random = new Random(42);
             _config = new RRTConfig();
             _nodes = new List<RRTNode>();
             _nodePositions = new HashSet<Point>();

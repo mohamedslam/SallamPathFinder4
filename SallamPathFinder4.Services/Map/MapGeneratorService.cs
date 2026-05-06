@@ -30,7 +30,7 @@ namespace SallamPathFinder4.Services.Map
         #region Constructor
         public MapGeneratorService()
         {
-            _random = new Random();
+            _random = new Random(42);
         }
         #endregion
 

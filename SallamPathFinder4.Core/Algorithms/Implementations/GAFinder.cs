@@ -94,7 +94,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         #region Constructor
         public GAFinder(MapGrid grid) : base(grid)
         {
-            _random = new Random();
+            _random = new Random(42);
             _config = new GAConfig();
             _population = new List<Chromosome>();
             _bestChromosome = null;

@@ -38,6 +38,7 @@ namespace SallamPathFinder4.Services.Simulation
         #region Constructor
         public DoorGroupManager(MapGrid grid)
         {
+            _random = new Random(42);
             _mapGrid = grid ?? throw new ArgumentNullException(nameof(grid));
             _doorGroups = new List<DoorGroup>();
             _random = new Random();

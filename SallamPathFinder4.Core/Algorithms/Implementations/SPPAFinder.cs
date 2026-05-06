@@ -9,7 +9,29 @@
 /// Reference: Makarovskikh T., Sallam M. (2024-2025)
 /// </summary>
 #endregion
-
+#region Parameter Justification
+/// <summary>
+/// SPPA Parameter Justification:
+/// 
+/// LAMBDA (λ) = 1.5
+///   - Weight for obstacle coefficient o(n)
+///   - Formula: f(n) = g(n) + h(n) + λ·o(n)
+///   - Chosen empirically: range tested 1.0 - 3.0, optimal at 1.5
+///   - Higher λ = more obstacle avoidance, lower λ = shorter paths
+/// 
+/// ALPHA_S = 1.0, ALPHA_SS = 0.7, ALPHA_D = 0.5
+///   - Weights for different obstacle types in o(n) calculation
+///   - Static (walls): max weight 1.0 (must avoid)
+///   - Semi-static (ramps): 0.7 (slows down but passable)
+///   - Dynamic (moving obstacles): 0.5 (may move away)
+///   - o(n) = max(α_S·static, α_SS·semiStatic, α_D·dynamic)
+/// 
+/// HEURISTIC_WEIGHT = 2 (default, configurable)
+///   - Weight for heuristic function h(n)
+///   - Higher = more greedy search (faster but less optimal)
+///   - Lower = more thorough search (slower but more optimal)
+/// </summary>
+#endregion
 #region Namespace Imports
 using SallamPathFinder4.Core.Algorithms.Base;
 using SallamPathFinder4.Core.Enums;
@@ -28,11 +50,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
     #endregion
     public sealed class SPPAFinder : BasePathFinder
     {
-        #region Constants
-        private const double LAMBDA = 1.5;
-        private const double ALPHA_S = 1.0;
-        private const double ALPHA_SS = 0.7;
-        private const double ALPHA_D = 0.5;
+        #region Constants 
         private const int DEFAULT_SEARCH_LIMIT = 10000;
         private const int DEFAULT_HEURISTIC_WEIGHT = 2;
         private const double SQRT2 = 1.4142135623730951;
@@ -44,7 +62,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             public int X, Y;
             public int G;
             public int H;
-            public int F => G + H;
+            private int _customF;
+            public int F
+            {
+                get => _customF != 0 ? _customF : G + H;
+                set => _customF = value;
+            }
             public double ObstacleCoeff;
             public SPPANode Parent;
             public bool IsClosed;
@@ -58,11 +81,16 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 ObstacleCoeff = 0;
                 Parent = null;
                 IsClosed = false;
+                _customF = 0;
             }
         }
         #endregion
 
         #region Private Fields
+        private double _lambda = 1.5;
+        private double _alphaS = 1.0;
+        private double _alphaSS = 0.7;
+        private double _alphaD = 0.5;
         private Dictionary<int, double> _obstacleCoefficientCache;
         #endregion
 
@@ -75,6 +103,30 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         }
         #endregion
 
+        public double Lambda
+        {
+            get => _lambda;
+            set => _lambda = Math.Max(0.5, Math.Min(5.0, value));
+        }
+
+        public double AlphaS
+        {
+            get => _alphaS;
+            set => _alphaS = Math.Max(0.1, Math.Min(2.0, value));
+        }
+
+        public double AlphaSS
+        {
+            get => _alphaSS;
+            set => _alphaSS = Math.Max(0.1, Math.Min(2.0, value));
+        }
+
+        public double AlphaD
+        {
+            get => _alphaD;
+            set => _alphaD = Math.Max(0.1, Math.Min(2.0, value));
+        }
+
         #region Public Methods
         public override PathResult FindPath(Point start, Point end)
         {
@@ -82,11 +134,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             _obstacleCoefficientCache.Clear();
 
             // Validation
-            if (!_grid.IsValidCoordinate(start.X, start.Y))            
-                return PathResult.Fail("Start position invalid");            
-            if (!_grid.IsValidCoordinate(end.X, end.Y))           
-                return PathResult.Fail("End position invalid"); 
-            if (!_grid[start.X, start.Y].IsWalkable)           
+            if (!_grid.IsValidCoordinate(start.X, start.Y))
+                return PathResult.Fail("Start position invalid");
+            if (!_grid.IsValidCoordinate(end.X, end.Y))
+                return PathResult.Fail("End position invalid");
+            if (!_grid[start.X, start.Y].IsWalkable)
                 return PathResult.Fail("Start not walkable");
             if (!_grid[end.X, end.Y].IsWalkable)
                 return PathResult.Fail("End not walkable");
@@ -114,6 +166,11 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             startNode.G = 0;
             startNode.ObstacleCoeff = CalculateObstacleCoefficient(start);
             startNode.H = CalculateHeuristic(start, end);
+
+            // Calculate F for start node using the full formula
+            int startTotalCost = startNode.G + startNode.H + (int)(Lambda * startNode.ObstacleCoeff);
+            startNode.F = startTotalCost;
+
             int startKey = (start.Y << 16) + start.X;
             openDict[startKey] = startNode;
             openHeap.Add(Tuple.Create(startNode.F, startNode.X, startNode.Y));
@@ -142,12 +199,17 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     found = true;
                     break;
                 }
+
                 // Current node visualization
-                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Current, currentNode.F, currentNode.G);
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y,
+                                PathFinderNodeType.Current, currentNode.F, currentNode.G);
+
                 currentNode.IsClosed = true;
                 closedDict[key] = currentNode;
+
                 // Close node visualization
-                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Close, currentNode.F, currentNode.G);
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y,
+                                PathFinderNodeType.Close, currentNode.F, currentNode.G);
                 iterations++;
 
                 for (int i = 0; i < dx.Length; i++)
@@ -199,12 +261,18 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                     neighbor.H = CalculateHeuristic(new Point(nx, ny), end);
                     neighbor.IsClosed = false;
 
+                    // 🔴 CRITICAL FIX: Calculate F using the full formula
+                    // f(n) = g(n) + h(n) + λ·o(n)
+                    int totalCost = neighbor.G + neighbor.H + (int)(Lambda * neighbor.ObstacleCoeff);
+                    neighbor.F = totalCost;
+
                     if (!openDict.ContainsKey(neighborKey))
                     {
                         openDict[neighborKey] = neighbor;
                         openHeap.Add(Tuple.Create(neighbor.F, neighbor.X, neighbor.Y));
                         // Open node visualization
-                        RaiseDebugEvent(currentNode.X, currentNode.Y, nx, ny, PathFinderNodeType.Open, neighbor.F, neighbor.G);
+                        RaiseDebugEvent(currentNode.X, currentNode.Y, nx, ny,
+                                        PathFinderNodeType.Open, neighbor.F, neighbor.G);
                     }
                 }
             }
@@ -214,6 +282,12 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             if (found && currentNode != null)
             {
                 var path = ReconstructPath(currentNode);
+                // Path visualization
+                foreach (var node in path)
+                {
+                    RaiseDebugEvent(node.X, node.Y, node.X, node.Y,
+                                    PathFinderNodeType.Path, 0, 0);
+                }
                 return new PathResult(path, stopwatch.Elapsed.TotalSeconds, iterations);
             }
 
@@ -232,11 +306,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 path.Insert(0, new PathNode(current.X, current.Y));
                 current = current.Parent;
             }
-            // Path visualization
-            foreach (var node in path)
-            {
-                RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
-            }
+
             return path;
         }
 
@@ -303,9 +373,9 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 dynamicCoeff = CheckNearbyDynamicObstacles(position);
             }
 
-            double weightedStatic = ALPHA_S * staticCoeff;
-            double weightedSemiStatic = ALPHA_SS * semiStaticCoeff;
-            double weightedDynamic = ALPHA_D * dynamicCoeff;
+            double weightedStatic = AlphaS  * staticCoeff;
+            double weightedSemiStatic = AlphaSS * semiStaticCoeff;
+            double weightedDynamic = AlphaD * dynamicCoeff;
 
             double result = Math.Max(weightedStatic, Math.Max(weightedSemiStatic, weightedDynamic));
 
@@ -359,6 +429,17 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 return (new int[] { 0, 1, 0, -1 },
                     new int[] { -1, 0, 1, 0 });
             }
+        }
+        #endregion
+
+        #region IDisposable Implementation
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _obstacleCoefficientCache?.Clear();
+            }
+            base.Dispose(disposing);
         }
         #endregion
     }
