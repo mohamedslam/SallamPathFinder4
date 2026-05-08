@@ -8,14 +8,21 @@
 #endregion
 
 #region Namespace Imports
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.WinForms.Helpers;
 #endregion
 
+/// <summary>
+/// Operating mode for the algorithm settings panel
+/// </summary>
+public enum AlgorithmPanelMode
+{
+    /// <summary>Single algorithm selection (for main form)</summary>
+    SingleSelection,
+
+    /// <summary>Multi-algorithm selection (for experiment designer)</summary>
+    MultiSelection
+}
 namespace SallamPathFinder4.WinForms.Panels
 {
     #region Class Documentation
@@ -49,6 +56,12 @@ namespace SallamPathFinder4.WinForms.Panels
         private const double DEFAULT_ACO_EVAPORATION = 0.1;
         private const double DEFAULT_ACO_ALPHA = 1.0;
         private const double DEFAULT_ACO_BETA = 2.0;
+        #endregion
+
+        #region Private Fields - Mode
+        private AlgorithmPanelMode _mode = AlgorithmPanelMode.SingleSelection;
+        private CheckedListBox _clbAlgorithmsMulti;
+        private CheckedListBox _clbMetricsMulti;
         #endregion
 
         #region Private Fields - Common Settings
@@ -173,6 +186,18 @@ namespace SallamPathFinder4.WinForms.Panels
         #endregion
 
         #region Properties
+        /// <summary>
+        /// Gets or sets the operating mode of the panel
+        /// </summary>
+        public AlgorithmPanelMode Mode
+        {
+            get => _mode;
+            set
+            {
+                _mode = value;
+                UpdateUIMode();
+            }
+        }
         public AlgorithmType CurrentAlgorithm { get; private set; } = AlgorithmType.AStar;
         public int HeuristicWeight => (int)_nudHeuristicWeight.Value;
         public int SearchLimit => (int)_nudSearchLimit.Value;
@@ -928,6 +953,7 @@ namespace SallamPathFinder4.WinForms.Panels
             SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
         #endregion
+
         #region Private Methods - RRT Settings
         private void CreateRRTSettings()
         {
@@ -1375,6 +1401,81 @@ namespace SallamPathFinder4.WinForms.Panels
                 _lblRecordingStatus.Text = "⚫ UnActive";
                 _lblRecordingStatus.ForeColor = Color.Gray;
             }
+        }
+        #endregion
+
+        #region Private Methods - UI Mode
+        /// <summary>
+        /// Updates UI visibility based on current mode
+        /// </summary>
+        private void UpdateUIMode()
+        {
+            if (_mode == AlgorithmPanelMode.SingleSelection)
+            {
+                // Show single selection controls
+                _cboAlgorithmType.Visible = true;
+                if (_clbAlgorithmsMulti != null) _clbAlgorithmsMulti.Visible = false;
+
+                // Show single metric ComboBox
+                _cboDistanceMetric.Visible = true;
+                if (_clbMetricsMulti != null) _clbMetricsMulti.Visible = false;
+            }
+            else
+            {
+                // Show multi selection controls
+                if (_cboAlgorithmType != null) _cboAlgorithmType.Visible = false;
+                if (_clbAlgorithmsMulti == null) CreateMultiAlgorithmList();
+                _clbAlgorithmsMulti.Visible = true;
+
+                // Show multi metric CheckedListBox
+                if (_cboDistanceMetric != null) _cboDistanceMetric.Visible = false;
+                if (_clbMetricsMulti == null) CreateMultiMetricList();
+                _clbMetricsMulti.Visible = true;
+            }
+        }
+
+        private void CreateMultiAlgorithmList()
+        {
+            _clbAlgorithmsMulti = new CheckedListBox
+            {
+                Location = new Point(10, 50),
+                Size = new Size(280, 120),
+                CheckOnClick = true
+            };
+
+            // Add all algorithms
+            _clbAlgorithmsMulti.Items.Add("A* (A-Star)", true);
+            _clbAlgorithmsMulti.Items.Add("SPPA", true);
+            _clbAlgorithmsMulti.Items.Add("SPPA-DL", false);
+            _clbAlgorithmsMulti.Items.Add("ACO", false);
+            _clbAlgorithmsMulti.Items.Add("D*", false);
+            _clbAlgorithmsMulti.Items.Add("KNN", false);
+            _clbAlgorithmsMulti.Items.Add("Brute Force", false);
+            _clbAlgorithmsMulti.Items.Add("RRT", false);
+            _clbAlgorithmsMulti.Items.Add("PRM", false);
+            _clbAlgorithmsMulti.Items.Add("PSO", false);
+            _clbAlgorithmsMulti.Items.Add("GA", false);
+            _clbAlgorithmsMulti.Items.Add("RRT*", false);
+
+            _pnlSettingsContainer.Controls.Add(_clbAlgorithmsMulti);
+        }
+
+        private void CreateMultiMetricList()
+        {
+            _clbMetricsMulti = new CheckedListBox
+            {
+                Location = new Point(10, _cboDistanceMetric.Location.Y),
+                Size = new Size(180, 100),
+                CheckOnClick = true
+            };
+
+            _clbMetricsMulti.Items.Add("Manhattan", true);
+            _clbMetricsMulti.Items.Add("Euclidean", true);
+            _clbMetricsMulti.Items.Add("MaxDXDY", false);
+            _clbMetricsMulti.Items.Add("DiagonalShortcut", false);
+            _clbMetricsMulti.Items.Add("EuclideanNoSQR", false);
+
+            _pnlSettingsContainer.Controls.Add(_clbMetricsMulti);
         }
         #endregion
     }

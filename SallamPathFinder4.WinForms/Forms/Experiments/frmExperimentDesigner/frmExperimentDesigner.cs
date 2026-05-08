@@ -114,8 +114,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             toolTip.SetToolTip(_chkEnableDynamicLearning, "Enable obstacle memory across simulations (SPPA-DL only)");
             toolTip.SetToolTip(_nudLearningRate, "Learning rate α for obstacle memory (higher = stronger memory)");
             toolTip.SetToolTip(_chkUseNeuralNetwork, "Use neural network for obstacle movement prediction (SPPA-DL only)");
-            toolTip.SetToolTip(_predictionWeight, "Weight β for neural network predictions (0-100%)");
-        }
+         }
         private void WireEvents()
         {
             _btnBrowseMap.Click += BtnBrowseMap_Click;

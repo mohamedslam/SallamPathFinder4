@@ -1101,20 +1101,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _lblInfo.Size = new Size(563, 60);
             _lblInfo.TabIndex = 0;
             _lblInfo.Text = resources.GetString("_lblInfo.Text");
-            // 
-            // _tabRobotSettings
-            // 
-            _tabRobotSettings.Location = new Point(0, 0);
-            _tabRobotSettings.Name = "_tabRobotSettings";
-            _tabRobotSettings.Size = new Size(200, 100);
-            _tabRobotSettings.TabIndex = 0;
-            // 
-            // _tabMLSettings
-            // 
-            _tabMLSettings.Location = new Point(0, 0);
-            _tabMLSettings.Name = "_tabMLSettings";
-            _tabMLSettings.Size = new Size(200, 100);
-            _tabMLSettings.TabIndex = 0;
+         
+       
             // 
             // _bottomPanel
             // 
