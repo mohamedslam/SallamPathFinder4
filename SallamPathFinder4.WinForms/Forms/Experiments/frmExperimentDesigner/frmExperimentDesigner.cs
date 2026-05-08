@@ -69,6 +69,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             WireEvents();
             LoadUserSettings();
             LoadCurrentMapSettings();
+            LoadCurrentRobotSettings();
             InitializeFilters();
         }
         #endregion
@@ -166,20 +167,88 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         }
 
         /// <summary>
-        /// Loads current map settings from ViewModel
+        /// Loads current map settings from the main form
+        /// Reads: Goals, Parking Points, Static Obstacles (Walls), Semi-Static Obstacles, Dynamic Obstacles
         /// </summary>
         private void LoadCurrentMapSettings()
         {
-            if (_mapGrid != null)
-            {
-                int goalCount = _viewModel?.Goals?.Count ?? 5;
-                _nudGoalCount.Value = Math.Max(_nudGoalCount.Minimum,
-                    Math.Min(_nudGoalCount.Maximum, Math.Max(1, goalCount)));
+            if (_mapGrid == null) return;
 
-                int parkingCount = _viewModel?.ParkingPoints?.Count ?? 2;
-                _nudParkingCount.Value = Math.Max(_nudParkingCount.Minimum,
-                    Math.Min(_nudParkingCount.Maximum, Math.Max(1, parkingCount)));
+            // ========== 1. قراءة الأهداف (Goals) ==========
+            int goalCount = _viewModel?.Goals?.Count ?? 0;
+            _nudGoalCount.Value = Math.Clamp(goalCount, _nudGoalCount.Minimum, _nudGoalCount.Maximum);
+
+            // ========== 2. قراءة مواقف الشحن (Parking Points) ==========
+            int parkingCount = _viewModel?.ParkingPoints?.Count ?? 0;
+            _nudParkingCount.Value = Math.Clamp(parkingCount, _nudParkingCount.Minimum, _nudParkingCount.Maximum);
+
+            // ========== 3. قراءة العوائق من الخريطة ==========
+            int staticCount = 0;      // Walls
+            int semiStaticCount = 0;  // Doors, Windows, Ramps
+            int dynamicCount = 0;      // Dynamic obstacles
+
+            for (int x = 0; x < _mapGrid.Width; x++)
+            {
+                for (int y = 0; y < _mapGrid.Height; y++)
+                {
+                    var cell = _mapGrid[x, y];
+
+                    switch (cell.ElementType)
+                    {
+                        case MapElementType.Wall:
+                            staticCount++;
+                            break;
+                        case MapElementType.Door:
+                        case MapElementType.Window:
+                        case MapElementType.Ramp:
+                            semiStaticCount++;
+                            break;
+                    }
+                }
             }
+
+            // قراءة العوائق الديناميكية من MapControl
+            dynamicCount = _mapControl?.DynamicObstacles?.Count ?? 0;
+
+            // تحديث الـ UI
+            _nudStaticObstacles.Value = Math.Clamp(staticCount, _nudStaticObstacles.Minimum, _nudStaticObstacles.Maximum);
+            _nudDynamicObstacles.Value = Math.Clamp(dynamicCount, _nudDynamicObstacles.Minimum, _nudDynamicObstacles.Maximum);
+
+            // عرض إحصائي في نافذة الـ Output للتحقق
+            System.Diagnostics.Debug.WriteLine($"[LoadCurrentMapSettings] Goals: {goalCount}, Parking: {parkingCount}, " +
+                                               $"Static (Walls): {staticCount}, SemiStatic (Doors/Windows/Ramps): {semiStaticCount}, " +
+                                               $"Dynamic: {dynamicCount}");
+        }
+        /// <summary>
+        /// Loads current robot settings from the main form
+        /// Reads: Robot Speed, Robot Position, Robot Angle
+        /// </summary>
+        private void LoadCurrentRobotSettings()
+        {
+            if (_viewModel?.RobotState == null) return;
+
+            // ========== 1. سرعة الروبوت ==========
+            double currentSpeed = _viewModel.RobotState.Speed;
+            if (currentSpeed > 0)
+            {
+                _nudRobotSpeed.Value = (decimal)Math.Clamp(currentSpeed, (double)_nudRobotSpeed.Minimum, (double)_nudRobotSpeed.Maximum);
+                System.Diagnostics.Debug.WriteLine($"[LoadCurrentRobotSettings] Speed: {currentSpeed} cm/s");
+            }
+
+            // ========== 2. موقع الروبوت الحالي (لنقطة البداية) ==========
+            Point robotPos = _mapControl?.RobotPosition ?? new Point(10, 10);
+
+            // تحديث عرض نقطة البداية
+            if (_lblCurrentStartPoint != null)
+            {
+                _lblCurrentStartPoint.Text = $"Current: ({robotPos.X}, {robotPos.Y})";
+                _lblCurrentStartPoint.Tag = robotPos;
+            }
+
+            // ========== 3. زاوية الروبوت (اختياري، للتوثيق) ==========
+            float robotAngle = _mapControl?.RobotAngle ?? 0;
+
+            System.Diagnostics.Debug.WriteLine($"[LoadCurrentRobotSettings] Position: ({robotPos.X},{robotPos.Y}), Angle: {robotAngle}°");
         }
         #endregion
 
@@ -273,14 +342,10 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _lblTrainingStatus.Visible = false;
         }
 
-        /// <summary>
-        /// Handles run comparison button click
-        /// </summary>
         private async void BtnRunComparison_Click(object sender, EventArgs e)
         {
-             
             ResetToDefaultState();
-         
+
             var algorithms = _logic.GetSelectedAlgorithms(this);
             if (algorithms == null || algorithms.Count == 0)
             {
@@ -311,13 +376,15 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 var (enableDynamicCharging, chargingTime, safetyMargin) = _logic.GetDynamicChargingSettings(this);
                 bool orderGoalsByDistance = _logic.GetOrderGoalsByDistance(this);
 
-                // Apply settings to robot
                 robotSettings.EnableDynamicCharging = enableDynamicCharging;
                 robotSettings.ChargingTimeSeconds = chargingTime;
                 robotSettings.SafetyMarginPercent = safetyMargin;
 
-                int totalExperiments = algorithms.Count * metrics.Count * iterations;
-                int currentExperiment = 0;
+                // ========== 🔴 COLD START: نقطة بداية ثابتة لجميع التكرارات ==========
+                Point fixedStartPoint = GetInitialStartPoint();
+
+                // ========== 🔴 تتبع نقاط النهاية للتوثيق فقط ==========
+                Dictionary<(string algorithm, string metric), List<Point>> endPointsHistory = new();
 
                 for (int iter = 0; iter < iterations; iter++)
                 {
@@ -325,31 +392,37 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                     {
                         foreach (string metric in metrics)
                         {
-                            currentExperiment++;
-                            _completedIterations = iter + 1;
+                            // ========== 🔴 جميع التكرارات تستخدم نفس نقطة البداية ==========
+                            Point startPoint = fixedStartPoint;
 
-                            UpdateProgressDisplay(_completedIterations, iterations, _currentStartPoint);
-
-                            _lblStatus.Text = $"Running: {algorithm} - {metric} - Iter {iter + 1}/{iterations} | Start: ({_currentStartPoint.X},{_currentStartPoint.Y})";
+                            _lblStatus.Text = $"Running: {algorithm} - {metric} - Iter {iter + 1}/{iterations} | " +
+                                              $"Start: ({startPoint.X},{startPoint.Y})";
                             Application.DoEvents();
 
-                            var result = await RunSingleExperiment(algorithm, metric, iter + 1, robotSettings, mlSettings, _currentStartPoint, orderGoalsByDistance);
+                            var result = await RunSingleExperiment(algorithm, metric, iter + 1,
+                                                                   robotSettings, mlSettings,
+                                                                   startPoint, orderGoalsByDistance);
                             results.Add(result);
 
-                            // Update start point for next iteration
-                            if (result.Success && result.Path != null && result.Path.Count > 0)
+                            // ========== 🔴 توثيق نقاط النهاية ==========
+                            if (result.Success && result.EndPointReached != Point.Empty)
                             {
-                                _currentStartPoint = result.Path.Last();
-                                _iterationEndPoints.Add(_currentStartPoint);
-                            }
+                                if (!endPointsHistory.ContainsKey((algorithm, metric)))
+                                    endPointsHistory[(algorithm, metric)] = new List<Point>();
 
-                            _iterationPaths.Add(result.Path?.ToList() ?? new List<Point>());
+                                endPointsHistory[(algorithm, metric)].Add(result.EndPointReached);
+                            }
                         }
                     }
+
                     _progressBar.Value = (int)((iter + 1) / (double)iterations * 100);
                 }
 
                 SaveExperimentResults(results);
+
+                // ========== 🔴 حفظ نقاط البداية والنهاية ==========
+                SaveStartEndPointsToCsv(endPointsHistory, fixedStartPoint);
+
                 SaveIterationTrackingData(results);
 
                 _lblStatus.Text = $"Experiment completed! Results saved to: {_currentOutputPath}";
@@ -364,9 +437,35 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             finally
             {
                 _btnRunComparison.Enabled = true;
-                _progressBar.Style = ProgressBarStyle.Continuous; 
+                _progressBar.Style = ProgressBarStyle.Continuous;
             }
         }
+        /// <summary>
+        /// Saves start and end points for each algorithm and metric to CSV file
+        /// </summary>
+        private void SaveStartEndPointsToCsv(Dictionary<(string algorithm, string metric), List<Point>> endPointsHistory, Point fixedStartPoint)
+        {
+            string filePath = Path.Combine(_currentOutputPath, "StartEndPoints.csv");
+
+            using var writer = new StreamWriter(filePath);
+            writer.WriteLine("Algorithm,Metric,Iteration,StartX,StartY,EndX,EndY");
+
+            foreach (var kvp in endPointsHistory)
+            {
+                string algorithm = kvp.Key.algorithm;
+                string metric = kvp.Key.metric;
+                var points = kvp.Value;
+
+                for (int i = 0; i < points.Count; i++)
+                {
+                    writer.WriteLine($"{algorithm},{metric},{i + 1},{fixedStartPoint.X},{fixedStartPoint.Y},{points[i].X},{points[i].Y}");
+                }
+            }
+
+            int totalEntries = endPointsHistory.Sum(kvp => kvp.Value.Count);
+            System.Diagnostics.Debug.WriteLine($"[SaveStartEndPoints] Saved {totalEntries} entries to {filePath}");
+        }
+   
 
         #endregion
 
@@ -1223,25 +1322,46 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
         /// <summary>
         /// Gets the initial start point for experiments
+        /// Priority: 1. Robot start point from map, 2. Current robot position, 3. Default (10,10)
         /// </summary>
         private Point GetInitialStartPoint()
         {
-            // If using custom start point from settings
-            var (useCustom, customPoint) = _logic.GetStartPointSettings(this);
-            if (useCustom)
+            // ========== 1. استخدام نقطة بداية الروبوت المحددة على الخريطة ==========
+            if (_mapControl != null && _mapControl.HasCustomStartPoint)
             {
-                return customPoint;
+                Point startPoint = _mapControl.RobotStartPoint;
+                System.Diagnostics.Debug.WriteLine($"[GetInitialStartPoint] Using robot start point: ({startPoint.X},{startPoint.Y})");
+                UpdateStartPointDisplay(startPoint);
+                return startPoint;
             }
 
-            // Otherwise use current robot position from map
-            if (_chkUseCurrentMap.Checked && _mapControl != null)
+            // ========== 2. استخدام موقع الروبوت الحالي ==========
+            if (_mapControl != null)
             {
-                return _mapControl.RobotPosition;
+                Point robotPos = _mapControl.RobotPosition;
+                System.Diagnostics.Debug.WriteLine($"[GetInitialStartPoint] Using current robot position: ({robotPos.X},{robotPos.Y})");
+                UpdateStartPointDisplay(robotPos);
+                return robotPos;
             }
 
-            // Default
-            return new Point(10, 10);
+            // ========== 3. القيمة الافتراضية ==========
+            Point defaultPoint = new Point(10, 10);
+            System.Diagnostics.Debug.WriteLine($"[GetInitialStartPoint] Using default: ({defaultPoint.X},{defaultPoint.Y})");
+            UpdateStartPointDisplay(defaultPoint);
+            return defaultPoint;
         }
+
+        /// <summary>
+        /// Updates the start point display label
+        /// </summary>
+        private void UpdateStartPointDisplay(Point startPoint)
+        {
+            if (_lblCurrentStartPoint != null)
+            {
+                _lblCurrentStartPoint.Text = $"Current: ({startPoint.X}, {startPoint.Y})";
+                _lblCurrentStartPoint.Tag = startPoint;
+            }
+        } 
 
         /// <summary>
         /// Saves iteration tracking data to files
@@ -1526,12 +1646,15 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         /// </summary>
         private void ResetToDefaultState()
         {
-            // إعادة تعيين موقع الروبوت إلى (10,10)
+            // الحصول على نقطة البداية الصحيحة
+            _currentStartPoint = GetInitialStartPoint();
+
+            // إعادة تعيين موقع الروبوت على الخريطة
             if (_mapControl != null)
             {
-                _mapControl.RobotPosition = new Point(10, 10);
+                _mapControl.RobotPosition = _currentStartPoint;
                 _mapControl.RobotAngle = 0;
-                _mapControl.SetCurrentStartPoint(new Point(10, 10));
+                _mapControl.SetCurrentStartPoint(_currentStartPoint);
                 _mapControl.ClearPaths();
                 _mapControl.Refresh();
             }
@@ -1543,7 +1666,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 _viewModel.ResetChargingStatistics();
             }
 
-            System.Diagnostics.Debug.WriteLine("[Experiment] Reset to default state: Robot at (10,10), Battery 100%");
+            System.Diagnostics.Debug.WriteLine($"[Experiment] Reset to default state: Robot at ({_currentStartPoint.X},{_currentStartPoint.Y}), Battery 100%");
         }
         #endregion
 
