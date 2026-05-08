@@ -42,8 +42,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         private readonly MapControl _mapControl;
         private readonly MainViewModel _viewModel;
         private readonly ExperimentDesignerLogic _logic;
-        private string _currentOutputPath;
-        private MapGrid _currentMapGrid; 
+        private string _currentOutputPath; 
         #endregion
 
         #region Private Fields - Iteration Tracking
@@ -66,6 +65,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _logic = new ExperimentDesignerLogic();
 
             InitializeComponent();
+            InitializeToolTips();   
             WireEvents();
             LoadUserSettings();
             LoadCurrentMapSettings();
@@ -76,8 +76,46 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
         #region Private Methods - Initialization
         /// <summary>
-        /// Wires up all event handlers
+        /// Initializes tooltips for all input controls
         /// </summary>
+        private void InitializeToolTips()
+        {
+            var toolTip = new ToolTip();
+
+            // Map settings
+            toolTip.SetToolTip(_nudGoalCount, "Number of goal points the robot must visit");
+            toolTip.SetToolTip(_nudParkingCount, "Number of parking/charging stations where robot can recharge");
+            toolTip.SetToolTip(_nudStaticObstacles, "Walls that block the robot (read-only from current map)");
+            toolTip.SetToolTip(_nudDynamicObstacles, "Moving obstacles like people, animals (read-only from current map)");
+            toolTip.SetToolTip(_chkUseCustomStartPoint, "Use a custom start point instead of the robot's current position");
+            toolTip.SetToolTip(_btnPickStartPoint, "Click to select start point from the main map");
+
+            // Robot settings
+            toolTip.SetToolTip(_nudRobotSpeed, "Robot movement speed in centimeters per second");
+            toolTip.SetToolTip(_nudRobotBattery, "Initial battery level (0-100%)");
+            toolTip.SetToolTip(_nudConsumptionRate, "Battery consumption rate per meter traveled");
+            toolTip.SetToolTip(_nudViewAngle, "Robot's field of view in degrees (90, 180, 270, 360)");
+            toolTip.SetToolTip(_nudDetectionRange, "Obstacle detection range in cells");
+            toolTip.SetToolTip(_chkEnableDynamicCharging, "Automatically go to parking when battery is low");
+
+            // Algorithm settings
+            toolTip.SetToolTip(_nudHeuristicWeight, "Higher = faster but less optimal path");
+            toolTip.SetToolTip(_nudSearchLimit, "Maximum nodes to explore before giving up");
+            toolTip.SetToolTip(_chkAllowDiagonals, "Allow diagonal movement (8-directional)");
+            toolTip.SetToolTip(_chkHeavyDiagonals, "Diagonal movement costs more (1.414x)");
+            toolTip.SetToolTip(_chkOrderGoalsByDistance, "Visit goals in order of distance from start point");
+
+            // Experiment settings
+            toolTip.SetToolTip(_nudIterations, "Number of times to repeat the experiment");
+            toolTip.SetToolTip(_chkSaveScreenshots, "Save screenshots of initial, path, and completed states");
+            toolTip.SetToolTip(_chkSaveReplay, "Save robot movement replay data");
+
+            // ML settings
+            toolTip.SetToolTip(_chkEnableDynamicLearning, "Enable obstacle memory across simulations (SPPA-DL only)");
+            toolTip.SetToolTip(_nudLearningRate, "Learning rate α for obstacle memory (higher = stronger memory)");
+            toolTip.SetToolTip(_chkUseNeuralNetwork, "Use neural network for obstacle movement prediction (SPPA-DL only)");
+            toolTip.SetToolTip(_predictionWeight, "Weight β for neural network predictions (0-100%)");
+        }
         private void WireEvents()
         {
             _btnBrowseMap.Click += BtnBrowseMap_Click;
@@ -344,6 +382,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
         private async void BtnRunComparison_Click(object sender, EventArgs e)
         {
+            if (!ValidateExperimentInputs()) return;
+
             ResetToDefaultState();
 
             var algorithms = _logic.GetSelectedAlgorithms(this);
@@ -421,7 +461,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 SaveExperimentResults(results);
 
                 // ========== 🔴 حفظ نقاط البداية والنهاية ==========
-                SaveStartEndPointsToCsv(endPointsHistory, fixedStartPoint);
+              //  SaveStartEndPointsToCsv(endPointsHistory, fixedStartPoint);
 
                 SaveIterationTrackingData(results);
 
@@ -441,31 +481,34 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             }
         }
         /// <summary>
-        /// Saves start and end points for each algorithm and metric to CSV file
+        /// Saves start and end points to CSV
         /// </summary>
-        private void SaveStartEndPointsToCsv(Dictionary<(string algorithm, string metric), List<Point>> endPointsHistory, Point fixedStartPoint)
+        private void SaveStartEndPointsToCsv(string filePath, List<ComparisonResult> results)
         {
-            string filePath = Path.Combine(_currentOutputPath, "StartEndPoints.csv");
-
-            using var writer = new StreamWriter(filePath);
-            writer.WriteLine("Algorithm,Metric,Iteration,StartX,StartY,EndX,EndY");
-
-            foreach (var kvp in endPointsHistory)
+            if (results == null || results.Count == 0)
             {
-                string algorithm = kvp.Key.algorithm;
-                string metric = kvp.Key.metric;
-                var points = kvp.Value;
-
-                for (int i = 0; i < points.Count; i++)
-                {
-                    writer.WriteLine($"{algorithm},{metric},{i + 1},{fixedStartPoint.X},{fixedStartPoint.Y},{points[i].X},{points[i].Y}");
-                }
+                System.Diagnostics.Debug.WriteLine("[SaveStartEndPointsToCsv] No results to save");
+                return;
             }
 
-            int totalEntries = endPointsHistory.Sum(kvp => kvp.Value.Count);
-            System.Diagnostics.Debug.WriteLine($"[SaveStartEndPoints] Saved {totalEntries} entries to {filePath}");
+            using var writer = new StreamWriter(filePath);
+            writer.WriteLine("Iteration,StartX,StartY,EndX,EndY,Algorithm,Metric,Success");
+
+            int maxCount = Math.Min(_iterationStartPoints.Count, results.Count);
+
+            for (int i = 0; i < maxCount; i++)
+            {
+                var start = i < _iterationStartPoints.Count ? _iterationStartPoints[i] : Point.Empty;
+                var end = i < _iterationEndPoints.Count ? _iterationEndPoints[i] : Point.Empty;
+                var result = results[i];
+
+                if (result == null) continue;
+
+                writer.WriteLine($"{i + 1},{start.X},{start.Y},{end.X},{end.Y},{result.Algorithm},{result.Metric},{result.Success}");
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[SaveStartEndPointsToCsv] Saved {maxCount} entries to {filePath}");
         }
-   
 
         #endregion
 
@@ -1377,36 +1420,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             string chargingPath = Path.Combine(_currentOutputPath, "ChargingSettings.json");
             SaveChargingSettingsToJson(chargingPath);
         }
-
-        /// <summary>
-        /// Saves start and end points to CSV
-        /// </summary>
-        private void SaveStartEndPointsToCsv(string filePath, List<ComparisonResult> results)
-        {
-            if (results == null || results.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("[SaveStartEndPointsToCsv] No results to save");
-                return;
-            }
-
-            using var writer = new StreamWriter(filePath);
-            writer.WriteLine("Iteration,StartX,StartY,EndX,EndY,Algorithm,Metric,Success");
-
-            int maxCount = Math.Min(_iterationStartPoints.Count, results.Count);
-
-            for (int i = 0; i < maxCount; i++)
-            {
-                var start = i < _iterationStartPoints.Count ? _iterationStartPoints[i] : Point.Empty;
-                var end = i < _iterationEndPoints.Count ? _iterationEndPoints[i] : Point.Empty;
-                var result = results[i];
-
-                if (result == null) continue;
-
-                writer.WriteLine($"{i + 1},{start.X},{start.Y},{end.X},{end.Y},{result.Algorithm},{result.Metric},{result.Success}");
-            }
-
-            System.Diagnostics.Debug.WriteLine($"[SaveStartEndPointsToCsv] Saved {maxCount} entries to {filePath}");
-        }
+         
 
         /// <summary>
         /// Saves all paths to JSON file
@@ -1991,6 +2005,75 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
             MessageBox.Show(summary, "Sensitivity Analysis Results",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>
+        /// Validates all input values before running experiment
+        /// </summary>
+        private bool ValidateExperimentInputs()
+        {
+            // Check goals
+            if (_nudGoalCount.Value < 1)
+            {
+                MessageBox.Show("Goal count must be at least 1.", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            // Check parking
+            if (_nudParkingCount.Value < 1)
+            {
+                MessageBox.Show("Parking count must be at least 1.", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            // Check search limit
+            if (_nudSearchLimit.Value < 1000)
+            {
+                var result = MessageBox.Show("Search limit is very low (less than 1000). May not find a path.\n\nContinue anyway?",
+                    "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.No)
+                    return false;
+            }
+
+            // Check heuristic weight
+            if (_nudHeuristicWeight.Value > 5)
+            {
+                var result = MessageBox.Show($"Heuristic weight is high ({_nudHeuristicWeight.Value}). May produce suboptimal paths.\n\nContinue anyway?",
+                    "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.No)
+                    return false;
+            }
+
+            // Check iterations
+            if (_nudIterations.Value > 20)
+            {
+                var result = MessageBox.Show($"Running {_nudIterations.Value} iterations may take a very long time.\n\nContinue anyway?",
+                    "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.No)
+                    return false;
+            }
+
+            // Check if algorithms are selected
+            var algorithms = _logic.GetSelectedAlgorithms(this);
+            if (algorithms == null || algorithms.Count == 0)
+            {
+                MessageBox.Show("Please select at least one algorithm to run.", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            // Check if metrics are selected
+            var metrics = _logic.GetSelectedMetrics(this);
+            if (metrics == null || metrics.Count == 0)
+            {
+                MessageBox.Show("Please select at least one distance metric to run.", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            return true;
         }
     }
 }

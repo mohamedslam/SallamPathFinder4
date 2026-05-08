@@ -18,9 +18,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         private System.Windows.Forms.TabControl _mainTabControl;
         private System.Windows.Forms.TabPage _tabExperimentSettings;
         private System.Windows.Forms.TabPage _tabMapSettings;
-        private System.Windows.Forms.TabPage _tabAlgorithms;
-        private System.Windows.Forms.TabPage _tabRobotSettings;
-        private System.Windows.Forms.TabPage _tabMLSettings;
+        private System.Windows.Forms.TabPage _tabAlgorithms; 
 
         // Bottom Panel Controls
         private System.Windows.Forms.Panel _bottomPanel;
@@ -240,9 +238,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _txtSavePath = new TextBox();
             _btnBrowseSavePath = new Button();
             _grpInfo = new GroupBox();
-            _lblInfo = new Label();
-            _tabRobotSettings = new TabPage();
-            _tabMLSettings = new TabPage();
+            _lblInfo = new Label(); 
             _bottomPanel = new Panel();
             _buttonPanel = new Panel();
             _btnRunComparison = new Button();
