@@ -94,7 +94,7 @@ namespace SallamPathFinder4.WinForms.Helpers
                             frame.Save(ms, ImageFormat.Png);
                             ms.Position = 0;
                             var img = new MagickImage(ms);
-                            img.AnimationDelay = _frameDelayMs / 10;
+                            img.AnimationDelay = uint.Parse( (_frameDelayMs / 10).ToString());
                             collection.Add(img);
                         }
                     }

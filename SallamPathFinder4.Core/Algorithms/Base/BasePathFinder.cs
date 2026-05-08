@@ -31,7 +31,6 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         private const double SQRT2 = 1.4142135623730951;
         private const int DEFAULT_HEURISTIC_WEIGHT = 2;
         private const int DEFAULT_SEARCH_LIMIT = 50000;
-        private int _randomSeed = 42;
         #endregion
 
         #region Private Fields
@@ -40,6 +39,11 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         protected bool _isPaused;
         protected bool _isStopped;
         protected readonly object _lockObject = new object();
+        private readonly object _pauseLock = new object();
+
+        // Visualization settings
+        private bool _enableVisualization = false;
+        private int _speedDelayMs = 0;
 
         /// <summary>
         /// Collection of cells where algorithm attempted to move through walls
@@ -70,15 +74,6 @@ namespace SallamPathFinder4.Core.Algorithms.Base
 
         #region Public Properties - Configuration
         /// <inheritdoc/>
-        public int RandomSeed
-        {
-            get => _randomSeed;
-            set
-            {
-                _randomSeed = value;
-                // إعادة تهيئة الـ Random في الخوارزميات المشتقة (تحتاج إلى إعادة تعيين)
-            }
-        }
         public DistanceMetric Metric { get; set; }
 
         /// <inheritdoc/>
@@ -123,6 +118,26 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         }
         #endregion
 
+        #region Public Properties - Visualization
+        /// <summary>
+        /// تفعيل/إيقاف تصور عملية البحث
+        /// </summary>
+        public bool EnableVisualization
+        {
+            get => _enableVisualization;
+            set => _enableVisualization = value;
+        }
+
+        /// <summary>
+        /// سرعة العرض بالمللي ثانية
+        /// </summary>
+        public int SpeedDelayMs
+        {
+            get => _speedDelayMs;
+            set => _speedDelayMs = Math.Max(0, Math.Min(500, value));
+        }
+        #endregion
+
         #region Public Properties - Metrics
         /// <inheritdoc/>
         public double LastComputationTimeSeconds { get; protected set; }
@@ -131,6 +146,83 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         #region Events
         /// <inheritdoc/>
         public event PathFinderDebugHandler DebugUpdate;
+        #endregion
+
+        #region Protected Methods - Debug Event Management (NEW)
+        /// <summary>
+        /// Copies debug event handlers to another pathfinder
+        /// Used when temporarily switching to another algorithm (e.g., Fast Path)
+        /// 🔴 IMPORTANT: Preserves visualization for educational purposes
+        /// </summary>
+        /// <param name="target">The target pathfinder to receive debug events</param>
+        protected void CopyDebugEventsTo(IPathFinder target)
+        {
+            if (target == null) return;
+
+            // Only copy if debug visualization is enabled
+            if (this.DebugUpdate != null && this.ShowDebugProgress)
+            {
+                target.DebugUpdate += this.DebugUpdate;
+            }
+
+            // Copy visualization settings
+            target.EnableVisualization = this.EnableVisualization;
+            target.SpeedDelayMs = this.SpeedDelayMs;
+            target.ShowDebugProgress = this.ShowDebugProgress;
+        }
+
+        /// <summary>
+        /// Removes debug event handlers from another pathfinder
+        /// 🔴 IMPORTANT: Prevents memory leaks by unsubscribing
+        /// </summary>
+        /// <param name="target">The target pathfinder to remove events from</param>
+        protected void RemoveDebugEventsFrom(IPathFinder target)
+        {
+            if (target == null) return;
+
+            if (this.DebugUpdate != null)
+            {
+                target.DebugUpdate -= this.DebugUpdate;
+            }
+        }
+
+        /// <summary>
+        /// Temporarily switches to another pathfinder while preserving debug events
+        /// Used for educational visualization of different algorithms
+        /// </summary>
+        /// <typeparam name="T">Type of pathfinder to create</typeparam>
+        /// <param name="finderCreator">Function to create the new finder</param>
+        /// <param name="start">Start position</param>
+        /// <param name="end">End position</param>
+        /// <returns>Path result from the temporary finder</returns>
+        protected PathResult RunWithDebugEvents<T>(Func<T> finderCreator, Point start, Point end) where T : IPathFinder
+        {
+            var tempFinder = finderCreator();
+
+            // Copy debug events to temporary finder
+            CopyDebugEventsTo(tempFinder);
+
+            // Copy algorithm settings
+            tempFinder.Metric = this.Metric;
+            tempFinder.AllowDiagonals = this.AllowDiagonals;
+            tempFinder.HeavyDiagonals = this.HeavyDiagonals;
+            tempFinder.HeuristicWeight = this.HeuristicWeight;
+            tempFinder.SearchLimit = this.SearchLimit;
+
+            // Execute pathfinding
+            var result = tempFinder.FindPath(start, end);
+
+            // Remove debug events to prevent memory leaks
+            RemoveDebugEventsFrom(tempFinder);
+
+            // Clean up if disposable
+            if (tempFinder is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
+            return result;
+        }
         #endregion
 
         #region Public Methods - Control
@@ -166,6 +258,16 @@ namespace SallamPathFinder4.Core.Algorithms.Base
                 System.Diagnostics.Debug.WriteLine("ResumeSearch: _isPaused = false, search resumed");
             }
         }
+
+        public virtual void PauseSearch()
+        {
+            lock (_pauseLock)
+            {
+                _isPaused = true;
+                System.Diagnostics.Debug.WriteLine("PauseSearch: _isPaused = true");
+            }
+        }
+
         /// <summary>
         /// Records an invalid move attempt (trying to walk through a wall)
         /// </summary>
@@ -188,8 +290,8 @@ namespace SallamPathFinder4.Core.Algorithms.Base
                 _invalidPathCells.Clear();
             }
         }
-        #endregion 
- 
+        #endregion
+
         #region Protected Methods - Heuristic
         /// <summary>
         /// Calculates heuristic distance between two points
@@ -325,35 +427,35 @@ namespace SallamPathFinder4.Core.Algorithms.Base
         }
         #endregion
 
-        #region Protected Methods - Debug
+        #region Protected Methods - Debug (Enhanced for Education)
         /// <summary>
         /// Raises debug event for visualization
+        /// 🔴 ENHANCED: Supports pause/resume and GIF recording
         /// </summary>
         protected void RaiseDebugEvent(int fromX, int fromY, int x, int y,
             PathFinderNodeType type, int totalCost, int cost)
         {
-            if (this.ShowDebugProgress)
+            if (!this.ShowDebugProgress) return;
+
+            lock (_pauseLock)
             {
-                // 🔴 أضف هذا الجزء للتعامل مع الإيقاف المؤقت
-                lock (_pauseLock)
+                while (_isPaused && !_isStopped)
                 {
-                    while (_isPaused && !_isStopped)
-                    {
-                        Monitor.Wait(_pauseLock);
-                    }
-                }
-
-                if (_isStopped) return;
-
-                var handler = this.DebugUpdate;
-                handler?.Invoke(fromX, fromY, x, y, type, totalCost, cost);
-
-                if (_enableVisualization && _speedDelayMs > 0)
-                {
-                    Thread.Sleep(_speedDelayMs);
+                    Monitor.Wait(_pauseLock);
                 }
             }
+
+            if (_isStopped) return;
+
+            var handler = this.DebugUpdate;
+            handler?.Invoke(fromX, fromY, x, y, type, totalCost, cost);
+
+            if (_enableVisualization && _speedDelayMs > 0)
+            {
+                Thread.Sleep(_speedDelayMs);
+            }
         }
+
         /// <summary>
         /// Checks if algorithm should stop (stopped or paused)
         /// </summary>
@@ -399,48 +501,6 @@ namespace SallamPathFinder4.Core.Algorithms.Base
                 _cts = null;
             }
         }
-        #endregion
-
-        #region Private Fields - Visualization
-        private bool _enableVisualization = false;
-        private int _speedDelayMs = 0;
-        #endregion
-
-        #region Public Properties - Visualization
-        /// <summary>
-        /// تفعيل/إيقاف تصور عملية البحث
-        /// </summary>
-        public bool EnableVisualization
-        {
-            get => _enableVisualization;
-            set => _enableVisualization = value;
-        }
-
-        /// <summary>
-        /// سرعة العرض بالمللي ثانية
-        /// </summary>
-        public int SpeedDelayMs
-        {
-            get => _speedDelayMs;
-            set => _speedDelayMs = Math.Max(0, Math.Min(500, value));
-        }
-        #endregion
-        #region Private Fields - Pause/Resume
-         private readonly object _pauseLock = new object();
-        #endregion
-
-        #region Public Methods - Pause/Resume
-        public virtual void PauseSearch()
-        {
-            lock (_pauseLock)
-            {
-                _isPaused = true;
-                System.Diagnostics.Debug.WriteLine("PauseSearch: _isPaused = true");
-            }
-        }
-
-       
-       
         #endregion
     }
 }
