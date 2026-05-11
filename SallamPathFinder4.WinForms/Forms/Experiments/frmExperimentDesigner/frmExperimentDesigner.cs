@@ -12,11 +12,13 @@ using SallamPathFinder4.Core.Algorithms.Implementations;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Algorithms;
 using SallamPathFinder4.Core.Interfaces.Services;
+using SallamPathFinder4.Core.Models.Algorithms;
 using SallamPathFinder4.Core.Models.Experiments;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
 using SallamPathFinder4.Core.Models.Robot;
+using SallamPathFinder4.Services.Pathfinding;
 using SallamPathFinder4.Services.Simulation;
 using SallamPathFinder4.WinForms.Controls;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Core;
@@ -65,12 +67,14 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _logic = new ExperimentDesignerLogic();
 
             InitializeComponent();
+            SetupAlgorithmGrid();
+            InitializeSensitivityTab();
+            InitializeAlgorithmGrid();
             InitializeToolTips();   
             WireEvents();
             LoadUserSettings();
             LoadCurrentMapSettings();
-            LoadCurrentRobotSettings();
-            InitializeFilters();
+            LoadCurrentRobotSettings(); 
         }
         #endregion
 
@@ -98,13 +102,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             toolTip.SetToolTip(_nudDetectionRange, "Obstacle detection range in cells");
             toolTip.SetToolTip(_chkEnableDynamicCharging, "Automatically go to parking when battery is low");
 
-            // Algorithm settings
-            toolTip.SetToolTip(_nudHeuristicWeight, "Higher = faster but less optimal path");
-            toolTip.SetToolTip(_nudSearchLimit, "Maximum nodes to explore before giving up");
-            toolTip.SetToolTip(_chkAllowDiagonals, "Allow diagonal movement (8-directional)");
-            toolTip.SetToolTip(_chkHeavyDiagonals, "Diagonal movement costs more (1.414x)");
-            toolTip.SetToolTip(_chkOrderGoalsByDistance, "Visit goals in order of distance from start point");
-
+          
             // Experiment settings
             toolTip.SetToolTip(_nudIterations, "Number of times to repeat the experiment");
             toolTip.SetToolTip(_chkSaveScreenshots, "Save screenshots of initial, path, and completed states");
@@ -154,19 +152,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _txtMapFilePath.Enabled = enabled;
             _btnBrowseMap.Enabled = enabled;
         }
-
-        /// <summary>
-        /// Initializes filter dropdowns
-        /// </summary>
-        private void InitializeFilters()
-        {
-            _clbDistanceMetrics.Items.Clear();
-            _clbDistanceMetrics.Items.Add("Manhattan", true);
-            _clbDistanceMetrics.Items.Add("Euclidean", true);
-            _clbDistanceMetrics.Items.Add("MaxDXDY", false);
-            _clbDistanceMetrics.Items.Add("DiagonalShortcut", false);
-            _clbDistanceMetrics.Items.Add("EuclideanNoSQR", false);
-        }
+         
 
         /// <summary>
         /// Loads user settings from Properties
@@ -382,7 +368,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         private async void BtnRunComparison_Click(object sender, EventArgs e)
         {
             if (!ValidateExperimentInputs()) return;
-
+            // Get selected algorithms from grid instead of checkboxes
+            var selectedConfigs = GetSelectedAlgorithmsWithParams();
+            if (selectedConfigs.Count == 0)
+            {
+                ExperimentSharedHelper.ShowWarning("Please enable at least one algorithm.", "No Algorithm Selected");
+                return;
+            }
             ResetToDefaultState();
 
             var algorithms = _logic.GetSelectedAlgorithms(this);
@@ -440,7 +432,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
                             var result = await RunSingleExperiment(algorithm, metric, iter + 1,
                                                                    robotSettings, mlSettings,
-                                                                   startPoint, orderGoalsByDistance);
+                                                                   startPoint);
                             results.Add(result);
 
                             // ========== 🔴 توثيق نقاط النهاية ==========
@@ -524,14 +516,18 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             int iteration,
             RobotSettings robotSettings,
             MLSettings mlSettings,
-            Point startPoint,
-            bool orderGoalsByDistance)
+            Point startPoint )
         {
             var result = _logic.CreateEmptyResult(algorithm, metric, iteration, robotSettings, this);
 
             try
             {
                 // ========== 1. INITIALIZE RESULT ==========
+                var parameters = GetParametersForAlgorithmFromGrid(algorithm, metric);
+                bool orderGoalsByDistance = parameters.ContainsKey("OrderGoalsByDistance")
+                    ? Convert.ToBoolean(parameters["OrderGoalsByDistance"])
+                    : false;
+
                 _iterationStartPoints.Add(startPoint);
 
                 bool enableDynamicCharging = _chkEnableDynamicCharging?.Checked ?? false;
@@ -592,7 +588,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 }
 
                 // ========== 4. CREATE AND CONFIGURE FINDER ==========
-                var finder = _logic.CreateAlgorithmFinder(_mapGrid, algorithm, mlSettings);
+                var algorithmParams = GetParametersForAlgorithmFromGrid(algorithm, metric);
+                var finder = _logic.CreateAlgorithmFinder(_mapGrid, algorithm, mlSettings, algorithmParams);
                 if (finder == null)
                 {
                     result.Success = false;
@@ -1570,90 +1567,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         #endregion
 
         #region Algorithm-Specific Configuration
-
-        /// <summary>
-        /// Applies algorithm-specific settings to the finder
-        /// </summary>
-        public void ConfigureAlgorithmSpecificSettings(IPathFinder finder, string algorithm, ExperimentSettings settings)
-        {
-            if (finder == null) return;
-
-            switch (algorithm)
-            {
-                case "AStar":
-                case "A*":
-                    // A* specific settings
-                    finder.HeuristicWeight = settings.HeuristicWeight;
-                    finder.AllowDiagonals = settings.AllowDiagonals;
-                    finder.HeavyDiagonals = settings.HeavyDiagonals;
-                    finder.SearchLimit = settings.SearchLimit;
-                    break;
-
-                case "SPPA":
-                    // SPPA specific settings
-                    finder.HeuristicWeight = settings.HeuristicWeight;
-                    finder.AllowDiagonals = settings.AllowDiagonals;
-                    finder.HeavyDiagonals = settings.HeavyDiagonals;
-                    finder.SearchLimit = settings.SearchLimit;
-                    // SPPA uses Lambda = 1.5 (hardcoded in algorithm)
-                    break;
-
-                case "SPPA_DL":
-                    // SPPA-DL specific settings
-                    finder.HeuristicWeight = settings.HeuristicWeight;
-                    finder.AllowDiagonals = settings.AllowDiagonals;
-                    finder.HeavyDiagonals = settings.HeavyDiagonals;
-                    finder.SearchLimit = settings.SearchLimit;
-
-                    // Apply ML settings if available
-                    if (settings.MLSettings != null)
-                    {
-                        if (finder is SPPA_DLFinder sppaDLFinder)
-                        {
-                            // Learning rate, prediction weight, etc. can be set here
-                            System.Diagnostics.Debug.WriteLine($"[Config] SPPA-DL: LearningRate={settings.MLSettings.LearningRate}");
-                        }
-                    }
-                    break;
-
-                case "ACO":
-                    // ACO specific settings (will be applied when ACOFinder supports them)
-                    if (finder is ACOFinder acoFinder)
-                    {
-                        // acoFinder.SetParameters(ants, evaporation, alpha, beta, iterations);
-                        System.Diagnostics.Debug.WriteLine($"[Config] ACO: Using default parameters");
-                    }
-                    break;
-
-                case "DStar":
-                    // D* specific settings
-                    finder.AllowDiagonals = settings.AllowDiagonals;
-                    finder.SearchLimit = settings.SearchLimit;
-                    break;
-
-                case "KNN":
-                    // KNN specific settings
-                    finder.AllowDiagonals = settings.AllowDiagonals;
-                    finder.SearchLimit = settings.SearchLimit;
-                    break;
-
-                case "BruteForce":
-                    // Brute Force specific settings
-                    finder.SearchLimit = settings.SearchLimit;
-                    break;
-
-                default:
-                    // Default settings
-                    finder.HeuristicWeight = settings.HeuristicWeight;
-                    finder.AllowDiagonals = settings.AllowDiagonals;
-                    finder.HeavyDiagonals = settings.HeavyDiagonals;
-                    finder.SearchLimit = settings.SearchLimit;
-                    break;
-            }
-
-            System.Diagnostics.Debug.WriteLine($"[Config] Applied settings for {algorithm}: Metric={finder.Metric}, Diagonals={finder.AllowDiagonals}, SearchLimit={finder.SearchLimit}");
-        }
-
+         
         /// <summary>
         /// Resets map and robot to default state for new experiment
         /// </summary>
@@ -1775,7 +1689,39 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
         {
             if (!_chkEnableSensitivity.Checked) return;
 
-            // ========== 1. التحقق من وجود أهداف ==========
+            // ========== 1. الحصول على الخوارزمية المختارة من الـ DataGridView ==========
+            string currentAlgorithm = "";
+            string currentMetric = "";
+            Dictionary<string, object> currentParams = null;
+
+            foreach (DataGridViewRow row in _dgvAlgorithems.Rows)
+            {
+                bool isEnabled = row.Cells["colEnabled"].Value != null && (bool)row.Cells["colEnabled"].Value;
+                if (isEnabled)
+                {
+                    currentAlgorithm = row.Cells["colAlgorithm"].Value?.ToString();
+                    currentMetric = row.Cells["colMetric"].Value?.ToString();
+                    currentParams = row.Tag as Dictionary<string, object>;
+                    break; // خذ أول خوارزمية مفعلة
+                }
+            }
+
+            if (string.IsNullOrEmpty(currentAlgorithm))
+            {
+                MessageBox.Show("Please enable at least one algorithm for sensitivity analysis.",
+                    "No Algorithm Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ========== 2. التحقق من أن الخوارزمية مدعومة (SPPA أو SPPA_DL) ==========
+            if (currentAlgorithm != "SPPA" && currentAlgorithm != "SPPA_DL")
+            {
+                MessageBox.Show("Sensitivity analysis is only supported for SPPA and SPPA-DL algorithms.",
+                    "Unsupported Algorithm", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ========== 3. التحقق من وجود أهداف ==========
             List<Point> allGoals = _viewModel.Goals.Select(g => g.Location).ToList();
             if (allGoals.Count == 0)
             {
@@ -1784,18 +1730,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 return;
             }
 
-            // ========== 2. التحقق من الخوارزمية المختارة ==========
-            string currentAlgorithm = "";
-            if (_chkSPPA.Checked) currentAlgorithm = "SPPA";
-            else if (_chkSPPA_DL.Checked) currentAlgorithm = "SPPA-DL";
-            else
-            {
-                MessageBox.Show("Please select SPPA or SPPA-DL for sensitivity analysis.",
-                    "No Algorithm Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // ========== 3. قراءة القيم المدخلة ==========
+            // ========== 4. قراءة القيم المدخلة ==========
             var parts = _txtSensitivityValues.Text.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
             var values = new List<double>();
             foreach (var part in parts)
@@ -1817,21 +1752,19 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 return;
             }
 
-            // ========== 4. قراءة المعامل المختار ==========
+            // ========== 5. قراءة المعامل المختار ==========
             string parameter = _cboSensitivityParameter.SelectedItem?.ToString() ?? "";
             string paramKey = parameter.Split(' ')[0]; // "Lambda", "LearningRate", etc.
 
-            // ========== 5. إعداد واجهة المستخدم ==========
+            // ========== 6. إعداد واجهة المستخدم ==========
             _btnRunSensitivity.Enabled = false;
             _dgvSensitivityResults.Rows.Clear();
             _lblSensitivityStatus.Text = "Running sensitivity analysis...";
             _lblSensitivityStatus.ForeColor = Color.Blue;
             Application.DoEvents();
 
-            // ========== 6. الحصول على نقطة البداية ==========
+            // ========== 7. الحصول على نقطة البداية والعوائق ==========
             Point startPoint = _mapControl.RobotPosition;
-
-            // ========== 7. الحصول على العوائق الديناميكية ==========
             var dynamicObstacles = _mapControl.DynamicObstacles;
 
             // ========== 8. تشغيل التحليل لكل قيمة ==========
@@ -1844,29 +1777,73 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
                 // إنشاء خوارزمية مع القيمة الجديدة
                 IPathFinder finder = null;
+                var mlSettings = _logic.GetMLSettings(this);
 
                 if (currentAlgorithm == "SPPA")
                 {
-                    var sppaFinder = new SPPAFinder(_mapGrid);
-                    ApplyParameterToFinder(sppaFinder, paramKey, val);
-                    finder = sppaFinder;
+                    var factory = new AlgorithmFactory(_mapGrid);
+                    finder = factory.Create(AlgorithmType.SPPA);
+
+                    if (finder is SPPAFinder sppaFinder)
+                    {
+                        ApplyParameterToFinder(sppaFinder, paramKey, val);
+                        // تطبيق البارامترات الأخرى من currentParams
+                        if (currentParams != null)
+                        {
+                            if (currentParams.ContainsKey("HeuristicWeight"))
+                                sppaFinder.HeuristicWeight = Convert.ToInt32(currentParams["HeuristicWeight"]);
+                            if (currentParams.ContainsKey("SearchLimit"))
+                                sppaFinder.SearchLimit = Convert.ToInt32(currentParams["SearchLimit"]);
+                            if (currentParams.ContainsKey("AlphaS"))
+                                sppaFinder.AlphaS = Convert.ToDouble(currentParams["AlphaS"]);
+                            if (currentParams.ContainsKey("AlphaSS"))
+                                sppaFinder.AlphaSS = Convert.ToDouble(currentParams["AlphaSS"]);
+                            if (currentParams.ContainsKey("AlphaD"))
+                                sppaFinder.AlphaD = Convert.ToDouble(currentParams["AlphaD"]);
+                        }
+                    }
                 }
-                else if (currentAlgorithm == "SPPA-DL")
+                else if (currentAlgorithm == "SPPA_DL")
                 {
-                    var sppaDLFinder = new SPPA_DLFinder(_mapGrid, dynamicObstacles, false, false, 2.0, 0.3);
-                    ApplyParameterToFinder(sppaDLFinder, paramKey, val);
-                    finder = sppaDLFinder;
+                    var factory = new AlgorithmFactory(_mapGrid);
+                    finder = factory.Create(AlgorithmType.SPPA_DL,
+                        mlSettings.UseNeuralNetwork,
+                        mlSettings.CollectTrainingData,
+                        mlSettings.LearningRate);
+
+                    if (finder is SPPA_DLFinder sppaDLFinder)
+                    {
+                        ApplyParameterToFinder(sppaDLFinder, paramKey, val);
+                        // تطبيق البارامترات الأخرى من currentParams
+                        if (currentParams != null)
+                        {
+                            if (currentParams.ContainsKey("HeuristicWeight"))
+                                sppaDLFinder.HeuristicWeight = Convert.ToInt32(currentParams["HeuristicWeight"]);
+                            if (currentParams.ContainsKey("SearchLimit"))
+                                sppaDLFinder.SearchLimit = Convert.ToInt32(currentParams["SearchLimit"]);
+                            if (currentParams.ContainsKey("Lambda"))
+                                sppaDLFinder.Lambda = Convert.ToDouble(currentParams["Lambda"]);
+                            if (currentParams.ContainsKey("PredictionWeight"))
+                                sppaDLFinder.PredictionWeight = Convert.ToDouble(currentParams["PredictionWeight"]);
+                            if (currentParams.ContainsKey("AlphaS"))
+                                sppaDLFinder.AlphaS = Convert.ToDouble(currentParams["AlphaS"]);
+                            if (currentParams.ContainsKey("AlphaSS"))
+                                sppaDLFinder.AlphaSS = Convert.ToDouble(currentParams["AlphaSS"]);
+                            if (currentParams.ContainsKey("AlphaD"))
+                                sppaDLFinder.AlphaD = Convert.ToDouble(currentParams["AlphaD"]);
+                        }
+                    }
                 }
 
                 if (finder == null) continue;
 
-                // تطبيق الإعدادات العامة
-                finder.Metric = DistanceMetric.Manhattan;
+                // تطبيق إعدادات الميترك
+                finder.Metric = ExperimentSharedLogic.GetDistanceMetric(currentMetric);
                 finder.AllowDiagonals = true;
                 finder.SearchLimit = 50000;
                 finder.HeuristicWeight = 2;
 
-                // ========== 9. إيجاد المسار عبر جميع الأهداف (مثل Experiment Designer) ==========
+                // ========== 9. إيجاد المسار عبر جميع الأهداف ==========
                 var fullPath = new List<PathNode>();
                 Point currentPos = startPoint;
                 double totalTimeMs = 0;
@@ -1900,19 +1877,15 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
                     totalTimeMs += goalResult.ComputationTimeSeconds * 1000;
                     currentPos = allGoals[i];
-
-                    System.Diagnostics.Debug.WriteLine($"[Sensitivity] Goal {i + 1}/{allGoals.Count} completed. Path so far: {fullPath.Count} cells");
                 }
 
                 // ========== 10. إضافة مسار العودة لـ SPPA و SPPA-DL ==========
-                if (pathSuccess && (currentAlgorithm == "SPPA" || currentAlgorithm == "SPPA-DL"))
+                if (pathSuccess && (currentAlgorithm == "SPPA" || currentAlgorithm == "SPPA_DL"))
                 {
-                    // الحصول على نقاط الباركينج
                     var parkingPoints = _viewModel.ParkingPoints.Select(p => p.Location).ToList();
 
                     if (parkingPoints != null && parkingPoints.Count > 0)
                     {
-                        // البحث عن أقرب نقطة باركينج لآخر هدف
                         Point lastGoal = allGoals.Last();
                         Point nearestParking = parkingPoints
                             .OrderBy(p => Math.Abs(p.X - lastGoal.X) + Math.Abs(p.Y - lastGoal.Y))
@@ -1925,7 +1898,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                             {
                                 fullPath.AddRange(returnResult.Path.Skip(1));
                                 totalTimeMs += returnResult.ComputationTimeSeconds * 1000;
-                                System.Diagnostics.Debug.WriteLine($"[Sensitivity] Return path added: {returnResult.Path.Count} cells");
                             }
                         }
                     }
@@ -1933,13 +1905,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 
                 // ========== 11. تسجيل النتائج ==========
                 int finalPathLength = pathSuccess ? fullPath.Count : 0;
-                results.Add((
-                    val,
-                    finalPathLength,
-                    totalTimeMs,
-                    pathSuccess,
-                    0
-                ));
+                results.Add((val, finalPathLength, totalTimeMs, pathSuccess, 0));
 
                 // تحديث واجهة المستخدم
                 _dgvSensitivityResults.Rows.Add(
@@ -1961,6 +1927,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // عرض ملخص النتائج
             ShowSensitivitySummary(results, paramKey);
         }
+
         private void ApplyParameterToFinder(IPathFinder finder, string paramKey, double value)
         {
             if (finder is SPPAFinder sppa)
@@ -1980,9 +1947,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                     case "Lambda": sppaDL.Lambda = value; break;
                     case "LearningRate": sppaDL.LearningRate = value; break;
                     case "PredictionWeight": sppaDL.PredictionWeight = value; break;
+                    case "Alpha_S": sppaDL.AlphaS = value; break;
+                    case "Alpha_SS": sppaDL.AlphaSS = value; break;
+                    case "Alpha_D": sppaDL.AlphaD = value; break;
                 }
             }
         }
+  
 
         private void ShowSensitivitySummary(List<(double value, int length, double time, bool success, int collisions)> results, string paramKey)
         {
@@ -2006,9 +1977,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        /// <summary>
-        /// Validates all input values before running experiment
-        /// </summary>
         private bool ValidateExperimentInputs()
         {
             // Check goals
@@ -2027,22 +1995,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                 return false;
             }
 
-            // Check search limit
-            if (_nudSearchLimit.Value < 1000)
+            // Check if algorithms are selected from the grid
+            var selectedAlgorithms = GetSelectedAlgorithmsWithParams();
+            if (selectedAlgorithms.Count == 0)
             {
-                var result = MessageBox.Show("Search limit is very low (less than 1000). May not find a path.\n\nContinue anyway?",
-                    "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (result == DialogResult.No)
-                    return false;
-            }
-
-            // Check heuristic weight
-            if (_nudHeuristicWeight.Value > 5)
-            {
-                var result = MessageBox.Show($"Heuristic weight is high ({_nudHeuristicWeight.Value}). May produce suboptimal paths.\n\nContinue anyway?",
-                    "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (result == DialogResult.No)
-                    return false;
+                MessageBox.Show("Please enable at least one algorithm to run.", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
 
             // Check iterations
@@ -2054,25 +2013,297 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
                     return false;
             }
 
-            // Check if algorithms are selected
-            var algorithms = _logic.GetSelectedAlgorithms(this);
-            if (algorithms == null || algorithms.Count == 0)
-            {
-                MessageBox.Show("Please select at least one algorithm to run.", "Validation Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
-            }
-
-            // Check if metrics are selected
-            var metrics = _logic.GetSelectedMetrics(this);
-            if (metrics == null || metrics.Count == 0)
-            {
-                MessageBox.Show("Please select at least one distance metric to run.", "Validation Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
-            }
-
             return true;
+        }
+        #region Algorithm Grid Methods
+
+        /// <summary>
+        /// Initializes the algorithm configuration grid
+        /// </summary>
+        private void InitializeAlgorithmGrid()
+        {
+            SetupAlgorithmGrid();
+            WireAlgorithmGridEvents();
+        }
+
+        /// <summary>
+        /// Wires events for the algorithm grid
+        /// </summary>
+        private void WireAlgorithmGridEvents()
+        {
+            _dgvAlgorithems.CellClick += DgvAlgorithems_CellClick;
+            _dgvAlgorithems.CellValueChanged += DgvAlgorithems_CellValueChanged;
+            _dgvAlgorithems.CurrentCellDirtyStateChanged += DgvAlgorithems_CurrentCellDirtyStateChanged;
+            _dgvAlgorithems.KeyDown += DgvAlgorithems_KeyDown;
+
+        }
+
+        /// <summary>
+        /// Handles cell click for edit button
+        /// </summary>
+        private void DgvAlgorithems_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+
+            // Edit button
+            if (e.ColumnIndex == _dgvAlgorithems.Columns["colEdit"].Index)
+            {
+                EditAlgorithmParameters(e.RowIndex);
+            }
+            // Duplicate button
+            else if (e.ColumnIndex == _dgvAlgorithems.Columns["colDuplicate"].Index)
+            {
+                DuplicateAlgorithmRow(e.RowIndex);
+            }
+        }
+
+        private void DuplicateAlgorithmRow(int sourceRowIndex)
+        {
+            var sourceRow = _dgvAlgorithems.Rows[sourceRowIndex];
+
+            string algorithm = sourceRow.Cells["colAlgorithm"].Value?.ToString();
+            string metric = sourceRow.Cells["colMetric"].Value?.ToString();
+            var parameters = sourceRow.Tag as Dictionary<string, object>;
+
+            if (string.IsNullOrEmpty(algorithm)) return;
+
+            // إنشاء نسخة من البارامترات
+            var paramsCopy = parameters != null
+                ? new Dictionary<string, object>(parameters)
+                : new Dictionary<string, object>();
+
+            // إضافة صف جديد
+            int newRowIndex = _dgvAlgorithems.Rows.Add();
+            var newRow = _dgvAlgorithems.Rows[newRowIndex];
+
+            newRow.Cells["colEnabled"].Value = sourceRow.Cells["colEnabled"].Value;
+            newRow.Cells["colAlgorithm"].Value = algorithm;
+            newRow.Cells["colMetric"].Value = metric;
+            newRow.Cells["colParameters"].Value = sourceRow.Cells["colParameters"].Value;
+            newRow.Tag = paramsCopy;
+
+            // تمييز الصف الجديد
+            _dgvAlgorithems.ClearSelection();
+            newRow.Selected = true;
+
+            System.Diagnostics.Debug.WriteLine($"[Duplicate] Created copy of {algorithm} with same parameters");
+        }
+
+        /// <summary>
+        /// Handles cell value changed event
+        /// </summary>
+        private void DgvAlgorithems_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+
+            // Update parameter summary when metric changes
+            if (e.ColumnIndex == _dgvAlgorithems.Columns["colMetric"].Index)
+            {
+                UpdateParameterSummary(e.RowIndex);
+            }
+        }
+
+        /// <summary>
+        /// Handles current cell dirty state changed (for checkboxes)
+        /// </summary>
+        private void DgvAlgorithems_CurrentCellDirtyStateChanged(object sender, EventArgs e)
+        {
+            if (_dgvAlgorithems.IsCurrentCellDirty && _dgvAlgorithems.CurrentCell.ColumnIndex == 0)
+            {
+                _dgvAlgorithems.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        }
+
+        /// <summary>
+        /// التعامل مع ضغط أزرار لوحة المفاتيح على الـ DataGridView
+        /// </summary>
+        private void DgvAlgorithems_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Delete && _dgvAlgorithems.SelectedRows.Count > 0)
+            {
+                // الحصول على الصف المحدد
+                var selectedRow = _dgvAlgorithems.SelectedRows[0];
+                int rowIndex = selectedRow.Index;
+
+                // التأكد من أن الخوارزمية المحددة ليست آخر خوارزمية مفعلة (اختياري)
+                string algorithm = selectedRow.Cells["colAlgorithm"].Value?.ToString();
+
+                if (string.IsNullOrEmpty(algorithm)) return;
+
+                // طلب تأكيد الحذف
+                var result = MessageBox.Show($"Delete '{algorithm}' from the list?", "Confirm Delete",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    _dgvAlgorithems.Rows.RemoveAt(rowIndex);
+                    System.Diagnostics.Debug.WriteLine($"[Delete] Removed {algorithm} from grid");
+
+                    // منع الحدث من الاستمرار
+                    e.Handled = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates parameter summary for a row
+        /// </summary>
+        private void UpdateParameterSummary(int rowIndex)
+        {
+            var row = _dgvAlgorithems.Rows[rowIndex];
+            string algorithm = row.Cells["colAlgorithm"].Value?.ToString();
+            var parameters = row.Tag as Dictionary<string, object>;
+
+            if (parameters != null)
+            {
+                string summary = GetParameterSummary(algorithm, parameters);
+                row.Cells["colParameters"].Value = summary;
+            }
+        }
+
+        /// <summary>
+        /// Gets parameter summary for display
+        /// </summary>
+        private string GetParameterSummary(string algorithm, Dictionary<string, object> parameters)
+        {
+            if (parameters == null) return "";
+
+            var displayParams = new List<string>();
+
+            switch (algorithm)
+            {
+                case "AStar":
+                    if (parameters.ContainsKey("HeuristicWeight"))
+                        displayParams.Add($"h={parameters["HeuristicWeight"]}");
+                    if (parameters.ContainsKey("SearchLimit"))
+                        displayParams.Add($"Limit={parameters["SearchLimit"]}");
+                    break;
+
+                case "SPPA":
+                    if (parameters.ContainsKey("Lambda"))
+                        displayParams.Add($"λ={parameters["Lambda"]}");
+                    if (parameters.ContainsKey("HeuristicWeight"))
+                        displayParams.Add($"h={parameters["HeuristicWeight"]}");
+                    break;
+
+                case "SPPA_DL":
+                    if (parameters.ContainsKey("Lambda"))
+                        displayParams.Add($"λ={parameters["Lambda"]}");
+                    if (parameters.ContainsKey("LearningRate"))
+                        displayParams.Add($"α={parameters["LearningRate"]}");
+                    break;
+
+                case "ACO":
+                    if (parameters.ContainsKey("Ants"))
+                        displayParams.Add($"Ants={parameters["Ants"]}");
+                    if (parameters.ContainsKey("Iterations"))
+                        displayParams.Add($"Iter={parameters["Iterations"]}");
+                    break;
+
+                case "RRT":
+                    if (parameters.ContainsKey("Iterations"))
+                        displayParams.Add($"Iter={parameters["Iterations"]}");
+                    if (parameters.ContainsKey("StepSize"))
+                        displayParams.Add($"Step={parameters["StepSize"]}");
+                    break;
+
+                default:
+                    foreach (var kvp in parameters.Take(2))
+                        displayParams.Add($"{kvp.Key}={kvp.Value}");
+                    break;
+            }
+
+            return string.Join(", ", displayParams);
+        }
+
+        /// <summary>
+        /// Edits algorithm parameters
+        /// </summary>
+        private void EditAlgorithmParameters(int rowIndex)
+        {
+            var row = _dgvAlgorithems.Rows[rowIndex];
+            string algorithm = row.Cells["colAlgorithm"].Value?.ToString();
+            var currentParams = row.Tag as Dictionary<string, object>;
+
+            if (string.IsNullOrEmpty(algorithm)) return;
+
+            // عمل نسخة من البارامترات الحالية
+            var paramsCopy = currentParams != null
+                ? new Dictionary<string, object>(currentParams)
+                : new Dictionary<string, object>();
+
+            using (var settingsForm = new frmAlgorithmSettings.frmAlgorithmSettings(algorithm, paramsCopy))
+            {
+                if (settingsForm.ShowDialog() == DialogResult.OK && settingsForm.ChangesApplied)
+                {
+                    // الحصول على القيم المعدلة
+                    var newParams = settingsForm.ModifiedValues;
+
+                    if (newParams != null && newParams.Count > 0)
+                    {
+                        if (row.Tag == null)
+                            row.Tag = new Dictionary<string, object>();
+
+                        var paramsDict = row.Tag as Dictionary<string, object>;
+                        foreach (var kvp in newParams)
+                        {
+                            paramsDict[kvp.Key] = kvp.Value;
+                            System.Diagnostics.Debug.WriteLine($"[AlgorithmGrid] Updated {kvp.Key} = {kvp.Value}");
+                        }
+
+                        // تحديث الملخص
+                        string summary = GetParameterSummary(algorithm, paramsDict);
+                        row.Cells["colParameters"].Value = summary;
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// Gets selected algorithms with their parameters for experiment
+        /// </summary>
+        private List<(string algorithm, string metric, Dictionary<string, object> parameters)> GetSelectedAlgorithmsWithParams()
+        {
+            var result = new List<(string, string, Dictionary<string, object>)>();
+
+            foreach (DataGridViewRow row in _dgvAlgorithems.Rows)
+            {
+                bool isEnabled = row.Cells["colEnabled"].Value != null && (bool)row.Cells["colEnabled"].Value;
+
+                if (isEnabled)
+                {
+                    string algorithm = row.Cells["colAlgorithm"].Value?.ToString();
+                    string metric = row.Cells["colMetric"].Value?.ToString();
+                    var parameters = row.Tag as Dictionary<string, object>;
+
+                    if (!string.IsNullOrEmpty(algorithm) && !string.IsNullOrEmpty(metric))
+                    {
+                        result.Add((algorithm, metric, parameters ?? new Dictionary<string, object>()));
+                    }
+                }
+            }
+
+            return result;
+        }
+
+      //  private bool _algorithmConfigChanged = false;
+
+        #endregion
+        /// <summary>
+        /// Gets parameters for a specific algorithm from the DataGridView
+        /// </summary>
+        private Dictionary<string, object> GetParametersForAlgorithmFromGrid(string algorithmName, string metric)
+        {
+            foreach (DataGridViewRow row in _dgvAlgorithems.Rows)
+            {
+                string alg = row.Cells["colAlgorithm"].Value?.ToString();
+                string met = row.Cells["colMetric"].Value?.ToString();
+
+                if (alg == algorithmName && met == metric)
+                {
+                    return row.Tag as Dictionary<string, object> ?? new Dictionary<string, object>();
+                }
+            }
+            return new Dictionary<string, object>();
         }
     }
 }

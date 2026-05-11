@@ -170,5 +170,57 @@ namespace SallamPathFinder4.WinForms.Models
                    $"OrderedByDistance: {(OrderedByDistance ? "Yes" : "No")}";
         }
         #endregion
+        // أضف هذه الخصائص إلى كلاس ExperimentResultItem الموجود في Models
+
+        /// <summary>
+        /// هل تم استخدام الشحن الديناميكي
+        /// </summary>
+        public bool UsedDynamicCharging { get; set; }
+
+        /// <summary>
+        /// وقت الشحن بالثواني
+        /// </summary>
+        public double ChargingTimeSeconds { get; set; }
+
+        /// <summary>
+        /// نسبة هامش الأمان للبطارية
+        /// </summary>
+        public double SafetyMarginPercent { get; set; }  
+
+        /// <summary>
+        /// هل يوجد أخطاء في المسار
+        /// </summary>
+        public bool HasPathErrors { get; set; }
+
+        /// <summary>
+        /// سبب الفشل (إن وجد)
+        /// </summary>
+        public string FailureReason { get; set; }
+
+  
+        /// <summary>
+        /// السرعة المتوسطة (م/ث)
+        /// </summary>
+        public double AverageSpeedMs { get; set; }
+
+        /// <summary>
+        /// المسافة الكلية بالأمتار
+        /// </summary>
+        public double TotalDistanceMeters { get; set; }
+
+        /// <summary>
+        /// نقاط المسار
+        /// </summary>
+        public List<Point> PathNodes { get; set; }
+
+        /// <summary>
+        /// نقطة البداية
+        /// </summary>
+        public Point StartPoint { get; set; }
+
+        /// <summary>
+        /// نقطة النهاية
+        /// </summary>
+        public Point EndPoint { get; set; }
     }
 }

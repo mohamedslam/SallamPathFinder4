@@ -19,6 +19,7 @@ using SallamPathFinder4.WinForms.ViewModels;
 using SallamPathFinder4.Core.Models.Experiments;
 using System.Text.Json;
 using static SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.frmExperimentDesigner;
+using SallamPathFinder4.Core.Algorithms.Implementations;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Core
@@ -36,38 +37,46 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         {
             var algorithms = new List<string>();
 
-            var chkAStar = form.Controls.Find("_chkAStar", true).FirstOrDefault() as CheckBox;
-            var chkSPPA = form.Controls.Find("_chkSPPA", true).FirstOrDefault() as CheckBox;
-            var chkSPPA_DL = form.Controls.Find("_chkSPPA_DL", true).FirstOrDefault() as CheckBox;
-            var chkACO = form.Controls.Find("_chkACO", true).FirstOrDefault() as CheckBox;
-            var chkDStar = form.Controls.Find("_chkDStar", true).FirstOrDefault() as CheckBox;
-            var chkKNN = form.Controls.Find("_chkKNN", true).FirstOrDefault() as CheckBox;
-            var chkBruteForce = form.Controls.Find("_chkBruteForce", true).FirstOrDefault() as CheckBox;
-            var chkRRT = form.Controls.Find("_chkRRT", true).FirstOrDefault() as CheckBox;  // NEW
+            // البحث عن DataGridView في النموذج
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
 
-
-            if (chkAStar?.Checked == true) algorithms.Add("AStar");
-            if (chkSPPA?.Checked == true) algorithms.Add("SPPA");
-            if (chkSPPA_DL?.Checked == true) algorithms.Add("SPPA_DL");
-            if (chkACO?.Checked == true) algorithms.Add("ACO");
-            if (chkDStar?.Checked == true) algorithms.Add("DStar");
-            if (chkKNN?.Checked == true) algorithms.Add("KNN");
-            if (chkBruteForce?.Checked == true) algorithms.Add("BruteForce");
-            if (chkRRT?.Checked == true) algorithms.Add("RRT");  // NEW
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    // التحقق من وجود الصف وقيمة Enabled
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        string algorithm = row.Cells["colAlgorithm"]?.Value?.ToString();
+                        if (!string.IsNullOrEmpty(algorithm))
+                        {
+                            algorithms.Add(algorithm);
+                        }
+                    }
+                }
+            }
 
             return algorithms;
         }
-
         public List<string> GetSelectedMetrics(Form form)
         {
             var metrics = new List<string>();
-            var clb = form.Controls.Find("_clbDistanceMetrics", true).FirstOrDefault() as CheckedListBox;
 
-            if (clb != null)
+            // البحث عن DataGridView في النموذج
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+
+            if (dgv != null)
             {
-                foreach (var item in clb.CheckedItems)
+                foreach (DataGridViewRow row in dgv.Rows)
                 {
-                    metrics.Add(item.ToString());
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        string metric = row.Cells["colMetric"]?.Value?.ToString();
+                        if (!string.IsNullOrEmpty(metric) && !metrics.Contains(metric))
+                        {
+                            metrics.Add(metric);
+                        }
+                    }
                 }
             }
 
@@ -75,19 +84,87 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             return metrics;
         }
         #endregion
+        /// <summary>
+        /// Gets selected algorithms with their metrics and parameters from DataGridView
+        /// </summary>
+        public List<(string algorithm, string metric, Dictionary<string, object> parameters)> GetSelectedAlgorithmsWithParams(Form form)
+        {
+            var result = new List<(string, string, Dictionary<string, object>)>();
 
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        string algorithm = row.Cells["colAlgorithm"]?.Value?.ToString();
+                        string metric = row.Cells["colMetric"]?.Value?.ToString();
+                        var parameters = row.Tag as Dictionary<string, object>;
+
+                        if (!string.IsNullOrEmpty(algorithm) && !string.IsNullOrEmpty(metric))
+                        {
+                            result.Add((algorithm, metric, parameters ?? new Dictionary<string, object>()));
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Gets the metric for a specific algorithm from DataGridView
+        /// </summary>
+        public string GetMetricForAlgorithm(Form form, string algorithmName)
+        {
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    string algorithm = row.Cells["colAlgorithm"]?.Value?.ToString();
+                    if (algorithm == algorithmName)
+                    {
+                        return row.Cells["colMetric"]?.Value?.ToString() ?? "Manhattan";
+                    }
+                }
+            }
+
+            return "Manhattan";
+        }
+
+        /// <summary>
+        /// Gets parameters for a specific algorithm from DataGridView
+        /// </summary>
+        public Dictionary<string, object> GetParametersForAlgorithm(Form form, string algorithmName)
+        {
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    string algorithm = row.Cells["colAlgorithm"]?.Value?.ToString();
+                    if (algorithm == algorithmName)
+                    {
+                        return row.Tag as Dictionary<string, object> ?? new Dictionary<string, object>();
+                    }
+                }
+            }
+
+            return new Dictionary<string, object>();
+        }
         #region Settings Management
-        public SallamPathFinder4.Core.Models.Experiments.ExperimentSettings GetCurrentSettings(Form form)
+        public  ExperimentSettings GetCurrentSettings(Form form)
         {
             var nudGoalCount = form.Controls.Find("_nudGoalCount", true).FirstOrDefault() as NumericUpDown;
             var nudParkingCount = form.Controls.Find("_nudParkingCount", true).FirstOrDefault() as NumericUpDown;
             var nudStaticObstacles = form.Controls.Find("_nudStaticObstacles", true).FirstOrDefault() as NumericUpDown;
             var nudDynamicObstacles = form.Controls.Find("_nudDynamicObstacles", true).FirstOrDefault() as NumericUpDown;
-            var nudHeuristicWeight = form.Controls.Find("_nudHeuristicWeight", true).FirstOrDefault() as NumericUpDown;
-            var nudSearchLimit = form.Controls.Find("_nudSearchLimit", true).FirstOrDefault() as NumericUpDown;
             var nudIterations = form.Controls.Find("_nudIterations", true).FirstOrDefault() as NumericUpDown;
-            var chkAllowDiagonals = form.Controls.Find("_chkAllowDiagonals", true).FirstOrDefault() as CheckBox;
-            var chkHeavyDiagonals = form.Controls.Find("_chkHeavyDiagonals", true).FirstOrDefault() as CheckBox;
             var chkSaveScreenshots = form.Controls.Find("_chkSaveScreenshots", true).FirstOrDefault() as CheckBox;
             var chkSaveReplay = form.Controls.Find("_chkSaveReplay", true).FirstOrDefault() as CheckBox;
             var chkShowPath = form.Controls.Find("_chkShowPathOnScreenshots", true).FirstOrDefault() as CheckBox;
@@ -97,19 +174,48 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             var (useCustomStartPoint, customStartPoint) = GetStartPointSettings(form);
             bool orderGoalsByDistance = GetOrderGoalsByDistance(form);
 
+            // الحصول على الإعدادات من الـ DataGridView
+            var selectedAlgorithms = GetSelectedAlgorithms(form);
+            var selectedMetrics = GetSelectedMetrics(form);
+            var distanceMetric = selectedMetrics.FirstOrDefault() ?? "Manhattan";
+
+            // الحصول على إعدادات HeuristicWeight و SearchLimit من أول خوارزمية مفعلة
+            int heuristicWeight = 2;
+            int searchLimit = 20000;
+
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        var parameters = row.Tag as Dictionary<string, object>;
+                        if (parameters != null)
+                        {
+                            if (parameters.ContainsKey("HeuristicWeight"))
+                                heuristicWeight = Convert.ToInt32(parameters["HeuristicWeight"]);
+                            if (parameters.ContainsKey("SearchLimit"))
+                                searchLimit = Convert.ToInt32(parameters["SearchLimit"]);
+                        }
+                        break; // خذ أول خوارزمية مفعلة
+                    }
+                }
+            }
+
             return new SallamPathFinder4.Core.Models.Experiments.ExperimentSettings
             {
                 ExperimentName = txtExperimentName?.Text ?? "Experiment",
-                SelectedAlgorithms = GetSelectedAlgorithms(form),
-                SelectedMetrics = GetSelectedMetrics(form),
+                SelectedAlgorithms = selectedAlgorithms,
+                SelectedMetrics = selectedMetrics,
                 GoalCount = (int)(nudGoalCount?.Value ?? 5),
                 ParkingCount = (int)(nudParkingCount?.Value ?? 2),
                 StaticObstacles = (int)(nudStaticObstacles?.Value ?? 20),
                 DynamicObstacles = (int)(nudDynamicObstacles?.Value ?? 5),
-                HeuristicWeight = (int)(nudHeuristicWeight?.Value ?? 2),
-                SearchLimit = (int)(nudSearchLimit?.Value ?? 20000),
-                AllowDiagonals = chkAllowDiagonals?.Checked == true,
-                HeavyDiagonals = chkHeavyDiagonals?.Checked == true,
+                HeuristicWeight = heuristicWeight,
+                SearchLimit = searchLimit,
+                AllowDiagonals = true,  // Default value
+                HeavyDiagonals = false,  // Default value
                 Iterations = (int)(nudIterations?.Value ?? 5),
                 SaveScreenshots = chkSaveScreenshots?.Checked == true,
                 SaveReplay = chkSaveReplay?.Checked == true,
@@ -121,7 +227,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 UseCustomStartPoint = useCustomStartPoint,
                 CustomStartPoint = customStartPoint,
                 OrderGoalsByDistance = orderGoalsByDistance,
-                DistanceMetric = GetSelectedDistanceMetric(form)
+                DistanceMetric = distanceMetric
             };
         }
 
@@ -132,44 +238,61 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             var nudParkingCount = form.Controls.Find("_nudParkingCount", true).FirstOrDefault() as NumericUpDown;
             var nudStaticObstacles = form.Controls.Find("_nudStaticObstacles", true).FirstOrDefault() as NumericUpDown;
             var nudDynamicObstacles = form.Controls.Find("_nudDynamicObstacles", true).FirstOrDefault() as NumericUpDown;
-            var nudHeuristicWeight = form.Controls.Find("_nudHeuristicWeight", true).FirstOrDefault() as NumericUpDown;
-            var nudSearchLimit = form.Controls.Find("_nudSearchLimit", true).FirstOrDefault() as NumericUpDown;
             var nudIterations = form.Controls.Find("_nudIterations", true).FirstOrDefault() as NumericUpDown;
-            var chkAllowDiagonals = form.Controls.Find("_chkAllowDiagonals", true).FirstOrDefault() as CheckBox;
-            var chkHeavyDiagonals = form.Controls.Find("_chkHeavyDiagonals", true).FirstOrDefault() as CheckBox;
             var chkSaveScreenshots = form.Controls.Find("_chkSaveScreenshots", true).FirstOrDefault() as CheckBox;
             var chkSaveReplay = form.Controls.Find("_chkSaveReplay", true).FirstOrDefault() as CheckBox;
             var chkShowPath = form.Controls.Find("_chkShowPathOnScreenshots", true).FirstOrDefault() as CheckBox;
             var txtSavePath = form.Controls.Find("_txtSavePath", true).FirstOrDefault() as TextBox;
-            var clbMetrics = form.Controls.Find("_clbDistanceMetrics", true).FirstOrDefault() as CheckedListBox;
 
             if (txtExperimentName != null) txtExperimentName.Text = settings.ExperimentName;
             if (nudGoalCount != null) nudGoalCount.Value = Math.Clamp(settings.GoalCount, 1, 50);
             if (nudParkingCount != null) nudParkingCount.Value = Math.Clamp(settings.ParkingCount, 1, 10);
             if (nudStaticObstacles != null) nudStaticObstacles.Value = Math.Clamp(settings.StaticObstacles, 0, 500);
             if (nudDynamicObstacles != null) nudDynamicObstacles.Value = Math.Clamp(settings.DynamicObstacles, 0, 50);
-            if (nudHeuristicWeight != null) nudHeuristicWeight.Value = Math.Clamp(settings.HeuristicWeight, 1, 10);
-            if (nudSearchLimit != null) nudSearchLimit.Value = Math.Clamp(settings.SearchLimit, 1000, 100000);
             if (nudIterations != null) nudIterations.Value = Math.Clamp(settings.Iterations, 1, 100);
-            if (chkAllowDiagonals != null) chkAllowDiagonals.Checked = settings.AllowDiagonals;
-            if (chkHeavyDiagonals != null) chkHeavyDiagonals.Checked = settings.HeavyDiagonals;
             if (chkSaveScreenshots != null) chkSaveScreenshots.Checked = settings.SaveScreenshots;
             if (chkSaveReplay != null) chkSaveReplay.Checked = settings.SaveReplay;
             if (chkShowPath != null) chkShowPath.Checked = settings.ShowPathOnScreenshots;
             if (txtSavePath != null && !string.IsNullOrEmpty(settings.SavePath)) txtSavePath.Text = settings.SavePath;
 
-            if (clbMetrics != null && settings.SelectedMetrics != null)
-            {
-                for (int i = 0; i < clbMetrics.Items.Count; i++)
-                {
-                    string item = clbMetrics.Items[i].ToString();
-                    clbMetrics.SetItemChecked(i, settings.SelectedMetrics.Contains(item));
-                }
-            }
-            ApplyDynamicChargingSettings(form, settings.EnableDynamicCharging,settings.ChargingTimeSeconds, settings.SafetyMarginPercent);
+            // تطبيق إعدادات الخوارزميات على الـ DataGridView
+            ApplyAlgorithmsToGrid(form, settings);
+
+            ApplyDynamicChargingSettings(form, settings.EnableDynamicCharging, settings.ChargingTimeSeconds, settings.SafetyMarginPercent);
             ApplyStartPointSettings(form, settings.UseCustomStartPoint, settings.CustomStartPoint);
             ApplyOrderGoalsByDistance(form, settings.OrderGoalsByDistance);
-            ApplyDistanceMetric(form, settings.DistanceMetric);
+        }
+
+        private void ApplyAlgorithmsToGrid(Form form, ExperimentSettings settings)
+        {
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv == null) return;
+
+            // إلغاء تحديد جميع الخوارزميات أولاً
+            foreach (DataGridViewRow row in dgv.Rows)
+            {
+                row.Cells["colEnabled"].Value = false;
+            }
+
+            // تفعيل الخوارزميات المحددة في الإعدادات
+            foreach (string algorithm in settings.SelectedAlgorithms)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    string alg = row.Cells["colAlgorithm"].Value?.ToString();
+                    if (alg == algorithm)
+                    {
+                        row.Cells["colEnabled"].Value = true;
+
+                        // تعيين الميترك إذا كان موجوداً
+                        if (settings.SelectedMetrics != null && settings.SelectedMetrics.Count > 0)
+                        {
+                            row.Cells["colMetric"].Value = settings.SelectedMetrics[0];
+                        }
+                        break;
+                    }
+                }
+            }
         }
 
         public void SaveSettingsToFile(SallamPathFinder4.Core.Models.Experiments.ExperimentSettings settings, string filePath)
@@ -260,32 +383,163 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         #endregion
 
         #region Pathfinding
-        public IPathFinder CreateAlgorithmFinder(MapGrid grid, string algorithm, MLSettings mlSettings)
+        public IPathFinder CreateAlgorithmFinder(MapGrid grid, string algorithm, MLSettings mlSettings, Dictionary<string, object> parameters = null)
         {
             var factory = new AlgorithmFactory(grid);
             var algoType = ExperimentSharedLogic.GetAlgorithmType(algorithm);
 
+            IPathFinder finder = null;
+
             if (algoType == AlgorithmType.SPPA_DL)
             {
-                return factory.Create(algoType, mlSettings.UseNeuralNetwork,
+                finder = factory.Create(algoType, mlSettings.UseNeuralNetwork,
                     mlSettings.CollectTrainingData, mlSettings.LearningRate);
+
+                // تطبيق البارامترات إذا وجدت
+                if (finder is SPPA_DLFinder sppaDLFinder && parameters != null)
+                {
+                    ApplyParametersToSPPA_DL(sppaDLFinder, parameters);
+                }
+            }
+            else if (algoType == AlgorithmType.SPPA)
+            {
+                finder = factory.Create(algoType);
+
+                if (finder is SPPAFinder sppaFinder && parameters != null)
+                {
+                    ApplyParametersToSPPA(sppaFinder, parameters);
+                }
+            }
+            else if (algoType == AlgorithmType.AStar)
+            {
+                finder = factory.Create(algoType);
+
+                if (finder is AStarFinder aStarFinder && parameters != null)
+                {
+                    ApplyParametersToAStar(aStarFinder, parameters);
+                }
+            }
+            else if (algoType == AlgorithmType.ACO)
+            {
+                finder = factory.Create(algoType);
+
+                if (finder is ACOFinder acoFinder && parameters != null)
+                {
+                    ApplyParametersToACO(acoFinder, parameters);
+                }
+            }
+            else
+            {
+                finder = factory.Create(algoType);
             }
 
-            return factory.Create(algoType);
+            return finder;
         }
+
+        #region Apply Parameters Methods
+
+        private void ApplyParametersToAStar(AStarFinder finder, Dictionary<string, object> parameters)
+        {
+            if (parameters.ContainsKey("HeuristicWeight"))
+                finder.HeuristicWeight = Convert.ToInt32(parameters["HeuristicWeight"]);
+            if (parameters.ContainsKey("SearchLimit"))
+                finder.SearchLimit = Convert.ToInt32(parameters["SearchLimit"]);
+            if (parameters.ContainsKey("AllowDiagonals"))
+                finder.AllowDiagonals = Convert.ToBoolean(parameters["AllowDiagonals"]);
+            if (parameters.ContainsKey("HeavyDiagonals"))
+                finder.HeavyDiagonals = Convert.ToBoolean(parameters["HeavyDiagonals"]);
+         }
+
+        private void ApplyParametersToSPPA(SPPAFinder finder, Dictionary<string, object> parameters)
+        {
+            if (parameters.ContainsKey("HeuristicWeight"))
+                finder.HeuristicWeight = Convert.ToInt32(parameters["HeuristicWeight"]);
+            if (parameters.ContainsKey("SearchLimit"))
+                finder.SearchLimit = Convert.ToInt32(parameters["SearchLimit"]);
+            if (parameters.ContainsKey("AllowDiagonals"))
+                finder.AllowDiagonals = Convert.ToBoolean(parameters["AllowDiagonals"]);
+            if (parameters.ContainsKey("HeavyDiagonals"))
+                finder.HeavyDiagonals = Convert.ToBoolean(parameters["HeavyDiagonals"]);
+            if (parameters.ContainsKey("Lambda"))
+                finder.Lambda = Convert.ToDouble(parameters["Lambda"]);
+            if (parameters.ContainsKey("AlphaS"))
+                finder.AlphaS = Convert.ToDouble(parameters["AlphaS"]);
+            if (parameters.ContainsKey("AlphaSS"))
+                finder.AlphaSS = Convert.ToDouble(parameters["AlphaSS"]);
+            if (parameters.ContainsKey("AlphaD"))
+                finder.AlphaD = Convert.ToDouble(parameters["AlphaD"]);
+
+            System.Diagnostics.Debug.WriteLine($"[SPPA] Applied params: h={finder.HeuristicWeight}, λ={finder.Lambda}");
+        }
+
+        private void ApplyParametersToSPPA_DL(SPPA_DLFinder finder, Dictionary<string, object> parameters)
+        {
+            if (parameters.ContainsKey("HeuristicWeight"))
+                finder.HeuristicWeight = Convert.ToInt32(parameters["HeuristicWeight"]);
+            if (parameters.ContainsKey("SearchLimit"))
+                finder.SearchLimit = Convert.ToInt32(parameters["SearchLimit"]);
+            if (parameters.ContainsKey("AllowDiagonals"))
+                finder.AllowDiagonals = Convert.ToBoolean(parameters["AllowDiagonals"]);
+            if (parameters.ContainsKey("HeavyDiagonals"))
+                finder.HeavyDiagonals = Convert.ToBoolean(parameters["HeavyDiagonals"]);
+            if (parameters.ContainsKey("Lambda"))
+                finder.Lambda = Convert.ToDouble(parameters["Lambda"]);
+            if (parameters.ContainsKey("LearningRate"))
+                finder.LearningRate = Convert.ToDouble(parameters["LearningRate"]);
+            if (parameters.ContainsKey("PredictionWeight"))
+                finder.PredictionWeight = Convert.ToDouble(parameters["PredictionWeight"]);
+            if (parameters.ContainsKey("AlphaS"))
+                finder.AlphaS = Convert.ToDouble(parameters["AlphaS"]);
+            if (parameters.ContainsKey("AlphaSS"))
+                finder.AlphaSS = Convert.ToDouble(parameters["AlphaSS"]);
+            if (parameters.ContainsKey("AlphaD"))
+                finder.AlphaD = Convert.ToDouble(parameters["AlphaD"]);
+
+            System.Diagnostics.Debug.WriteLine($"[SPPA-DL] Applied params: h={finder.HeuristicWeight}, λ={finder.Lambda}, α={finder.LearningRate}, β={finder.PredictionWeight}");
+        }
+
+        private void ApplyParametersToACO(ACOFinder finder, Dictionary<string, object> parameters)
+        {
+            int ants = parameters.ContainsKey("Ants") ? Convert.ToInt32(parameters["Ants"]) : 20;
+            int iterations = parameters.ContainsKey("Iterations") ? Convert.ToInt32(parameters["Iterations"]) : 100;
+            double alpha = parameters.ContainsKey("Alpha") ? Convert.ToDouble(parameters["Alpha"]) : 1.0;
+            double beta = parameters.ContainsKey("Beta") ? Convert.ToDouble(parameters["Beta"]) : 2.0;
+            double evaporation = parameters.ContainsKey("EvaporationRate") ? Convert.ToDouble(parameters["EvaporationRate"]) : 0.1;
+
+            finder.SetParameters(ants, evaporation, alpha, beta, iterations);
+
+            if (parameters.ContainsKey("AllowDiagonals"))
+                finder.AllowDiagonals = Convert.ToBoolean(parameters["AllowDiagonals"]);
+
+            System.Diagnostics.Debug.WriteLine($"[ACO] Applied params: Ants={ants}, Iter={iterations}, α={alpha}, β={beta}");
+        }
+
+        #endregion
 
         public void ConfigureFinder(IPathFinder finder, string metric, Form form)
         {
+            // فقط قم بتعيين الإعدادات الأساسية التي لا تتعارض مع بارامترات المستخدم
+            finder.Metric = ExperimentSharedLogic.GetDistanceMetric(metric);
+
+            // هذه القيم قد تكون تم تعيينها بالفعل من البارامترات
+            // لذا نتحقق أولاً إذا كانت القيم الافتراضية فقط هي التي تم تعيينها
             var chkAllowDiagonals = form.Controls.Find("_chkAllowDiagonals", true).FirstOrDefault() as CheckBox;
             var chkHeavyDiagonals = form.Controls.Find("_chkHeavyDiagonals", true).FirstOrDefault() as CheckBox;
             var nudHeuristicWeight = form.Controls.Find("_nudHeuristicWeight", true).FirstOrDefault() as NumericUpDown;
             var nudSearchLimit = form.Controls.Find("_nudSearchLimit", true).FirstOrDefault() as NumericUpDown;
-             
-            finder.Metric = ExperimentSharedLogic.GetDistanceMetric(metric);
-            finder.AllowDiagonals = chkAllowDiagonals?.Checked == true;
-            finder.HeavyDiagonals = chkHeavyDiagonals?.Checked == true;
-            finder.HeuristicWeight = nudHeuristicWeight != null ? (int)nudHeuristicWeight.Value : 2;
-            finder.SearchLimit = nudSearchLimit != null ? (int)nudSearchLimit.Value : 20000;
+
+            // فقط إذا كانت القيم لم تُعيين بعد (قيم افتراضية)
+            if (finder.AllowDiagonals == false && finder.AllowDiagonals != (chkAllowDiagonals?.Checked == true))
+                finder.AllowDiagonals = chkAllowDiagonals?.Checked == true;
+
+            if (finder.HeavyDiagonals == false && finder.HeavyDiagonals != (chkHeavyDiagonals?.Checked == true))
+                finder.HeavyDiagonals = chkHeavyDiagonals?.Checked == true;
+
+            if (finder.HeuristicWeight == 2 && nudHeuristicWeight != null && finder.HeuristicWeight != (int)nudHeuristicWeight.Value)
+                finder.HeuristicWeight = nudHeuristicWeight != null ? (int)nudHeuristicWeight.Value : 2;
+
+            if (finder.SearchLimit == 20000 && nudSearchLimit != null && finder.SearchLimit != (int)nudSearchLimit.Value)
+                finder.SearchLimit = nudSearchLimit != null ? (int)nudSearchLimit.Value : 20000;
         }
 
         public async Task<SequentialPathResult> FindSequentialPath(IPathFinder finder, Point start, List<Point> goals)
@@ -387,7 +641,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         }
 
         public ComparisonResult CreateEmptyResult(string algorithm, string metric, int iteration,
-            RobotSettings robotSettings, Form form)
+       RobotSettings robotSettings, Form form)
         {
             var nudGoalCount = form.Controls.Find("_nudGoalCount", true).FirstOrDefault() as NumericUpDown;
             var nudParkingCount = form.Controls.Find("_nudParkingCount", true).FirstOrDefault() as NumericUpDown;
@@ -398,6 +652,31 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             int parkingCount = nudParkingCount != null ? (int)nudParkingCount.Value : 2;
             int staticObstacles = nudStaticObstacles != null ? (int)nudStaticObstacles.Value : 20;
             int dynamicObstacles = nudDynamicObstacles != null ? (int)nudDynamicObstacles.Value : 5;
+
+            // الحصول على HeuristicWeight و SearchLimit من البارامترات إذا أمكن
+            int heuristicWeight = 2;
+            int searchLimit = 20000;
+
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    string alg = row.Cells["colAlgorithm"].Value?.ToString();
+                    if (alg == algorithm)
+                    {
+                        var parameters = row.Tag as Dictionary<string, object>;
+                        if (parameters != null)
+                        {
+                            if (parameters.ContainsKey("HeuristicWeight"))
+                                heuristicWeight = Convert.ToInt32(parameters["HeuristicWeight"]);
+                            if (parameters.ContainsKey("SearchLimit"))
+                                searchLimit = Convert.ToInt32(parameters["SearchLimit"]);
+                        }
+                        break;
+                    }
+                }
+            }
 
             return new ComparisonResult
             {
@@ -414,7 +693,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 RemainingBattery = robotSettings.InitialBatteryLevel,
                 AverageActualSpeed = robotSettings.InitialSpeedCmS,
                 CollisionCount = 0,
-                InvalidMoveCount = 0
+                InvalidMoveCount = 0,
+                HeuristicWeight = heuristicWeight,
+                SearchLimit = searchLimit
             };
         }
         #endregion

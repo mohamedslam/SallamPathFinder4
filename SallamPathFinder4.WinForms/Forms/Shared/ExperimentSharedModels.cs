@@ -38,6 +38,8 @@ namespace SallamPathFinder4.WinForms.Forms.Shared
         public string Algorithm { get; set; }
         public string Metric { get; set; }
         public int Iteration { get; set; }
+        public int HeuristicWeight { get; set; }
+        public int SearchLimit { get; set; }
         public bool Success { get; set; }
         public string FailureReason { get; set; }
         public string ErrorMessage { get; set; }
@@ -140,5 +142,6 @@ namespace SallamPathFinder4.WinForms.Forms.Shared
                    $"Battery={FinalBatteryPercent:F1}%, ChargingUnits={TotalChargingUnits:F2}";
         }
         #endregion
+
     }
 }
