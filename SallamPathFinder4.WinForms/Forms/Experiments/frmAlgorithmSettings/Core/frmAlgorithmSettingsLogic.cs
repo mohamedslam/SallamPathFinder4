@@ -48,6 +48,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmAlgorithmSettings
         public string AlgorithmFormula => AlgorithmParametersRegistry.GetAlgorithmFormula(_algorithmName);
         public string AlgorithmDescription => AlgorithmParametersRegistry.GetAlgorithmDescription(_algorithmName);
         public string AlgorithmDisplayName => GetDisplayName();
+        public string ModifiedMetric { get; private set; } = null;
+
         #endregion
 
         #region Public Methods - Parameter Management

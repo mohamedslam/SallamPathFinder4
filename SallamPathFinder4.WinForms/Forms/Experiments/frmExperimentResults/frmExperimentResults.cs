@@ -292,69 +292,256 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
         #region Private Methods - Display
         private void ShowFullPathDetails(ExperimentResultItem result)
         {
+            // ========== 1. التحقق من صحة البيانات ==========
+            if (result == null)
+            {
+                MessageBox.Show("No result data available.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // التحقق من وجود نقاط المسار
+            bool hasPathData = result.Path != null && result.Path.Count > 0;
+
+            // ========== 2. إنشاء النافذة ==========
             var detailsForm = new Form
             {
                 Text = $"Path Details - {result.Algorithm} - Iter {result.Iteration}",
-                Size = new Size(700, 600),
+                Size = new Size(800, 650),
                 StartPosition = FormStartPosition.CenterParent,
-                BackColor = Color.White
+                BackColor = Color.White,
+                MinimizeBox = true,
+                MaximizeBox = true
             };
 
-            var splitContainer = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterDistance = 200 };
-
-            // Info panel
-            var infoText = new TextBox
+            // ========== 3. Split Container ==========
+            var splitContainer = new SplitContainer
             {
                 Dock = DockStyle.Fill,
-                Multiline = true,
+                Orientation = Orientation.Vertical,
+                SplitterDistance = 280,
+                SplitterWidth = 3
+            };
+            splitContainer.Panel1.BackColor = Color.FromArgb(248, 249, 250);
+            splitContainer.Panel2.BackColor = Color.White;
+            // ========== 4. اللوحة اليمنى - معلومات المسار ==========
+       
+
+            var infoText = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
                 ReadOnly = true,
-                Font = new Font("Consolas", 10),
+                Font = new Font("Segoe UI", 9),
                 BackColor = Color.FromArgb(248, 249, 250),
-                Text = $"═══════════════════════════════════════════════════════════\n" +
-                       $"                    PATH DETAILS\n" +
-                       $"═══════════════════════════════════════════════════════════\n\n" +
-                       $"Algorithm:        {result.Algorithm}\n" +
-                       $"Metric:           {result.Metric}\n" +
-                       $"Iteration:        {result.Iteration}\n" +
-                       $"Success:          {(result.Success ? "✓ Yes" : "✗ No")}\n\n" +
-                       $"{new string('─', 55)}\n" +
-                       $"                    BATTERY STATISTICS\n" +
-                       $"{new string('─', 55)}\n\n" +
-                       result.GetBatteryStatsText() + "\n\n" +
-                       $"{new string('─', 55)}\n" +
-                       $"                    TIME STATISTICS\n" +
-                       $"{new string('─', 55)}\n\n" +
-                       result.GetTimeStatsText() + "\n\n" +
-                       $"{new string('─', 55)}\n" +
-                       $"                    PATH INFORMATION\n" +
-                       $"{new string('─', 55)}\n\n" +
-                       result.GetPathInfoText() + "\n\n" +
-                       $"Goal Order:       {result.GoalOrder}"
+                BorderStyle = BorderStyle.None
             };
 
-            // Path points panel
+            infoText.Text = GetFormattedResultDetails(result, hasPathData);
+            splitContainer.Panel1.Controls.Add(infoText);
+
+            // ========== 5. اللوحة اليسرى - قائمة نقاط المسار ==========
+            var pathPanel = new Panel
+            {
+                Width = 400,
+                Dock = DockStyle.Fill,
+                Padding = new Padding(10)
+            };
+
+            //// عنوان اللوحة
+            var titleLabel = new Label
+            {
+                Text = hasPathData ? $"📍 PATH POINTS ({result.Path.Count} cells)" : "⚠️ NO PATH DATA AVAILABLE",
+                Dock = DockStyle.Bottom,
+                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                Height = 35,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = hasPathData ? Color.FromArgb(46, 204, 113) : Color.FromArgb(231, 76, 60)
+            };
+            pathPanel.Controls.Add(titleLabel);
+            // قائمة نقاط المسار
             var pathList = new ListBox
             {
                 Dock = DockStyle.Fill,
                 Font = new Font("Consolas", 9),
-                IntegralHeight = false
+                IntegralHeight = true,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.White
             };
-            for (int i = 0; i < result.Path.Count; i++)
+            pathList.TopIndex= 0;
+            pathList.BringToFront();
+
+            if (hasPathData)
             {
-                var point = result.Path[i];
-                pathList.Items.Add($"{i + 1,4}. ({point.X,3}, {point.Y,3})");
+                // عرض جميع نقاط المسار مع تمييز البداية والنهاية
+                for (int i = 0; i < result.Path.Count; i++)
+                {
+                    var point = result.Path[i];
+                    string prefix;
+
+                    if (i == 0)
+                    {
+                        prefix = "🏁 START";
+                    }
+                    else if (i == result.Path.Count - 1)
+                    {
+                        prefix = "🏆 GOAL";
+                    }
+                    else
+                    {
+                        prefix = "📍 STEP";
+                    }
+
+                    string displayText = $"{prefix} {i + 1,4}: ({point.X,3}, {point.Y,3})";
+                    pathList.Items.Add(displayText);
+                  
+                }
+
+                
+                // إضافة إحصائية في نهاية القائمة
+                pathList.Items.Add("");
+                pathList.Items.Add($"📐 Total Steps: {result.Path.Count - 1}");
+
+                // حساب المسافة التقريبية (Manhattan)
+                double totalDistance = 0;
+                for (int i = 1; i < result.Path.Count; i++)
+                {
+                    var prev = result.Path[i - 1];
+                    var curr = result.Path[i];
+                    totalDistance += Math.Abs(curr.X - prev.X) + Math.Abs(curr.Y - prev.Y);
+                }
+                pathList.Items.Add($"📏 Estimated Distance: {totalDistance} cells");
+            }
+            else
+            {
+                pathList.Items.Add("╔══════════════════════════════════════════════════════════════╗");
+                pathList.Items.Add("║                         WARNING                              ║");
+                pathList.Items.Add("╠══════════════════════════════════════════════════════════════╣");
+                pathList.Items.Add("║  No path data is available for this experiment.              ║");
+                pathList.Items.Add("║                                                              ║");
+                pathList.Items.Add("║  Possible reasons:                                           ║");
+                pathList.Items.Add("║  • The experiment failed to find a valid path                ║");
+                pathList.Items.Add("║  • Path data was not recorded properly                       ║");
+                pathList.Items.Add("║  • The algorithm did not complete successfully               ║");
+                pathList.Items.Add("╚══════════════════════════════════════════════════════════════╝");
             }
 
-            var pathPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10) };
             pathPanel.Controls.Add(pathList);
-            pathPanel.Controls.Add(new Label { Text = $"📍 Path Points ({result.PathLength} cells)", Dock = DockStyle.Top, Font = new Font("Segoe UI", 10, FontStyle.Bold), Height = 30 });
-
-            splitContainer.Panel1.Controls.Add(infoText);
             splitContainer.Panel2.Controls.Add(pathPanel);
+
+            // ========== 6. إضافة الأزرار السفلية ==========
+            var buttonPanel = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 45,
+                BackColor = Color.FromArgb(240, 242, 245)
+            };
+
+            var btnClose = new Button
+            {
+                Text = "Close",
+                Location = new Point(detailsForm.Width - 85, 8),
+                Size = new Size(75, 30),
+                BackColor = Color.FromArgb(149, 165, 166),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            btnClose.Click += (s, e) => detailsForm.Close();
+
+            var btnCopyPath = new Button
+            {
+                Text = "Copy Path",
+                Location = new Point(10, 8),
+                Size = new Size(85, 30),
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Enabled = hasPathData
+            };
+            btnCopyPath.Click += (s, e) =>
+            {
+                if (hasPathData)
+                {
+                    string pathText = string.Join(Environment.NewLine,
+                        result.Path.Select((p, i) => $"{i + 1}: ({p.X}, {p.Y})"));
+                    Clipboard.SetText(pathText);
+                    MessageBox.Show("Path copied to clipboard!", "Success",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            };
+
+            buttonPanel.Controls.Add(btnClose);
+            buttonPanel.Controls.Add(btnCopyPath);
+
             detailsForm.Controls.Add(splitContainer);
+            detailsForm.Controls.Add(buttonPanel);
+
+            // ضبط موضع زر Close بعد تحميل النافذة
+            detailsForm.Shown += (s, e) =>
+            {
+                btnClose.Location = new Point(detailsForm.ClientSize.Width - 85, 8);
+                btnCopyPath.Location = new Point(10, 8);
+            };
+
+            detailsForm.Resize += (s, e) =>
+            {
+                btnClose.Location = new Point(detailsForm.ClientSize.Width - 85, 8);
+            };
+
             detailsForm.ShowDialog();
         }
 
+        /// <summary>
+        /// تنسيق معلومات النتيجة بشكل جميل
+        /// </summary>
+        private string GetFormattedResultDetails(ExperimentResultItem result, bool hasPathData)
+        {
+            return $@"═══════════════════════════════════════════════════════════════
+                    PATH DETAILS
+═══════════════════════════════════════════════════════════════
+
+┌─ BASIC INFORMATION ─────────────────────────────────────────┐
+│ Algorithm:        {result.Algorithm,-35} │
+│ Metric:           {result.Metric,-35} │
+│ Iteration:        {result.Iteration,-35} │
+│ Success:          {(result.Success ? "✓ Yes" : "✗ No"),-35} │
+│ Path Data:        {(hasPathData ? $"✓ Available ({result.Path.Count} points)" : "✗ Not available"),-35} │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+┌─ BATTERY STATISTICS ────────────────────────────────────────┐
+│ Initial Battery:    {result.InitialBatteryPercent,-30:F1}% │
+│ Final Battery:      {result.FinalBatteryPercent,-30:F1}% │
+│ Total Consumed:     {result.TotalBatteryConsumedPercent,-30:F1}% │
+│ Charging Units:     {result.TotalChargingUnits,-30:F2} │
+│ Charging Cycles:    {result.TotalChargingCycles,-30} │
+│ Charging Time:      {result.TotalChargingTimeSeconds,-30:F0} sec │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+┌─ TIME STATISTICS ───────────────────────────────────────────┐
+│ Travel Time:        {result.TotalTravelTimeSeconds,-30:F2} sec │
+│ Computation Time:   {result.ComputationTimeMs,-30:F2} ms │
+│ Total Time:         {result.TotalTimeSeconds,-30:F2} sec │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+┌─ PATH INFORMATION ──────────────────────────────────────────┐
+│ Path Length:        {result.PathLength,-30} cells │
+│ Start Point:        ({result.StartPointUsed.X},{result.StartPointUsed.Y}) │
+│ End Point:          ({result.EndPointReached.X},{result.EndPointReached.Y}) │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+Goal Order: {result.GoalOrder}
+
+═══════════════════════════════════════════════════════════════
+";
+        }
+        /// <summary>
+        /// تنسيق معلومات النتيجة بشكل جميل
+        /// </summary>
+ 
         private void LoadScreenshots()
         {
             if (_selectedResult == null) return;
@@ -457,16 +644,31 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
         #endregion
 
         #region Picture Double-Click Handlers
-        private void PicInitial_DoubleClick(object sender, EventArgs e) => ShowScreenshot(_selectedResult?.InitialScreenshotPath);
-        private void PicPath_DoubleClick(object sender, EventArgs e) => ShowScreenshot(_selectedResult?.PathScreenshotPath);
-        private void PicCompleted_DoubleClick(object sender, EventArgs e) => ShowScreenshot(_selectedResult?.CompletedScreenshotPath);
+        private void PicInitial_DoubleClick(object sender, EventArgs e) => ShowScreenshot("initial");
+        private void PicPath_DoubleClick(object sender, EventArgs e) => ShowScreenshot("path");
+        private void PicCompleted_DoubleClick(object sender, EventArgs e) => ShowScreenshot("completed");
 
-        private void ShowScreenshot(string path)
+        private void ShowScreenshot(string imageType)
         {
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                new frmScreenshotViewer.frmScreenshotViewer(_selectedResult, _resultsFolderPath).ShowDialog();
-            else
-                MessageBox.Show("No screenshot available.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (_selectedResult == null) return;
+
+            string imagePath = imageType switch
+            {
+                "initial" => _selectedResult.InitialScreenshotPath,
+                "path" => _selectedResult.PathScreenshotPath,
+                "completed" => _selectedResult.CompletedScreenshotPath,
+                _ => null
+            };
+
+            if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath))
+            {
+                MessageBox.Show($"No {imageType} screenshot available.", "Information",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var viewer = new frmScreenshotViewer.frmScreenshotViewer(_selectedResult, _resultsFolderPath, imageType);
+            viewer.ShowDialog();
         }
         #endregion
     }

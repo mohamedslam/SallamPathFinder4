@@ -25,16 +25,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmAlgorithmSettings
         private System.Windows.Forms.Label _lblTitle;
         private System.Windows.Forms.Label _lblFormulaTitle;
         private System.Windows.Forms.Label _lblDescTitle;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null))
-            {
-                components.Dispose();
-            }
-            base.Dispose(disposing);
-        }
-
+         
         private void InitializeComponent()
         {
             this._dgvParameters = new System.Windows.Forms.DataGridView();

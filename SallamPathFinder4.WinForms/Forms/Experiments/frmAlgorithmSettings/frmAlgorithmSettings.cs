@@ -314,6 +314,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmAlgorithmSettings
                     row.Cells[1].Value = newValue;
                     _logic.SetModifiedValue(param.Name, newValue);
                 }
+                
             }
         }
 
@@ -780,17 +781,16 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmAlgorithmSettings
                         parsedValue = cellValue;
                         break;
                 }
-
+               
                 if (parsedValue != null)
                     _logic.SetModifiedValue(param.Name, parsedValue);
             }
-
+            
             _logic.ApplyChanges();
             ChangesApplied = true;
             this.DialogResult = DialogResult.OK;
             this.Close();
         }
-
         private void BtnCancel_Click(object sender, EventArgs e)
         {
             ChangesApplied = false;

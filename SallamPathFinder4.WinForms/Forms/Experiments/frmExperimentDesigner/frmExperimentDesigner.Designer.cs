@@ -1,13 +1,9 @@
 ﻿#region File Header
- 
-
-using SallamPathFinder4.Core.Models.Algorithms;
-
 /// <summary>
 /// File: frmExperimentDesigner.Designer.cs
 /// Description: Designer file for experiment designer form
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-14
+/// Date: 2026-05-12
 /// </summary>
 #endregion
 
@@ -15,126 +11,131 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
 {
     partial class frmExperimentDesigner
     {
-        #region Private Fields - UI Components
-        private System.ComponentModel.IContainer _components;
+        private System.ComponentModel.IContainer components = null;
 
         // Tab Control
-        private System.Windows.Forms.TabControl _mainTabControl;
-        private System.Windows.Forms.TabPage _tabExperimentSettings;
-        private System.Windows.Forms.TabPage _tabMapSettings;
-        private System.Windows.Forms.TabPage _tabAlgorithms; 
+        private TabControl _mainTabControl;
+        private TabPage _tabExperimentSettings;
+        private TabPage _tabMapSettings;
+        private TabPage _tabAlgorithms;
+        private TabPage _tabSensitivity;
 
         // Bottom Panel Controls
-        private System.Windows.Forms.Panel _bottomPanel;
-        private System.Windows.Forms.Panel _buttonPanel;
-        private System.Windows.Forms.ProgressBar _progressBar;
-        private System.Windows.Forms.Label _lblStatus;
-        private System.Windows.Forms.Button _btnRunComparison;
-        private System.Windows.Forms.Button _btnSaveSettings;
-        private System.Windows.Forms.Button _btnLoadSettings;
-        private System.Windows.Forms.Button _btnCancel;
+        private Panel _bottomPanel;
+        private Panel _buttonPanel;
+        private ProgressBar _progressBar;
+        private Label _lblStatus;
+        private Button _btnRunComparison;
+        private Button _btnSaveSettings;
+        private Button _btnLoadSettings;
+        private Button _btnCancel;
 
         // Tab 1: Experiment Settings Controls
-        private System.Windows.Forms.GroupBox _grpExperimentSettings;
-        private System.Windows.Forms.Label _lblExpName;
-        private System.Windows.Forms.TextBox _txtExperimentName;
-        private System.Windows.Forms.Label _lblIterations;
-        private System.Windows.Forms.NumericUpDown _nudIterations;
-        private System.Windows.Forms.CheckBox _chkSaveScreenshots;
-        private System.Windows.Forms.CheckBox _chkSaveReplay;
-        private System.Windows.Forms.CheckBox _chkShowPathOnScreenshots;
-        private System.Windows.Forms.Label _lblSavePath;
-        private System.Windows.Forms.TextBox _txtSavePath;
-        private System.Windows.Forms.Button _btnBrowseSavePath;
-        private System.Windows.Forms.GroupBox _grpInfo;
-        private System.Windows.Forms.Label _lblInfo;
+        private GroupBox _grpExperimentSettings;
+        private Label _lblExpName;
+        private TextBox _txtExperimentName;
+        private Label _lblIterations;
+        private NumericUpDown _nudIterations;
+        private CheckBox _chkSaveScreenshots;
+        private CheckBox _chkSaveReplay;
+        private CheckBox _chkShowPathOnScreenshots;
+        private Label _lblSavePath;
+        private TextBox _txtSavePath;
+        private Button _btnBrowseSavePath;
+        private GroupBox _grpInfo;
+        private Label _lblInfo;
 
-        // Tab 2: Map Settings Controls
-        private System.Windows.Forms.GroupBox _grpMapSource;
-        private System.Windows.Forms.RadioButton _rbLoadMap;
-        private System.Windows.Forms.CheckBox _chkUseCurrentMap;
-        private System.Windows.Forms.TextBox _txtMapFilePath;
-        private System.Windows.Forms.Button _btnBrowseMap;
-        private System.Windows.Forms.GroupBox _grpMapProperties;
-        private System.Windows.Forms.Label _lblGoals;
-        private System.Windows.Forms.NumericUpDown _nudGoalCount;
-        private System.Windows.Forms.Label _lblParking;
-        private System.Windows.Forms.NumericUpDown _nudParkingCount;
-        private System.Windows.Forms.Label _lblStatic;
-        private System.Windows.Forms.NumericUpDown _nudStaticObstacles;
-        private System.Windows.Forms.Label _lblDynamic;
-        private System.Windows.Forms.NumericUpDown _nudDynamicObstacles;
+        // Tab 2: Map Settings Controls - Map Source
+        private GroupBox _grpMapSource;
+        private RadioButton _rbLoadMap;
+        private CheckBox _chkUseCurrentMap;
+        private TextBox _txtMapFilePath;
+        private Button _btnBrowseMap;
 
-        // NEW: Start Point Controls (أضيفت داخل _grpMapProperties)
-        private System.Windows.Forms.CheckBox _chkUseCustomStartPoint;
-        private System.Windows.Forms.Label _lblCurrentStartPoint;
-        private System.Windows.Forms.Button _btnPickStartPoint;
+        // Tab 2: Map Properties
+        private GroupBox _grpMapProperties;
+        private Label _lblGoals;
+        private NumericUpDown _nudGoalCount;
+        private Label _lblParking;
+        private NumericUpDown _nudParkingCount;
+        private Label _lblStatic;
+        private NumericUpDown _nudStaticObstacles;
+        private Label _lblDynamic;
+        private NumericUpDown _nudDynamicObstacles;
+        private CheckBox _chkUseCustomStartPoint;
+        private Label _lblCurrentStartPoint;
+        private Button _btnPickStartPoint;
+        private NumericUpDown _nudCellSize;
+        private Label _lblCellSize;
 
-        // Tab 2: Robot Properties (ضمن Tab Map Settings)
-        private System.Windows.Forms.GroupBox _grpRobotProperties;
-        private System.Windows.Forms.Label _lblRobotName;
-        private System.Windows.Forms.TextBox _txtRobotName;
-        private System.Windows.Forms.Label _lblRobotSpeed;
-        private System.Windows.Forms.NumericUpDown _nudRobotSpeed;
-        private System.Windows.Forms.Label _lblRobotBattery;
-        private System.Windows.Forms.NumericUpDown _nudRobotBattery;
-        private System.Windows.Forms.Label _lblConsumption;
-        private System.Windows.Forms.NumericUpDown _nudConsumptionRate;
-        private System.Windows.Forms.Label _lblViewAngle;
-        private System.Windows.Forms.NumericUpDown _nudViewAngle;
-        private System.Windows.Forms.Label _lblDetection;
-        private System.Windows.Forms.NumericUpDown _nudDetectionRange;
+        // Grid Dimension Controls
+        private Label _lblGridWidth;
+        private NumericUpDown _nudGridWidth;
+        private Label _lblGridHeight;
+        private NumericUpDown _nudGridHeight;
 
-        // NEW: Dynamic Charging Controls (أضيفت داخل _grpRobotProperties)
-        private System.Windows.Forms.CheckBox _chkEnableDynamicCharging;
-        private System.Windows.Forms.Label _lblChargingTime;
-        private System.Windows.Forms.NumericUpDown _nudChargingTime;
-        private System.Windows.Forms.Label _lblChargingTimeUnit;
-        private System.Windows.Forms.Label _lblSafetyMargin;
-        private System.Windows.Forms.NumericUpDown _nudSafetyMargin;
-        private System.Windows.Forms.Label _lblSafetyMarginUnit;
+        // Semi-Static and Rough Terrain Controls
+        private Label _lblSemiStatic;
+        private NumericUpDown _nudSemiStaticObstacles;
+        private Label _lblRoughTerrain;
+        private NumericUpDown _nudRoughTerrain;
 
-        // Tab 3: Algorithms Controls
-        private System.Windows.Forms.GroupBox _grpAlgorithmSelection;
+        // Tab 2: Robot Properties
+        private GroupBox _grpRobotProperties;
+        private Label _lblRobotName;
+        private TextBox _txtRobotName;
+        private Label _lblRobotSpeed;
+        private NumericUpDown _nudRobotSpeed;
+        private Label _lblRobotBattery;
+        private NumericUpDown _nudRobotBattery;
+        private Label _lblConsumption;
+        private NumericUpDown _nudConsumptionRate;
+        private Label _lblViewAngle;
+        private NumericUpDown _nudViewAngle;
+        private Label _lblDetection;
+        private NumericUpDown _nudDetectionRange;
+        private CheckBox _chkEnableDynamicCharging;
+        private Label _lblChargingTime;
+        private NumericUpDown _nudChargingTime;
+        private Label _lblSafetyMargin;
+        private NumericUpDown _nudSafetyMargin;
+        private Label _lblSafetyMarginUnit;
 
-        // Tab 4: ML Settings Controls
-        private System.Windows.Forms.GroupBox _grpMLSettings;
-        private System.Windows.Forms.CheckBox _chkEnableDynamicLearning;
-        private System.Windows.Forms.Label _lblLearningRate;
-        private System.Windows.Forms.NumericUpDown _nudLearningRate;
-        private System.Windows.Forms.CheckBox _chkUseNeuralNetwork;
-        private System.Windows.Forms.CheckBox _chkCollectTrainingData;
-        private System.Windows.Forms.CheckBox _chkTrainBeforeExperiment;
-        private System.Windows.Forms.Button _btnTrainNow;
-        private System.Windows.Forms.ProgressBar _prgTraining;
-        private System.Windows.Forms.Label _lblTrainingStatus;
-        #endregion
-      
-        #region Private Fields - Sensitivity Analysis
-        private System.Windows.Forms.TabPage _tabSensitivity;
-        private System.Windows.Forms.CheckBox _chkEnableSensitivity;
-        private System.Windows.Forms.Label _lblParameter;
-        private System.Windows.Forms.ComboBox _cboSensitivityParameter;
-        private System.Windows.Forms.Label _lblValues;
-        private System.Windows.Forms.TextBox _txtSensitivityValues;
-        private System.Windows.Forms.Button _btnValidateValues;
-        private System.Windows.Forms.DataGridView _dgvSensitivityResults;
-        private System.Windows.Forms.Button _btnRunSensitivity;
-        private System.Windows.Forms.Label _lblSensitivityStatus;
-        #endregion
+        // Tab 3: Algorithms - DataGridView
+        private GroupBox _grpAlgorithmSelection;
+        private DataGridView _dgvAlgorithems;
 
-        #region Dispose
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (_components != null))
-            {
-                _components.Dispose();
-            }
-            base.Dispose(disposing);
-        }
-        #endregion
+        // ML Settings
+        private GroupBox _grpMLSettings;
+        private CheckBox _chkEnableDynamicLearning;
+        private Label _lblLearningRate;
+        private NumericUpDown _nudLearningRate;
+        private CheckBox _chkUseNeuralNetwork;
+        private CheckBox _chkCollectTrainingData;
+        private CheckBox _chkTrainBeforeExperiment;
+        private Button _btnTrainNow;
+        private ProgressBar _prgTraining;
+        private Label _lblTrainingStatus;
 
-        #region Initialize Component
+        // Sensitivity Analysis Controls
+        private CheckBox _chkEnableSensitivity;
+        private Label _lblParameter;
+        private ComboBox _cboSensitivityParameter;
+        private Label _lblValues;
+        private TextBox _txtSensitivityValues;
+        private Button _btnValidateValues;
+        private DataGridView _dgvSensitivityResults;
+        private Button _btnRunSensitivity;
+        private Label _lblSensitivityStatus;       
+
+        // DataGridView columns
+        private CheckBox _chkSelectAll;
+        private DataGridViewCheckBoxColumn colEnabled;
+        private DataGridViewTextBoxColumn colAlgorithm;
+        private DataGridViewComboBoxColumn colMetric;
+        private DataGridViewTextBoxColumn colParameters;
+        private DataGridViewButtonColumn colEdit;
+        private DataGridViewButtonColumn colDuplicate;
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(frmExperimentDesigner));
@@ -144,42 +145,49 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _dgvAlgorithems = new DataGridView();
             _grpMLSettings = new GroupBox();
             _chkTrainBeforeExperiment = new CheckBox();
-            _chkCollectTrainingData = new CheckBox();
-            _chkUseNeuralNetwork = new CheckBox();
+            _btnTrainNow = new Button();
             _chkEnableDynamicLearning = new CheckBox();
             _lblLearningRate = new Label();
             _nudLearningRate = new NumericUpDown();
-            _btnTrainNow = new Button();
+            _chkUseNeuralNetwork = new CheckBox();
+            _chkCollectTrainingData = new CheckBox();
             _prgTraining = new ProgressBar();
             _lblTrainingStatus = new Label();
             _tabMapSettings = new TabPage();
+            groupBox1 = new GroupBox();
+            _nudDynamicObstacles = new NumericUpDown();
+            _lblStatic = new Label();
+            _lblDynamic = new Label();
+            _nudStaticObstacles = new NumericUpDown();
+            _nudRoughTerrain = new NumericUpDown();
+            _lblRoughTerrain = new Label();
+            _nudSemiStaticObstacles = new NumericUpDown();
+            _lblSemiStatic = new Label();
+            _grpMapPoints = new GroupBox();
+            _btnPickStartPoint = new Button();
+            _chkUseCustomStartPoint = new CheckBox();
+            _lblCurrentStartPoint = new Label();
+            _lblParking = new Label();
+            _nudParkingCount = new NumericUpDown();
+            _nudGoalCount = new NumericUpDown();
+            _lblGoals = new Label();
             _grpMapSource = new GroupBox();
             _rbLoadMap = new RadioButton();
             _chkUseCurrentMap = new CheckBox();
             _txtMapFilePath = new TextBox();
             _btnBrowseMap = new Button();
             _grpMapProperties = new GroupBox();
-            _nudCellSize = new NumericUpDown();
+            _lblGridWidth = new Label();
+            _nudGridWidth = new NumericUpDown();
+            _lblGridHeight = new Label();
+            _nudGridHeight = new NumericUpDown();
             _lblCellSize = new Label();
-            numericUpDown1 = new NumericUpDown();
-            label5 = new Label();
-            numericUpDown2 = new NumericUpDown();
-            _lblGoals = new Label();
-            _nudGoalCount = new NumericUpDown();
-            _lblParking = new Label();
-            _nudParkingCount = new NumericUpDown();
-            label1 = new Label();
-            label4 = new Label();
-            _nudSemiStaticObstacles = new NumericUpDown();
-            _lblStatic = new Label();
-            _nudStaticObstacles = new NumericUpDown();
-            _lblDynamic = new Label();
-            _nudDynamicObstacles = new NumericUpDown();
-            _chkUseCustomStartPoint = new CheckBox();
-            _lblCurrentStartPoint = new Label();
-            _btnPickStartPoint = new Button();
+            _nudCellSize = new NumericUpDown();
             _grpRobotProperties = new GroupBox();
-            _nudSafetyMargin = new NumericUpDown();
+            _nudDetectionRange = new NumericUpDown();
+            _nudRobotHeight = new NumericUpDown();
+            _nudRobotWidth = new NumericUpDown();
+            _nudViewAngle = new NumericUpDown();
             _lblRobotName = new Label();
             _txtRobotName = new TextBox();
             _lblRobotSpeed = new Label();
@@ -188,20 +196,32 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _nudRobotBattery = new NumericUpDown();
             _lblConsumption = new Label();
             _nudConsumptionRate = new NumericUpDown();
-            label3 = new Label();
-            _lblViewAngle = new Label();
-            _nudHeight = new NumericUpDown();
             label2 = new Label();
-            _nudViewAngle = new NumericUpDown();
-            _nudWidth = new NumericUpDown();
+            _lblViewAngle = new Label();
+            label1 = new Label();
             _lblDetection = new Label();
-            _nudDetectionRange = new NumericUpDown();
             _chkEnableDynamicCharging = new CheckBox();
             _lblChargingTime = new Label();
             _nudChargingTime = new NumericUpDown();
-            _lblChargingTimeUnit = new Label();
             _lblSafetyMargin = new Label();
+            _nudSafetyMargin = new NumericUpDown();
             _lblSafetyMarginUnit = new Label();
+            _tabSensitivity = new TabPage();
+            _chkEnableSensitivity = new CheckBox();
+            pnlSensitivity = new Panel();
+            _dgvSensitivityResults = new DataGridView();
+            dataGridViewTextBoxColumn1 = new DataGridViewTextBoxColumn();
+            dataGridViewTextBoxColumn2 = new DataGridViewTextBoxColumn();
+            dataGridViewTextBoxColumn3 = new DataGridViewTextBoxColumn();
+            dataGridViewTextBoxColumn4 = new DataGridViewTextBoxColumn();
+            dataGridViewTextBoxColumn5 = new DataGridViewTextBoxColumn();
+            _lblParameter = new Label();
+            _cboSensitivityParameter = new ComboBox();
+            _lblValues = new Label();
+            _txtSensitivityValues = new TextBox();
+            _btnValidateValues = new Button();
+            _btnRunSensitivity = new Button();
+            _lblSensitivityStatus = new Label();
             _tabExperimentSettings = new TabPage();
             _grpExperimentSettings = new GroupBox();
             _lblExpName = new Label();
@@ -224,6 +244,14 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnCancel = new Button();
             _lblStatus = new Label();
             _progressBar = new ProgressBar();
+            colEnabled = new DataGridViewCheckBoxColumn();
+            colAlgorithm = new DataGridViewTextBoxColumn();
+            colMetric = new DataGridViewComboBoxColumn();
+            colParameters = new DataGridViewTextBoxColumn();
+            colEdit = new DataGridViewButtonColumn();
+            colDuplicate = new DataGridViewButtonColumn();
+            _cboAlgorithm = new ComboBox();
+            _lblAlgorithm = new Label();
             _mainTabControl.SuspendLayout();
             _tabAlgorithms.SuspendLayout();
             _grpAlgorithmSelection.SuspendLayout();
@@ -231,26 +259,32 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _grpMLSettings.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)_nudLearningRate).BeginInit();
             _tabMapSettings.SuspendLayout();
+            groupBox1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)_nudDynamicObstacles).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudStaticObstacles).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudRoughTerrain).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudSemiStaticObstacles).BeginInit();
+            _grpMapPoints.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)_nudParkingCount).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudGoalCount).BeginInit();
             _grpMapSource.SuspendLayout();
             _grpMapProperties.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)_nudGridWidth).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudGridHeight).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_nudCellSize).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)numericUpDown1).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)numericUpDown2).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudGoalCount).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudParkingCount).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudSemiStaticObstacles).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudStaticObstacles).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudDynamicObstacles).BeginInit();
             _grpRobotProperties.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)_nudSafetyMargin).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudDetectionRange).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudRobotHeight).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudRobotWidth).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudViewAngle).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_nudRobotSpeed).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_nudRobotBattery).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_nudConsumptionRate).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudHeight).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudViewAngle).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudWidth).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)_nudDetectionRange).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_nudChargingTime).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)_nudSafetyMargin).BeginInit();
+            _tabSensitivity.SuspendLayout();
+            pnlSensitivity.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)_dgvSensitivityResults).BeginInit();
             _tabExperimentSettings.SuspendLayout();
             _grpExperimentSettings.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)_nudIterations).BeginInit();
@@ -263,90 +297,98 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // 
             _mainTabControl.Controls.Add(_tabAlgorithms);
             _mainTabControl.Controls.Add(_tabMapSettings);
+            _mainTabControl.Controls.Add(_tabSensitivity);
             _mainTabControl.Controls.Add(_tabExperimentSettings);
             _mainTabControl.Dock = DockStyle.Fill;
             _mainTabControl.Location = new Point(0, 0);
             _mainTabControl.Name = "_mainTabControl";
             _mainTabControl.SelectedIndex = 0;
-            _mainTabControl.Size = new Size(591, 518);
+            _mainTabControl.Size = new Size(650, 631);
             _mainTabControl.TabIndex = 0;
             // 
             // _tabAlgorithms
             // 
+            _chkSelectAll = new CheckBox
+            {
+                Text = "Select All",
+                Location = new Point(10, 0),
+                Size = new Size(100, 25),
+                Checked = true  // افتراضياً، SPPA فقط مفعل لكننا سنضبطه لاحقاً
+            };
+            _grpAlgorithmSelection.Controls.Add(_chkSelectAll);
             _tabAlgorithms.Controls.Add(_grpAlgorithmSelection);
             _tabAlgorithms.Controls.Add(_grpMLSettings);
             _tabAlgorithms.Location = new Point(4, 24);
             _tabAlgorithms.Name = "_tabAlgorithms";
-            _tabAlgorithms.Size = new Size(583, 490);
-            _tabAlgorithms.TabIndex = 2;
+            _tabAlgorithms.Size = new Size(642, 603);
+            _tabAlgorithms.TabIndex = 0;
             _tabAlgorithms.Text = "Algorithms & ML";
             // 
             // _grpAlgorithmSelection
             // 
+        
             _grpAlgorithmSelection.Controls.Add(_dgvAlgorithems);
             _grpAlgorithmSelection.Dock = DockStyle.Fill;
             _grpAlgorithmSelection.Location = new Point(0, 0);
             _grpAlgorithmSelection.Name = "_grpAlgorithmSelection";
-            _grpAlgorithmSelection.Size = new Size(583, 348);
+            _grpAlgorithmSelection.Size = new Size(642, 496);
             _grpAlgorithmSelection.TabIndex = 0;
             _grpAlgorithmSelection.TabStop = false;
             _grpAlgorithmSelection.Text = "Select Algorithms";
             // 
             // _dgvAlgorithems
             // 
-            _dgvAlgorithems.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            _dgvAlgorithems.AllowUserToAddRows = false;
+            _dgvAlgorithems.AllowUserToDeleteRows = false;
             _dgvAlgorithems.BackgroundColor = Color.White;
-            _dgvAlgorithems.BorderStyle = BorderStyle.Fixed3D;
             _dgvAlgorithems.Dock = DockStyle.Fill;
             _dgvAlgorithems.GridColor = Color.FromArgb(230, 230, 230);
             _dgvAlgorithems.Location = new Point(3, 19);
+            _dgvAlgorithems.MultiSelect = false;
             _dgvAlgorithems.Name = "_dgvAlgorithems";
             _dgvAlgorithems.RowHeadersVisible = false;
-            _dgvAlgorithems.Size = new Size(577, 326);
-            _dgvAlgorithems.TabIndex = 11;
+            _dgvAlgorithems.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            _dgvAlgorithems.Size = new Size(636, 474);
+            _dgvAlgorithems.TabIndex = 0;
             // 
             // _grpMLSettings
             // 
             _grpMLSettings.Controls.Add(_chkTrainBeforeExperiment);
-            _grpMLSettings.Controls.Add(_chkCollectTrainingData);
-            _grpMLSettings.Controls.Add(_chkUseNeuralNetwork);
+            _grpMLSettings.Controls.Add(_btnTrainNow);
             _grpMLSettings.Controls.Add(_chkEnableDynamicLearning);
             _grpMLSettings.Controls.Add(_lblLearningRate);
             _grpMLSettings.Controls.Add(_nudLearningRate);
-            _grpMLSettings.Controls.Add(_btnTrainNow);
+            _grpMLSettings.Controls.Add(_chkUseNeuralNetwork);
+            _grpMLSettings.Controls.Add(_chkCollectTrainingData);
             _grpMLSettings.Controls.Add(_prgTraining);
             _grpMLSettings.Controls.Add(_lblTrainingStatus);
             _grpMLSettings.Dock = DockStyle.Bottom;
-            _grpMLSettings.Location = new Point(0, 348);
+            _grpMLSettings.Location = new Point(0, 496);
             _grpMLSettings.Name = "_grpMLSettings";
-            _grpMLSettings.Size = new Size(583, 142);
-            _grpMLSettings.TabIndex = 2;
+            _grpMLSettings.Size = new Size(642, 107);
+            _grpMLSettings.TabIndex = 1;
             _grpMLSettings.TabStop = false;
             _grpMLSettings.Text = "Machine Learning Options (SPPA-DL only)";
             // 
             // _chkTrainBeforeExperiment
             // 
-            _chkTrainBeforeExperiment.Location = new Point(192, 51);
+            _chkTrainBeforeExperiment.Location = new Point(384, 24);
             _chkTrainBeforeExperiment.Name = "_chkTrainBeforeExperiment";
-            _chkTrainBeforeExperiment.Size = new Size(105, 20);
+            _chkTrainBeforeExperiment.Size = new Size(124, 25);
             _chkTrainBeforeExperiment.TabIndex = 5;
-            _chkTrainBeforeExperiment.Text = "Train Model Before Experiment";
+            _chkTrainBeforeExperiment.Text = "Train Before Experiment";
             // 
-            // _chkCollectTrainingData
+            // _btnTrainNow
             // 
-            _chkCollectTrainingData.Location = new Point(15, 52);
-            _chkCollectTrainingData.Name = "_chkCollectTrainingData";
-            _chkCollectTrainingData.Size = new Size(140, 20);
-            _chkCollectTrainingData.TabIndex = 4;
-            _chkCollectTrainingData.Text = "Collect Training Data";
-            // 
-            // _chkUseNeuralNetwork
-            // 
-            _chkUseNeuralNetwork.Location = new Point(192, 25);
-            _chkUseNeuralNetwork.Name = "_chkUseNeuralNetwork";
-            _chkUseNeuralNetwork.Size = new Size(220, 20);
-            _chkUseNeuralNetwork.TabIndex = 3;
-            _chkUseNeuralNetwork.Text = "Use Neural Network Prediction";
+            _btnTrainNow.BackColor = Color.FromArgb(52, 152, 219);
+            _btnTrainNow.FlatStyle = FlatStyle.Flat;
+            _btnTrainNow.ForeColor = Color.White;
+            _btnTrainNow.Location = new Point(514, 19);
+            _btnTrainNow.Name = "_btnTrainNow";
+            _btnTrainNow.Size = new Size(120, 28);
+            _btnTrainNow.TabIndex = 6;
+            _btnTrainNow.Text = "Train Model Now";
+            _btnTrainNow.UseVisualStyleBackColor = false;
             // 
             // _chkEnableDynamicLearning
             // 
@@ -354,46 +396,50 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _chkEnableDynamicLearning.CheckState = CheckState.Checked;
             _chkEnableDynamicLearning.Location = new Point(15, 25);
             _chkEnableDynamicLearning.Name = "_chkEnableDynamicLearning";
-            _chkEnableDynamicLearning.Size = new Size(200, 20);
+            _chkEnableDynamicLearning.Size = new Size(160, 25);
             _chkEnableDynamicLearning.TabIndex = 0;
             _chkEnableDynamicLearning.Text = "Enable Dynamic Learning";
             // 
             // _lblLearningRate
             // 
-            _lblLearningRate.Location = new Point(14, 83);
+            _lblLearningRate.Location = new Point(15, 55);
             _lblLearningRate.Name = "_lblLearningRate";
-            _lblLearningRate.Size = new Size(100, 20);
+            _lblLearningRate.Size = new Size(100, 25);
             _lblLearningRate.TabIndex = 1;
             _lblLearningRate.Text = "Learning Rate (α):";
             // 
             // _nudLearningRate
             // 
             _nudLearningRate.DecimalPlaces = 1;
-            _nudLearningRate.Location = new Point(119, 80);
+            _nudLearningRate.Location = new Point(120, 53);
             _nudLearningRate.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
             _nudLearningRate.Minimum = new decimal(new int[] { 1, 0, 0, 65536 });
             _nudLearningRate.Name = "_nudLearningRate";
-            _nudLearningRate.Size = new Size(60, 23);
+            _nudLearningRate.Size = new Size(80, 23);
             _nudLearningRate.TabIndex = 2;
             _nudLearningRate.Value = new decimal(new int[] { 20, 0, 0, 65536 });
             // 
-            // _btnTrainNow
+            // _chkUseNeuralNetwork
             // 
-            _btnTrainNow.BackColor = Color.FromArgb(52, 152, 219);
-            _btnTrainNow.FlatStyle = FlatStyle.Flat;
-            _btnTrainNow.ForeColor = Color.White;
-            _btnTrainNow.Location = new Point(185, 77);
-            _btnTrainNow.Name = "_btnTrainNow";
-            _btnTrainNow.Size = new Size(112, 30);
-            _btnTrainNow.TabIndex = 6;
-            _btnTrainNow.Text = "Train Model Now";
-            _btnTrainNow.UseVisualStyleBackColor = false;
+            _chkUseNeuralNetwork.Location = new Point(230, 25);
+            _chkUseNeuralNetwork.Name = "_chkUseNeuralNetwork";
+            _chkUseNeuralNetwork.Size = new Size(180, 25);
+            _chkUseNeuralNetwork.TabIndex = 3;
+            _chkUseNeuralNetwork.Text = "Use Neural Network Prediction";
+            // 
+            // _chkCollectTrainingData
+            // 
+            _chkCollectTrainingData.Location = new Point(230, 55);
+            _chkCollectTrainingData.Name = "_chkCollectTrainingData";
+            _chkCollectTrainingData.Size = new Size(150, 25);
+            _chkCollectTrainingData.TabIndex = 4;
+            _chkCollectTrainingData.Text = "Collect Training Data";
             // 
             // _prgTraining
             // 
-            _prgTraining.Location = new Point(303, 89);
+            _prgTraining.Location = new Point(386, 62);
             _prgTraining.Name = "_prgTraining";
-            _prgTraining.Size = new Size(272, 18);
+            _prgTraining.Size = new Size(248, 18);
             _prgTraining.TabIndex = 7;
             _prgTraining.Visible = false;
             // 
@@ -401,22 +447,193 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // 
             _lblTrainingStatus.BorderStyle = BorderStyle.FixedSingle;
             _lblTrainingStatus.Dock = DockStyle.Bottom;
-            _lblTrainingStatus.Location = new Point(3, 119);
+            _lblTrainingStatus.Location = new Point(3, 84);
             _lblTrainingStatus.Name = "_lblTrainingStatus";
-            _lblTrainingStatus.Size = new Size(577, 20);
+            _lblTrainingStatus.Size = new Size(636, 20);
             _lblTrainingStatus.TabIndex = 8;
             _lblTrainingStatus.Visible = false;
             // 
             // _tabMapSettings
             // 
+            _tabMapSettings.Controls.Add(groupBox1);
+            _tabMapSettings.Controls.Add(_grpMapPoints);
             _tabMapSettings.Controls.Add(_grpMapSource);
             _tabMapSettings.Controls.Add(_grpMapProperties);
             _tabMapSettings.Controls.Add(_grpRobotProperties);
             _tabMapSettings.Location = new Point(4, 24);
             _tabMapSettings.Name = "_tabMapSettings";
-            _tabMapSettings.Size = new Size(583, 490);
+            _tabMapSettings.Size = new Size(642, 603);
             _tabMapSettings.TabIndex = 1;
             _tabMapSettings.Text = "Map & Robot";
+            // 
+            // groupBox1
+            // 
+            groupBox1.Controls.Add(_nudDynamicObstacles);
+            groupBox1.Controls.Add(_lblStatic);
+            groupBox1.Controls.Add(_lblDynamic);
+            groupBox1.Controls.Add(_nudStaticObstacles);
+            groupBox1.Controls.Add(_nudRoughTerrain);
+            groupBox1.Controls.Add(_lblRoughTerrain);
+            groupBox1.Controls.Add(_nudSemiStaticObstacles);
+            groupBox1.Controls.Add(_lblSemiStatic);
+            groupBox1.Location = new Point(80, 175);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(480, 85);
+            groupBox1.TabIndex = 4;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Obstacles";
+            // 
+            // _nudDynamicObstacles
+            // 
+            _nudDynamicObstacles.Location = new Point(364, 52);
+            _nudDynamicObstacles.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
+            _nudDynamicObstacles.Name = "_nudDynamicObstacles";
+            _nudDynamicObstacles.Size = new Size(80, 23);
+            _nudDynamicObstacles.TabIndex = 20;
+            _nudDynamicObstacles.Value = new decimal(new int[] { 5, 0, 0, 0 });
+            // 
+            // _lblStatic
+            // 
+            _lblStatic.Location = new Point(13, 27);
+            _lblStatic.Name = "_lblStatic";
+            _lblStatic.Size = new Size(110, 25);
+            _lblStatic.TabIndex = 17;
+            _lblStatic.Text = "Static Obstacles:";
+            // 
+            // _lblDynamic
+            // 
+            _lblDynamic.Location = new Point(225, 54);
+            _lblDynamic.Name = "_lblDynamic";
+            _lblDynamic.Size = new Size(120, 25);
+            _lblDynamic.TabIndex = 19;
+            _lblDynamic.Text = "Dynamic Obstacles:";
+            // 
+            // _nudStaticObstacles
+            // 
+            _nudStaticObstacles.Location = new Point(123, 25);
+            _nudStaticObstacles.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
+            _nudStaticObstacles.Name = "_nudStaticObstacles";
+            _nudStaticObstacles.Size = new Size(80, 23);
+            _nudStaticObstacles.TabIndex = 18;
+            _nudStaticObstacles.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            // 
+            // _nudRoughTerrain
+            // 
+            _nudRoughTerrain.Enabled = false;
+            _nudRoughTerrain.Location = new Point(364, 25);
+            _nudRoughTerrain.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
+            _nudRoughTerrain.Name = "_nudRoughTerrain";
+            _nudRoughTerrain.Size = new Size(80, 23);
+            _nudRoughTerrain.TabIndex = 7;
+            _nudRoughTerrain.Value = new decimal(new int[] { 10, 0, 0, 0 });
+            // 
+            // _lblRoughTerrain
+            // 
+            _lblRoughTerrain.Location = new Point(225, 27);
+            _lblRoughTerrain.Name = "_lblRoughTerrain";
+            _lblRoughTerrain.Size = new Size(90, 25);
+            _lblRoughTerrain.TabIndex = 6;
+            _lblRoughTerrain.Text = "Rough Terrain:";
+            // 
+            // _nudSemiStaticObstacles
+            // 
+            _nudSemiStaticObstacles.Enabled = false;
+            _nudSemiStaticObstacles.Location = new Point(123, 52);
+            _nudSemiStaticObstacles.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
+            _nudSemiStaticObstacles.Name = "_nudSemiStaticObstacles";
+            _nudSemiStaticObstacles.Size = new Size(80, 23);
+            _nudSemiStaticObstacles.TabIndex = 5;
+            _nudSemiStaticObstacles.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            // 
+            // _lblSemiStatic
+            // 
+            _lblSemiStatic.Location = new Point(13, 54);
+            _lblSemiStatic.Name = "_lblSemiStatic";
+            _lblSemiStatic.Size = new Size(80, 25);
+            _lblSemiStatic.TabIndex = 4;
+            _lblSemiStatic.Text = "Semi-Static:";
+            // 
+            // _grpMapPoints
+            // 
+            _grpMapPoints.Controls.Add(_btnPickStartPoint);
+            _grpMapPoints.Controls.Add(_chkUseCustomStartPoint);
+            _grpMapPoints.Controls.Add(_lblCurrentStartPoint);
+            _grpMapPoints.Controls.Add(_lblParking);
+            _grpMapPoints.Controls.Add(_nudParkingCount);
+            _grpMapPoints.Controls.Add(_nudGoalCount);
+            _grpMapPoints.Controls.Add(_lblGoals);
+            _grpMapPoints.Location = new Point(80, 268);
+            _grpMapPoints.Name = "_grpMapPoints";
+            _grpMapPoints.Size = new Size(480, 95);
+            _grpMapPoints.TabIndex = 3;
+            _grpMapPoints.TabStop = false;
+            _grpMapPoints.Text = "Points";
+            // 
+            // _btnPickStartPoint
+            // 
+            _btnPickStartPoint.BackColor = Color.FromArgb(52, 152, 219);
+            _btnPickStartPoint.Cursor = Cursors.Hand;
+            _btnPickStartPoint.FlatStyle = FlatStyle.Flat;
+            _btnPickStartPoint.ForeColor = Color.White;
+            _btnPickStartPoint.Location = new Point(342, 26);
+            _btnPickStartPoint.Name = "_btnPickStartPoint";
+            _btnPickStartPoint.Size = new Size(102, 25);
+            _btnPickStartPoint.TabIndex = 10;
+            _btnPickStartPoint.Text = "Pick from Map";
+            _btnPickStartPoint.UseVisualStyleBackColor = false;
+            // 
+            // _chkUseCustomStartPoint
+            // 
+            _chkUseCustomStartPoint.Location = new Point(148, 27);
+            _chkUseCustomStartPoint.Name = "_chkUseCustomStartPoint";
+            _chkUseCustomStartPoint.Size = new Size(150, 25);
+            _chkUseCustomStartPoint.TabIndex = 9;
+            _chkUseCustomStartPoint.Text = "Use Custom Start Point";
+            // 
+            // _lblCurrentStartPoint
+            // 
+            _lblCurrentStartPoint.Font = new Font("Segoe UI", 8F, FontStyle.Italic);
+            _lblCurrentStartPoint.Location = new Point(23, 29);
+            _lblCurrentStartPoint.Name = "_lblCurrentStartPoint";
+            _lblCurrentStartPoint.Size = new Size(120, 25);
+            _lblCurrentStartPoint.TabIndex = 8;
+            _lblCurrentStartPoint.Text = "Current Start: (10, 10)";
+            // 
+            // _lblParking
+            // 
+            _lblParking.Location = new Point(23, 65);
+            _lblParking.Name = "_lblParking";
+            _lblParking.Size = new Size(90, 25);
+            _lblParking.TabIndex = 15;
+            _lblParking.Text = "Parking Count:";
+            // 
+            // _nudParkingCount
+            // 
+            _nudParkingCount.Location = new Point(123, 58);
+            _nudParkingCount.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
+            _nudParkingCount.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            _nudParkingCount.Name = "_nudParkingCount";
+            _nudParkingCount.Size = new Size(80, 23);
+            _nudParkingCount.TabIndex = 16;
+            _nudParkingCount.Value = new decimal(new int[] { 2, 0, 0, 0 });
+            // 
+            // _nudGoalCount
+            // 
+            _nudGoalCount.Location = new Point(364, 58);
+            _nudGoalCount.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
+            _nudGoalCount.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            _nudGoalCount.Name = "_nudGoalCount";
+            _nudGoalCount.Size = new Size(80, 23);
+            _nudGoalCount.TabIndex = 14;
+            _nudGoalCount.Value = new decimal(new int[] { 5, 0, 0, 0 });
+            // 
+            // _lblGoals
+            // 
+            _lblGoals.Location = new Point(231, 65);
+            _lblGoals.Name = "_lblGoals";
+            _lblGoals.Size = new Size(80, 25);
+            _lblGoals.TabIndex = 13;
+            _lblGoals.Text = "Goal Count:";
             // 
             // _grpMapSource
             // 
@@ -424,9 +641,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _grpMapSource.Controls.Add(_chkUseCurrentMap);
             _grpMapSource.Controls.Add(_txtMapFilePath);
             _grpMapSource.Controls.Add(_btnBrowseMap);
-            _grpMapSource.Location = new Point(60, 19);
+            _grpMapSource.Location = new Point(80, 15);
             _grpMapSource.Name = "_grpMapSource";
-            _grpMapSource.Size = new Size(451, 90);
+            _grpMapSource.Size = new Size(480, 79);
             _grpMapSource.TabIndex = 0;
             _grpMapSource.TabStop = false;
             _grpMapSource.Text = "Map Source";
@@ -434,29 +651,29 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // _rbLoadMap
             // 
             _rbLoadMap.Checked = true;
-            _rbLoadMap.Location = new Point(15, 25);
+            _rbLoadMap.Location = new Point(15, 20);
             _rbLoadMap.Name = "_rbLoadMap";
-            _rbLoadMap.Size = new Size(120, 20);
+            _rbLoadMap.Size = new Size(120, 25);
             _rbLoadMap.TabIndex = 0;
             _rbLoadMap.TabStop = true;
-            _rbLoadMap.Text = "Load Existing Map";
+            _rbLoadMap.Text = "Load External Map";
             // 
             // _chkUseCurrentMap
             // 
             _chkUseCurrentMap.Checked = true;
             _chkUseCurrentMap.CheckState = CheckState.Checked;
-            _chkUseCurrentMap.Location = new Point(150, 25);
+            _chkUseCurrentMap.Location = new Point(140, 20);
             _chkUseCurrentMap.Name = "_chkUseCurrentMap";
-            _chkUseCurrentMap.Size = new Size(200, 20);
+            _chkUseCurrentMap.Size = new Size(200, 25);
             _chkUseCurrentMap.TabIndex = 1;
-            _chkUseCurrentMap.Text = "Use current map from main form";
+            _chkUseCurrentMap.Text = "Use Current Map from Main Form";
             // 
             // _txtMapFilePath
             // 
             _txtMapFilePath.Enabled = false;
             _txtMapFilePath.Location = new Point(15, 50);
             _txtMapFilePath.Name = "_txtMapFilePath";
-            _txtMapFilePath.Size = new Size(320, 23);
+            _txtMapFilePath.Size = new Size(350, 23);
             _txtMapFilePath.TabIndex = 2;
             // 
             // _btnBrowseMap
@@ -465,7 +682,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnBrowseMap.Enabled = false;
             _btnBrowseMap.FlatStyle = FlatStyle.Flat;
             _btnBrowseMap.ForeColor = Color.White;
-            _btnBrowseMap.Location = new Point(340, 48);
+            _btnBrowseMap.Location = new Point(375, 48);
             _btnBrowseMap.Name = "_btnBrowseMap";
             _btnBrowseMap.Size = new Size(40, 25);
             _btnBrowseMap.TabIndex = 3;
@@ -474,203 +691,78 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // 
             // _grpMapProperties
             // 
-            _grpMapProperties.Controls.Add(_nudCellSize);
+            _grpMapProperties.Controls.Add(_lblGridWidth);
+            _grpMapProperties.Controls.Add(_nudGridWidth);
+            _grpMapProperties.Controls.Add(_lblGridHeight);
+            _grpMapProperties.Controls.Add(_nudGridHeight);
             _grpMapProperties.Controls.Add(_lblCellSize);
-            _grpMapProperties.Controls.Add(numericUpDown1);
-            _grpMapProperties.Controls.Add(label5);
-            _grpMapProperties.Controls.Add(numericUpDown2);
-            _grpMapProperties.Controls.Add(_lblGoals);
-            _grpMapProperties.Controls.Add(_nudGoalCount);
-            _grpMapProperties.Controls.Add(_lblParking);
-            _grpMapProperties.Controls.Add(_nudParkingCount);
-            _grpMapProperties.Controls.Add(label1);
-            _grpMapProperties.Controls.Add(label4);
-            _grpMapProperties.Controls.Add(_nudSemiStaticObstacles);
-            _grpMapProperties.Controls.Add(_lblStatic);
-            _grpMapProperties.Controls.Add(_nudStaticObstacles);
-            _grpMapProperties.Controls.Add(_lblDynamic);
-            _grpMapProperties.Controls.Add(_nudDynamicObstacles);
-            _grpMapProperties.Controls.Add(_chkUseCustomStartPoint);
-            _grpMapProperties.Controls.Add(_lblCurrentStartPoint);
-            _grpMapProperties.Controls.Add(_btnPickStartPoint);
-            _grpMapProperties.Location = new Point(60, 115);
+            _grpMapProperties.Controls.Add(_nudCellSize);
+            _grpMapProperties.Location = new Point(80, 96);
             _grpMapProperties.Name = "_grpMapProperties";
-            _grpMapProperties.Size = new Size(451, 160);
+            _grpMapProperties.Size = new Size(480, 79);
             _grpMapProperties.TabIndex = 1;
             _grpMapProperties.TabStop = false;
             _grpMapProperties.Text = "Map Properties";
             // 
-            // _nudCellSize
+            // _lblGridWidth
             // 
-            _nudCellSize.Location = new Point(113, 95);
-            _nudCellSize.Minimum = new decimal(new int[] { 10, 0, 0, 0 });
-            _nudCellSize.Name = "_nudCellSize";
-            _nudCellSize.Size = new Size(60, 23);
-            _nudCellSize.TabIndex = 12;
-            _nudCellSize.Value = new decimal(new int[] { 30, 0, 0, 0 });
+            _lblGridWidth.Location = new Point(7, 27);
+            _lblGridWidth.Name = "_lblGridWidth";
+            _lblGridWidth.Size = new Size(80, 25);
+            _lblGridWidth.TabIndex = 0;
+            _lblGridWidth.Text = "Grid Width:";
+            // 
+            // _nudGridWidth
+            // 
+            _nudGridWidth.Enabled = false;
+            _nudGridWidth.Location = new Point(123, 20);
+            _nudGridWidth.Maximum = new decimal(new int[] { 200, 0, 0, 0 });
+            _nudGridWidth.Minimum = new decimal(new int[] { 10, 0, 0, 0 });
+            _nudGridWidth.Name = "_nudGridWidth";
+            _nudGridWidth.Size = new Size(80, 23);
+            _nudGridWidth.TabIndex = 1;
+            _nudGridWidth.Value = new decimal(new int[] { 50, 0, 0, 0 });
+            // 
+            // _lblGridHeight
+            // 
+            _lblGridHeight.Location = new Point(248, 23);
+            _lblGridHeight.Name = "_lblGridHeight";
+            _lblGridHeight.Size = new Size(80, 25);
+            _lblGridHeight.TabIndex = 2;
+            _lblGridHeight.Text = "Grid Height:";
+            // 
+            // _nudGridHeight
+            // 
+            _nudGridHeight.Enabled = false;
+            _nudGridHeight.Location = new Point(364, 22);
+            _nudGridHeight.Name = "_nudGridHeight";
+            _nudGridHeight.Size = new Size(80, 23);
+            _nudGridHeight.TabIndex = 3;
+            _nudGridHeight.Value = new decimal(new int[] { 20, 0, 0, 0 });
             // 
             // _lblCellSize
             // 
-            _lblCellSize.Location = new Point(17, 95);
+            _lblCellSize.Location = new Point(6, 50);
             _lblCellSize.Name = "_lblCellSize";
-            _lblCellSize.Size = new Size(110, 23);
+            _lblCellSize.Size = new Size(110, 25);
             _lblCellSize.TabIndex = 11;
             _lblCellSize.Text = "Cell Size (pixels):";
             // 
-            // numericUpDown1
+            // _nudCellSize
             // 
-            numericUpDown1.Location = new Point(113, 71);
-            numericUpDown1.Name = "numericUpDown1";
-            numericUpDown1.Size = new Size(60, 23);
-            numericUpDown1.TabIndex = 5;
-            numericUpDown1.Value = new decimal(new int[] { 10, 0, 0, 0 });
-            // 
-            // label5
-            // 
-            label5.Location = new Point(18, 52);
-            label5.Name = "label5";
-            label5.Size = new Size(80, 20);
-            label5.TabIndex = 0;
-            label5.Text = "Grid Width:";
-            // 
-            // numericUpDown2
-            // 
-            numericUpDown2.Location = new Point(113, 47);
-            numericUpDown2.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            numericUpDown2.Name = "numericUpDown2";
-            numericUpDown2.Size = new Size(60, 23);
-            numericUpDown2.TabIndex = 1;
-            numericUpDown2.Value = new decimal(new int[] { 10, 0, 0, 0 });
-            // 
-            // _lblGoals
-            // 
-            _lblGoals.Location = new Point(18, 132);
-            _lblGoals.Name = "_lblGoals";
-            _lblGoals.Size = new Size(80, 20);
-            _lblGoals.TabIndex = 0;
-            _lblGoals.Text = "Goal Count:";
-            // 
-            // _nudGoalCount
-            // 
-            _nudGoalCount.Location = new Point(113, 129);
-            _nudGoalCount.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
-            _nudGoalCount.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            _nudGoalCount.Name = "_nudGoalCount";
-            _nudGoalCount.Size = new Size(60, 23);
-            _nudGoalCount.TabIndex = 1;
-            _nudGoalCount.Value = new decimal(new int[] { 5, 0, 0, 0 });
-            // 
-            // _lblParking
-            // 
-            _lblParking.Location = new Point(235, 131);
-            _lblParking.Name = "_lblParking";
-            _lblParking.Size = new Size(90, 20);
-            _lblParking.TabIndex = 2;
-            _lblParking.Text = "Parking Count:";
-            // 
-            // _nudParkingCount
-            // 
-            _nudParkingCount.Location = new Point(330, 129);
-            _nudParkingCount.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
-            _nudParkingCount.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            _nudParkingCount.Name = "_nudParkingCount";
-            _nudParkingCount.Size = new Size(60, 23);
-            _nudParkingCount.TabIndex = 3;
-            _nudParkingCount.Value = new decimal(new int[] { 2, 0, 0, 0 });
-            // 
-            // label1
-            // 
-            label1.Location = new Point(200, 72);
-            label1.Name = "label1";
-            label1.Size = new Size(125, 20);
-            label1.TabIndex = 4;
-            label1.Text = "Semi Static Obstacles:";
-            // 
-            // label4
-            // 
-            label4.Location = new Point(18, 74);
-            label4.Name = "label4";
-            label4.Size = new Size(115, 20);
-            label4.TabIndex = 4;
-            label4.Text = "Grid Height:";
-            // 
-            // _nudSemiStaticObstacles
-            // 
-            _nudSemiStaticObstacles.Location = new Point(330, 69);
-            _nudSemiStaticObstacles.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
-            _nudSemiStaticObstacles.Name = "_nudSemiStaticObstacles";
-            _nudSemiStaticObstacles.Size = new Size(60, 23);
-            _nudSemiStaticObstacles.TabIndex = 5;
-            _nudSemiStaticObstacles.Value = new decimal(new int[] { 20, 0, 0, 0 });
-            // 
-            // _lblStatic
-            // 
-            _lblStatic.Location = new Point(200, 52);
-            _lblStatic.Name = "_lblStatic";
-            _lblStatic.Size = new Size(115, 20);
-            _lblStatic.TabIndex = 4;
-            _lblStatic.Text = "Static Obstacles:";
-            // 
-            // _nudStaticObstacles
-            // 
-            _nudStaticObstacles.Location = new Point(330, 45);
-            _nudStaticObstacles.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
-            _nudStaticObstacles.Name = "_nudStaticObstacles";
-            _nudStaticObstacles.Size = new Size(60, 23);
-            _nudStaticObstacles.TabIndex = 5;
-            _nudStaticObstacles.Value = new decimal(new int[] { 20, 0, 0, 0 });
-            // 
-            // _lblDynamic
-            // 
-            _lblDynamic.Location = new Point(200, 94);
-            _lblDynamic.Name = "_lblDynamic";
-            _lblDynamic.Size = new Size(125, 20);
-            _lblDynamic.TabIndex = 6;
-            _lblDynamic.Text = "Dynamic Obstacles:";
-            // 
-            // _nudDynamicObstacles
-            // 
-            _nudDynamicObstacles.Location = new Point(330, 93);
-            _nudDynamicObstacles.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
-            _nudDynamicObstacles.Name = "_nudDynamicObstacles";
-            _nudDynamicObstacles.Size = new Size(60, 23);
-            _nudDynamicObstacles.TabIndex = 7;
-            _nudDynamicObstacles.Value = new decimal(new int[] { 5, 0, 0, 0 });
-            // 
-            // _chkUseCustomStartPoint
-            // 
-            _chkUseCustomStartPoint.Location = new Point(25, 18);
-            _chkUseCustomStartPoint.Name = "_chkUseCustomStartPoint";
-            _chkUseCustomStartPoint.Size = new Size(150, 20);
-            _chkUseCustomStartPoint.TabIndex = 8;
-            _chkUseCustomStartPoint.Text = "Use Custom Start Point";
-            // 
-            // _lblCurrentStartPoint
-            // 
-            _lblCurrentStartPoint.Font = new Font("Segoe UI", 8F, FontStyle.Italic);
-            _lblCurrentStartPoint.Location = new Point(295, 18);
-            _lblCurrentStartPoint.Name = "_lblCurrentStartPoint";
-            _lblCurrentStartPoint.Size = new Size(120, 20);
-            _lblCurrentStartPoint.TabIndex = 9;
-            _lblCurrentStartPoint.Tag = new Point(10, 10);
-            _lblCurrentStartPoint.Text = "Current: (10, 10)";
-            // 
-            // _btnPickStartPoint
-            // 
-            _btnPickStartPoint.BackColor = Color.FromArgb(52, 152, 219);
-            _btnPickStartPoint.Cursor = Cursors.Hand;
-            _btnPickStartPoint.FlatStyle = FlatStyle.Flat;
-            _btnPickStartPoint.ForeColor = Color.White;
-            _btnPickStartPoint.Location = new Point(180, 14);
-            _btnPickStartPoint.Name = "_btnPickStartPoint";
-            _btnPickStartPoint.Size = new Size(100, 25);
-            _btnPickStartPoint.TabIndex = 10;
-            _btnPickStartPoint.Text = "Pick from Map";
-            _btnPickStartPoint.UseVisualStyleBackColor = false;
+            _nudCellSize.Location = new Point(123, 46);
+            _nudCellSize.Minimum = new decimal(new int[] { 10, 0, 0, 0 });
+            _nudCellSize.Name = "_nudCellSize";
+            _nudCellSize.Size = new Size(80, 23);
+            _nudCellSize.TabIndex = 12;
+            _nudCellSize.Value = new decimal(new int[] { 30, 0, 0, 0 });
             // 
             // _grpRobotProperties
             // 
-            _grpRobotProperties.Controls.Add(_nudSafetyMargin);
+            _grpRobotProperties.Controls.Add(_nudDetectionRange);
+            _grpRobotProperties.Controls.Add(_nudRobotHeight);
+            _grpRobotProperties.Controls.Add(_nudRobotWidth);
+            _grpRobotProperties.Controls.Add(_nudViewAngle);
             _grpRobotProperties.Controls.Add(_lblRobotName);
             _grpRobotProperties.Controls.Add(_txtRobotName);
             _grpRobotProperties.Controls.Add(_lblRobotSpeed);
@@ -679,50 +771,72 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _grpRobotProperties.Controls.Add(_nudRobotBattery);
             _grpRobotProperties.Controls.Add(_lblConsumption);
             _grpRobotProperties.Controls.Add(_nudConsumptionRate);
-            _grpRobotProperties.Controls.Add(label3);
-            _grpRobotProperties.Controls.Add(_lblViewAngle);
-            _grpRobotProperties.Controls.Add(_nudHeight);
             _grpRobotProperties.Controls.Add(label2);
-            _grpRobotProperties.Controls.Add(_nudViewAngle);
-            _grpRobotProperties.Controls.Add(_nudWidth);
+            _grpRobotProperties.Controls.Add(_lblViewAngle);
+            _grpRobotProperties.Controls.Add(label1);
             _grpRobotProperties.Controls.Add(_lblDetection);
-            _grpRobotProperties.Controls.Add(_nudDetectionRange);
             _grpRobotProperties.Controls.Add(_chkEnableDynamicCharging);
             _grpRobotProperties.Controls.Add(_lblChargingTime);
             _grpRobotProperties.Controls.Add(_nudChargingTime);
-            _grpRobotProperties.Controls.Add(_lblChargingTimeUnit);
             _grpRobotProperties.Controls.Add(_lblSafetyMargin);
+            _grpRobotProperties.Controls.Add(_nudSafetyMargin);
             _grpRobotProperties.Controls.Add(_lblSafetyMarginUnit);
-            _grpRobotProperties.Location = new Point(60, 273);
+            _grpRobotProperties.Location = new Point(80, 366);
             _grpRobotProperties.Name = "_grpRobotProperties";
-            _grpRobotProperties.Size = new Size(451, 214);
+            _grpRobotProperties.Size = new Size(480, 213);
             _grpRobotProperties.TabIndex = 2;
             _grpRobotProperties.TabStop = false;
             _grpRobotProperties.Text = "Robot Configuration";
             // 
-            // _nudSafetyMargin
+            // _nudDetectionRange
             // 
-            _nudSafetyMargin.DecimalPlaces = 1;
-            _nudSafetyMargin.Enabled = false;
-            _nudSafetyMargin.Location = new Point(325, 176);
-            _nudSafetyMargin.Maximum = new decimal(new int[] { 30, 0, 0, 0 });
-            _nudSafetyMargin.Minimum = new decimal(new int[] { 5, 0, 0, 0 });
-            _nudSafetyMargin.Name = "_nudSafetyMargin";
-            _nudSafetyMargin.Size = new Size(60, 23);
-            _nudSafetyMargin.TabIndex = 17;
-            _nudSafetyMargin.Value = new decimal(new int[] { 10, 0, 0, 0 });
+            _nudDetectionRange.Location = new Point(374, 76);
+            _nudDetectionRange.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
+            _nudDetectionRange.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            _nudDetectionRange.Name = "_nudDetectionRange";
+            _nudDetectionRange.Size = new Size(80, 23);
+            _nudDetectionRange.TabIndex = 11;
+            _nudDetectionRange.Value = new decimal(new int[] { 2, 0, 0, 0 });
+            // 
+            // _nudRobotHeight
+            // 
+            _nudRobotHeight.Location = new Point(372, 47);
+            _nudRobotHeight.Maximum = new decimal(new int[] { 360, 0, 0, 0 });
+            _nudRobotHeight.Name = "_nudRobotHeight";
+            _nudRobotHeight.Size = new Size(80, 23);
+            _nudRobotHeight.TabIndex = 9;
+            _nudRobotHeight.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            // 
+            // _nudRobotWidth
+            // 
+            _nudRobotWidth.Location = new Point(131, 46);
+            _nudRobotWidth.Maximum = new decimal(new int[] { 360, 0, 0, 0 });
+            _nudRobotWidth.Name = "_nudRobotWidth";
+            _nudRobotWidth.Size = new Size(80, 23);
+            _nudRobotWidth.TabIndex = 9;
+            _nudRobotWidth.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            // 
+            // _nudViewAngle
+            // 
+            _nudViewAngle.Location = new Point(131, 75);
+            _nudViewAngle.Maximum = new decimal(new int[] { 360, 0, 0, 0 });
+            _nudViewAngle.Minimum = new decimal(new int[] { 45, 0, 0, 0 });
+            _nudViewAngle.Name = "_nudViewAngle";
+            _nudViewAngle.Size = new Size(80, 23);
+            _nudViewAngle.TabIndex = 9;
+            _nudViewAngle.Value = new decimal(new int[] { 180, 0, 0, 0 });
             // 
             // _lblRobotName
             // 
             _lblRobotName.Location = new Point(15, 25);
             _lblRobotName.Name = "_lblRobotName";
-            _lblRobotName.Size = new Size(80, 20);
+            _lblRobotName.Size = new Size(80, 25);
             _lblRobotName.TabIndex = 0;
             _lblRobotName.Text = "Robot Name:";
             // 
             // _txtRobotName
             // 
-            _txtRobotName.Location = new Point(120, 25);
+            _txtRobotName.Location = new Point(131, 22);
             _txtRobotName.Name = "_txtRobotName";
             _txtRobotName.Size = new Size(80, 23);
             _txtRobotName.TabIndex = 1;
@@ -730,176 +844,271 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // 
             // _lblRobotSpeed
             // 
-            _lblRobotSpeed.Location = new Point(200, 25);
+            _lblRobotSpeed.Location = new Point(245, 25);
             _lblRobotSpeed.Name = "_lblRobotSpeed";
-            _lblRobotSpeed.Size = new Size(80, 20);
+            _lblRobotSpeed.Size = new Size(85, 25);
             _lblRobotSpeed.TabIndex = 2;
             _lblRobotSpeed.Text = "Speed (cm/s):";
             // 
             // _nudRobotSpeed
             // 
-            _nudRobotSpeed.Location = new Point(325, 23);
+            _nudRobotSpeed.Location = new Point(372, 23);
             _nudRobotSpeed.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             _nudRobotSpeed.Name = "_nudRobotSpeed";
-            _nudRobotSpeed.Size = new Size(60, 23);
+            _nudRobotSpeed.Size = new Size(80, 23);
             _nudRobotSpeed.TabIndex = 3;
-            _nudRobotSpeed.Value = new decimal(new int[] { 25, 0, 0, 0 });
+            _nudRobotSpeed.Value = new decimal(new int[] { 10, 0, 0, 0 });
             // 
             // _lblRobotBattery
             // 
-            _lblRobotBattery.Location = new Point(15, 123);
+            _lblRobotBattery.Location = new Point(17, 116);
             _lblRobotBattery.Name = "_lblRobotBattery";
-            _lblRobotBattery.Size = new Size(99, 20);
+            _lblRobotBattery.Size = new Size(80, 25);
             _lblRobotBattery.TabIndex = 4;
             _lblRobotBattery.Text = "Battery (%):";
             // 
             // _nudRobotBattery
             // 
-            _nudRobotBattery.Location = new Point(120, 122);
+            _nudRobotBattery.Location = new Point(131, 113);
             _nudRobotBattery.Name = "_nudRobotBattery";
-            _nudRobotBattery.Size = new Size(60, 23);
+            _nudRobotBattery.Size = new Size(80, 23);
             _nudRobotBattery.TabIndex = 5;
             _nudRobotBattery.Value = new decimal(new int[] { 100, 0, 0, 0 });
             // 
             // _lblConsumption
             // 
-            _lblConsumption.Location = new Point(200, 122);
+            _lblConsumption.Location = new Point(245, 116);
             _lblConsumption.Name = "_lblConsumption";
-            _lblConsumption.Size = new Size(120, 20);
+            _lblConsumption.Size = new Size(121, 25);
             _lblConsumption.TabIndex = 6;
             _lblConsumption.Text = "Consumption (%/m):";
             // 
             // _nudConsumptionRate
             // 
             _nudConsumptionRate.DecimalPlaces = 1;
-            _nudConsumptionRate.Location = new Point(325, 121);
-            _nudConsumptionRate.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
-            _nudConsumptionRate.Minimum = new decimal(new int[] { 1, 0, 0, 65536 });
+            _nudConsumptionRate.Location = new Point(372, 114);
             _nudConsumptionRate.Name = "_nudConsumptionRate";
-            _nudConsumptionRate.Size = new Size(60, 23);
+            _nudConsumptionRate.Size = new Size(80, 23);
             _nudConsumptionRate.TabIndex = 7;
-            _nudConsumptionRate.Value = new decimal(new int[] { 10, 0, 0, 65536 });
-            // 
-            // label3
-            // 
-            label3.Location = new Point(15, 57);
-            label3.Name = "label3";
-            label3.Size = new Size(80, 20);
-            label3.TabIndex = 8;
-            label3.Text = "Height:";
-            // 
-            // _lblViewAngle
-            // 
-            _lblViewAngle.Location = new Point(15, 85);
-            _lblViewAngle.Name = "_lblViewAngle";
-            _lblViewAngle.Size = new Size(100, 20);
-            _lblViewAngle.TabIndex = 8;
-            _lblViewAngle.Text = "View Angle (deg):";
-            // 
-            // _nudHeight
-            // 
-            _nudHeight.Location = new Point(120, 54);
-            _nudHeight.Minimum = new decimal(new int[] { 20, 0, 0, 0 });
-            _nudHeight.Name = "_nudHeight";
-            _nudHeight.Size = new Size(60, 23);
-            _nudHeight.TabIndex = 9;
-            _nudHeight.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            _nudConsumptionRate.Value = new decimal(new int[] { 1, 0, 0, 65536 });
             // 
             // label2
             // 
-            label2.Location = new Point(210, 57);
+            label2.Location = new Point(16, 48);
             label2.Name = "label2";
-            label2.Size = new Size(80, 20);
-            label2.TabIndex = 10;
-            label2.Text = "Width:";
+            label2.Size = new Size(88, 25);
+            label2.TabIndex = 8;
+            label2.Text = "Height (cm):";
             // 
-            // _nudViewAngle
+            // _lblViewAngle
             // 
-            _nudViewAngle.Location = new Point(120, 82);
-            _nudViewAngle.Maximum = new decimal(new int[] { 360, 0, 0, 0 });
-            _nudViewAngle.Minimum = new decimal(new int[] { 45, 0, 0, 0 });
-            _nudViewAngle.Name = "_nudViewAngle";
-            _nudViewAngle.Size = new Size(60, 23);
-            _nudViewAngle.TabIndex = 9;
-            _nudViewAngle.Value = new decimal(new int[] { 180, 0, 0, 0 });
+            _lblViewAngle.Location = new Point(7, 78);
+            _lblViewAngle.Name = "_lblViewAngle";
+            _lblViewAngle.Size = new Size(100, 25);
+            _lblViewAngle.TabIndex = 8;
+            _lblViewAngle.Text = "View Angle (deg):";
             // 
-            // _nudWidth
+            // label1
             // 
-            _nudWidth.Location = new Point(325, 54);
-            _nudWidth.Minimum = new decimal(new int[] { 20, 0, 0, 0 });
-            _nudWidth.Name = "_nudWidth";
-            _nudWidth.Size = new Size(60, 23);
-            _nudWidth.TabIndex = 11;
-            _nudWidth.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            label1.Location = new Point(247, 49);
+            label1.Name = "label1";
+            label1.Size = new Size(110, 25);
+            label1.TabIndex = 10;
+            label1.Text = "Width (cm):";
             // 
             // _lblDetection
             // 
-            _lblDetection.Location = new Point(200, 85);
+            _lblDetection.Location = new Point(247, 78);
             _lblDetection.Name = "_lblDetection";
-            _lblDetection.Size = new Size(120, 20);
+            _lblDetection.Size = new Size(110, 25);
             _lblDetection.TabIndex = 10;
-            _lblDetection.Text = "Detection Range (cells):";
-            // 
-            // _nudDetectionRange
-            // 
-            _nudDetectionRange.Location = new Point(325, 82);
-            _nudDetectionRange.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
-            _nudDetectionRange.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            _nudDetectionRange.Name = "_nudDetectionRange";
-            _nudDetectionRange.Size = new Size(60, 23);
-            _nudDetectionRange.TabIndex = 11;
-            _nudDetectionRange.Value = new decimal(new int[] { 2, 0, 0, 0 });
+            _lblDetection.Text = "Detection Range:";
             // 
             // _chkEnableDynamicCharging
             // 
-            _chkEnableDynamicCharging.Location = new Point(15, 151);
+            _chkEnableDynamicCharging.Location = new Point(16, 142);
             _chkEnableDynamicCharging.Name = "_chkEnableDynamicCharging";
-            _chkEnableDynamicCharging.Size = new Size(150, 20);
+            _chkEnableDynamicCharging.Size = new Size(160, 25);
             _chkEnableDynamicCharging.TabIndex = 12;
             _chkEnableDynamicCharging.Text = "Enable Dynamic Charging";
             // 
             // _lblChargingTime
             // 
-            _lblChargingTime.Location = new Point(15, 179);
+            _lblChargingTime.Location = new Point(251, 171);
             _lblChargingTime.Name = "_lblChargingTime";
-            _lblChargingTime.Size = new Size(90, 20);
+            _lblChargingTime.Size = new Size(120, 25);
             _lblChargingTime.TabIndex = 13;
-            _lblChargingTime.Text = "Charging Time:";
+            _lblChargingTime.Text = "Charging Time (sec):";
             // 
             // _nudChargingTime
             // 
             _nudChargingTime.Enabled = false;
-            _nudChargingTime.Location = new Point(120, 176);
+            _nudChargingTime.Location = new Point(372, 168);
             _nudChargingTime.Maximum = new decimal(new int[] { 3600, 0, 0, 0 });
             _nudChargingTime.Minimum = new decimal(new int[] { 5, 0, 0, 0 });
             _nudChargingTime.Name = "_nudChargingTime";
-            _nudChargingTime.Size = new Size(60, 23);
+            _nudChargingTime.Size = new Size(80, 23);
             _nudChargingTime.TabIndex = 14;
             _nudChargingTime.Value = new decimal(new int[] { 15, 0, 0, 0 });
             // 
-            // _lblChargingTimeUnit
-            // 
-            _lblChargingTimeUnit.Location = new Point(183, 179);
-            _lblChargingTimeUnit.Name = "_lblChargingTimeUnit";
-            _lblChargingTimeUnit.Size = new Size(50, 20);
-            _lblChargingTimeUnit.TabIndex = 15;
-            _lblChargingTimeUnit.Text = "seconds";
-            // 
             // _lblSafetyMargin
             // 
-            _lblSafetyMargin.Location = new Point(240, 179);
+            _lblSafetyMargin.Location = new Point(16, 173);
             _lblSafetyMargin.Name = "_lblSafetyMargin";
-            _lblSafetyMargin.Size = new Size(95, 20);
+            _lblSafetyMargin.Size = new Size(90, 25);
             _lblSafetyMargin.TabIndex = 16;
             _lblSafetyMargin.Text = "Safety Margin:";
             // 
+            // _nudSafetyMargin
+            // 
+            _nudSafetyMargin.DecimalPlaces = 1;
+            _nudSafetyMargin.Enabled = false;
+            _nudSafetyMargin.Location = new Point(131, 169);
+            _nudSafetyMargin.Maximum = new decimal(new int[] { 30, 0, 0, 0 });
+            _nudSafetyMargin.Minimum = new decimal(new int[] { 5, 0, 0, 0 });
+            _nudSafetyMargin.Name = "_nudSafetyMargin";
+            _nudSafetyMargin.Size = new Size(80, 23);
+            _nudSafetyMargin.TabIndex = 17;
+            _nudSafetyMargin.Value = new decimal(new int[] { 10, 0, 0, 0 });
+            // 
             // _lblSafetyMarginUnit
             // 
-            _lblSafetyMarginUnit.Location = new Point(391, 179);
+            _lblSafetyMarginUnit.Location = new Point(219, 171);
             _lblSafetyMarginUnit.Name = "_lblSafetyMarginUnit";
-            _lblSafetyMarginUnit.Size = new Size(30, 20);
+            _lblSafetyMarginUnit.Size = new Size(25, 20);
             _lblSafetyMarginUnit.TabIndex = 18;
             _lblSafetyMarginUnit.Text = "%";
+            // 
+            // _tabSensitivity
+            // 
+            _tabSensitivity.Controls.Add(_chkEnableSensitivity);
+            _tabSensitivity.Controls.Add(pnlSensitivity);
+            _tabSensitivity.Location = new Point(4, 24);
+            _tabSensitivity.Name = "_tabSensitivity";
+            _tabSensitivity.Size = new Size(642, 603);
+            _tabSensitivity.TabIndex = 2;
+            _tabSensitivity.Text = "Sensitivity Analysis";
+            // 
+            // _chkEnableSensitivity
+            // 
+            _chkEnableSensitivity.Location = new Point(51, 15);
+            _chkEnableSensitivity.Name = "_chkEnableSensitivity";
+            _chkEnableSensitivity.Size = new Size(121, 24);
+            _chkEnableSensitivity.TabIndex = 0;
+            _chkEnableSensitivity.Text = "EnableSensitivity";
+            // 
+            // pnlSensitivity
+            // 
+            pnlSensitivity.BorderStyle = BorderStyle.FixedSingle;
+            pnlSensitivity.Controls.Add(_dgvSensitivityResults);
+            pnlSensitivity.Controls.Add(_lblAlgorithm);
+            pnlSensitivity.Controls.Add(_lblParameter);
+            pnlSensitivity.Controls.Add(_cboAlgorithm);
+            pnlSensitivity.Controls.Add(_cboSensitivityParameter);
+            pnlSensitivity.Controls.Add(_lblValues);
+            pnlSensitivity.Controls.Add(_txtSensitivityValues);
+            pnlSensitivity.Controls.Add(_btnValidateValues);
+            pnlSensitivity.Controls.Add(_btnRunSensitivity);
+            pnlSensitivity.Controls.Add(_lblSensitivityStatus);
+            pnlSensitivity.Location = new Point(50, 45);
+            pnlSensitivity.Name = "pnlSensitivity";
+            pnlSensitivity.Size = new Size(548, 502);
+            pnlSensitivity.TabIndex = 0;
+            // 
+            // _dgvSensitivityResults
+            // 
+            _dgvSensitivityResults.Columns.AddRange(new DataGridViewColumn[] { dataGridViewTextBoxColumn1, dataGridViewTextBoxColumn2, dataGridViewTextBoxColumn3, dataGridViewTextBoxColumn4, dataGridViewTextBoxColumn5 });
+            _dgvSensitivityResults.Dock = DockStyle.Bottom;
+            _dgvSensitivityResults.Location = new Point(0, 141);
+            _dgvSensitivityResults.Name = "_dgvSensitivityResults";
+            _dgvSensitivityResults.Size = new Size(546, 359);
+            _dgvSensitivityResults.TabIndex = 6;
+            // 
+            // dataGridViewTextBoxColumn1
+            // 
+            dataGridViewTextBoxColumn1.HeaderText = "Parameter Value";
+            dataGridViewTextBoxColumn1.Name = "dataGridViewTextBoxColumn1";
+            // 
+            // dataGridViewTextBoxColumn2
+            // 
+            dataGridViewTextBoxColumn2.HeaderText = "Path Length (cells)";
+            dataGridViewTextBoxColumn2.Name = "dataGridViewTextBoxColumn2";
+            // 
+            // dataGridViewTextBoxColumn3
+            // 
+            dataGridViewTextBoxColumn3.HeaderText = "Time (ms)";
+            dataGridViewTextBoxColumn3.Name = "dataGridViewTextBoxColumn3";
+            // 
+            // dataGridViewTextBoxColumn4
+            // 
+            dataGridViewTextBoxColumn4.HeaderText = "Success";
+            dataGridViewTextBoxColumn4.Name = "dataGridViewTextBoxColumn4";
+            // 
+            // dataGridViewTextBoxColumn5
+            // 
+            dataGridViewTextBoxColumn5.HeaderText = "Collisions";
+            dataGridViewTextBoxColumn5.Name = "dataGridViewTextBoxColumn5";
+            // 
+            // _lblParameter
+            // 
+            _lblParameter.Location = new Point(44, 38);
+            _lblParameter.Name = "_lblParameter";
+            _lblParameter.Size = new Size(100, 23);
+            _lblParameter.TabIndex = 1;
+            _lblParameter.Text = "Parameter:";
+            // 
+            // _cboSensitivityParameter
+            // 
+            _cboSensitivityParameter.Items.AddRange(new object[] { "Lambda (λ) - Obstacle weight", "LearningRate (α) - Memory weight (SPPA-DL only)", "PredictionWeight (β) - ML risk weight (SPPA-DL only)", "Alpha_S - Static obstacle weight", "Alpha_SS - Semi-static obstacle weight", "Alpha_D - Dynamic obstacle weight" });
+            _cboSensitivityParameter.Location = new Point(150, 36);
+            _cboSensitivityParameter.Name = "_cboSensitivityParameter";
+            _cboSensitivityParameter.Size = new Size(229, 23);
+            _cboSensitivityParameter.TabIndex = 2;
+            _cboSensitivityParameter.Text = "Lambda (λ) - Obstacle weight";
+            // 
+            // _lblValues
+            // 
+            _lblValues.Location = new Point(44, 70);
+            _lblValues.Name = "_lblValues";
+            _lblValues.Size = new Size(100, 23);
+            _lblValues.TabIndex = 3;
+            _lblValues.Text = "Values:";
+            // 
+            // _txtSensitivityValues
+            // 
+            _txtSensitivityValues.Location = new Point(150, 69);
+            _txtSensitivityValues.Name = "_txtSensitivityValues";
+            _txtSensitivityValues.Size = new Size(121, 23);
+            _txtSensitivityValues.TabIndex = 4;
+            // 
+            // _btnValidateValues
+            // 
+            _btnValidateValues.Location = new Point(277, 63);
+            _btnValidateValues.Name = "_btnValidateValues";
+            _btnValidateValues.Size = new Size(102, 23);
+            _btnValidateValues.TabIndex = 5;
+            _btnValidateValues.Text = "Validate";
+            // 
+            // _btnRunSensitivity
+            // 
+            _btnRunSensitivity.BackColor = Color.FromArgb(52, 152, 219);
+            _btnRunSensitivity.FlatStyle = FlatStyle.Flat;
+            _btnRunSensitivity.ForeColor = Color.White;
+            _btnRunSensitivity.Location = new Point(277, 90);
+            _btnRunSensitivity.Name = "_btnRunSensitivity";
+            _btnRunSensitivity.Size = new Size(102, 26);
+            _btnRunSensitivity.TabIndex = 7;
+            _btnRunSensitivity.Text = "RunSensitivity";
+            _btnRunSensitivity.UseVisualStyleBackColor = false;
+            // 
+            // _lblSensitivityStatus
+            // 
+            _lblSensitivityStatus.BorderStyle = BorderStyle.FixedSingle;
+            _lblSensitivityStatus.Location = new Point(44, 93);
+            _lblSensitivityStatus.Name = "_lblSensitivityStatus";
+            _lblSensitivityStatus.Size = new Size(227, 23);
+            _lblSensitivityStatus.TabIndex = 8;
+            _lblSensitivityStatus.Text = "SensitivityStatus:";
             // 
             // _tabExperimentSettings
             // 
@@ -907,8 +1116,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _tabExperimentSettings.Controls.Add(_grpInfo);
             _tabExperimentSettings.Location = new Point(4, 24);
             _tabExperimentSettings.Name = "_tabExperimentSettings";
-            _tabExperimentSettings.Size = new Size(583, 490);
-            _tabExperimentSettings.TabIndex = 0;
+            _tabExperimentSettings.Size = new Size(642, 603);
+            _tabExperimentSettings.TabIndex = 3;
             _tabExperimentSettings.Text = "Experiment";
             // 
             // _grpExperimentSettings
@@ -923,52 +1132,53 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _grpExperimentSettings.Controls.Add(_lblSavePath);
             _grpExperimentSettings.Controls.Add(_txtSavePath);
             _grpExperimentSettings.Controls.Add(_btnBrowseSavePath);
-            _grpExperimentSettings.Location = new Point(8, 67);
+            _grpExperimentSettings.Location = new Point(50, 20);
             _grpExperimentSettings.Name = "_grpExperimentSettings";
-            _grpExperimentSettings.Size = new Size(563, 155);
+            _grpExperimentSettings.Size = new Size(540, 160);
             _grpExperimentSettings.TabIndex = 0;
             _grpExperimentSettings.TabStop = false;
             _grpExperimentSettings.Text = "Experiment Settings";
             // 
             // _lblExpName
             // 
-            _lblExpName.Location = new Point(15, 25);
+            _lblExpName.Location = new Point(15, 30);
             _lblExpName.Name = "_lblExpName";
-            _lblExpName.Size = new Size(100, 23);
+            _lblExpName.Size = new Size(110, 25);
             _lblExpName.TabIndex = 0;
             _lblExpName.Text = "Experiment Name:";
             // 
             // _txtExperimentName
             // 
-            _txtExperimentName.Location = new Point(120, 22);
+            _txtExperimentName.Location = new Point(140, 28);
             _txtExperimentName.Name = "_txtExperimentName";
-            _txtExperimentName.Size = new Size(250, 23);
+            _txtExperimentName.Size = new Size(280, 23);
             _txtExperimentName.TabIndex = 1;
+            _txtExperimentName.Text = "Experiment";
             // 
             // _lblIterations
             // 
-            _lblIterations.Location = new Point(15, 55);
+            _lblIterations.Location = new Point(15, 65);
             _lblIterations.Name = "_lblIterations";
-            _lblIterations.Size = new Size(70, 23);
+            _lblIterations.Size = new Size(70, 25);
             _lblIterations.TabIndex = 2;
             _lblIterations.Text = "Iterations:";
             // 
             // _nudIterations
             // 
-            _nudIterations.Location = new Point(120, 53);
+            _nudIterations.Location = new Point(140, 63);
             _nudIterations.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             _nudIterations.Name = "_nudIterations";
             _nudIterations.Size = new Size(80, 23);
             _nudIterations.TabIndex = 3;
-            _nudIterations.Value = new decimal(new int[] { 5, 0, 0, 0 });
+            _nudIterations.Value = new decimal(new int[] { 1, 0, 0, 0 });
             // 
             // _chkSaveScreenshots
             // 
             _chkSaveScreenshots.Checked = true;
             _chkSaveScreenshots.CheckState = CheckState.Checked;
-            _chkSaveScreenshots.Location = new Point(210, 53);
+            _chkSaveScreenshots.Location = new Point(250, 63);
             _chkSaveScreenshots.Name = "_chkSaveScreenshots";
-            _chkSaveScreenshots.Size = new Size(120, 23);
+            _chkSaveScreenshots.Size = new Size(120, 25);
             _chkSaveScreenshots.TabIndex = 4;
             _chkSaveScreenshots.Text = "Save Screenshots";
             // 
@@ -976,9 +1186,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // 
             _chkSaveReplay.Checked = true;
             _chkSaveReplay.CheckState = CheckState.Checked;
-            _chkSaveReplay.Location = new Point(340, 53);
+            _chkSaveReplay.Location = new Point(380, 63);
             _chkSaveReplay.Name = "_chkSaveReplay";
-            _chkSaveReplay.Size = new Size(100, 23);
+            _chkSaveReplay.Size = new Size(100, 25);
             _chkSaveReplay.TabIndex = 5;
             _chkSaveReplay.Text = "Save Replay";
             // 
@@ -986,28 +1196,27 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // 
             _chkShowPathOnScreenshots.Checked = true;
             _chkShowPathOnScreenshots.CheckState = CheckState.Checked;
-            _chkShowPathOnScreenshots.Location = new Point(120, 83);
+            _chkShowPathOnScreenshots.Location = new Point(140, 95);
             _chkShowPathOnScreenshots.Name = "_chkShowPathOnScreenshots";
-            _chkShowPathOnScreenshots.Size = new Size(180, 23);
+            _chkShowPathOnScreenshots.Size = new Size(200, 25);
             _chkShowPathOnScreenshots.TabIndex = 6;
             _chkShowPathOnScreenshots.Text = "Show Path on Screenshots";
             // 
             // _lblSavePath
             // 
-            _lblSavePath.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            _lblSavePath.Location = new Point(15, 115);
+            _lblSavePath.Location = new Point(15, 130);
             _lblSavePath.Name = "_lblSavePath";
-            _lblSavePath.Size = new Size(90, 23);
+            _lblSavePath.Size = new Size(90, 25);
             _lblSavePath.TabIndex = 7;
             _lblSavePath.Text = "Save Location:";
             // 
             // _txtSavePath
             // 
             _txtSavePath.BackColor = Color.WhiteSmoke;
-            _txtSavePath.Location = new Point(120, 112);
+            _txtSavePath.Location = new Point(140, 128);
             _txtSavePath.Name = "_txtSavePath";
             _txtSavePath.ReadOnly = true;
-            _txtSavePath.Size = new Size(260, 23);
+            _txtSavePath.Size = new Size(320, 23);
             _txtSavePath.TabIndex = 8;
             // 
             // _btnBrowseSavePath
@@ -1015,7 +1224,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnBrowseSavePath.BackColor = Color.FromArgb(52, 152, 219);
             _btnBrowseSavePath.FlatStyle = FlatStyle.Flat;
             _btnBrowseSavePath.ForeColor = Color.White;
-            _btnBrowseSavePath.Location = new Point(386, 110);
+            _btnBrowseSavePath.Location = new Point(470, 126);
             _btnBrowseSavePath.Name = "_btnBrowseSavePath";
             _btnBrowseSavePath.Size = new Size(40, 25);
             _btnBrowseSavePath.TabIndex = 9;
@@ -1025,20 +1234,20 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             // _grpInfo
             // 
             _grpInfo.Controls.Add(_lblInfo);
-            _grpInfo.Location = new Point(8, 300);
+            _grpInfo.Location = new Point(50, 200);
             _grpInfo.Name = "_grpInfo";
-            _grpInfo.Size = new Size(563, 162);
+            _grpInfo.Size = new Size(540, 138);
             _grpInfo.TabIndex = 1;
             _grpInfo.TabStop = false;
             _grpInfo.Text = "Information";
             // 
             // _lblInfo
             // 
-            _lblInfo.Font = new Font("Segoe UI", 10F);
+            _lblInfo.Font = new Font("Segoe UI", 9F);
             _lblInfo.ForeColor = Color.DarkBlue;
-            _lblInfo.Location = new Point(15, 47);
+            _lblInfo.Location = new Point(15, 20);
             _lblInfo.Name = "_lblInfo";
-            _lblInfo.Size = new Size(506, 75);
+            _lblInfo.Size = new Size(510, 108);
             _lblInfo.TabIndex = 0;
             _lblInfo.Text = resources.GetString("_lblInfo.Text");
             // 
@@ -1049,10 +1258,10 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _bottomPanel.Controls.Add(_lblStatus);
             _bottomPanel.Controls.Add(_progressBar);
             _bottomPanel.Dock = DockStyle.Bottom;
-            _bottomPanel.Location = new Point(0, 518);
+            _bottomPanel.Location = new Point(0, 631);
             _bottomPanel.Name = "_bottomPanel";
             _bottomPanel.Padding = new Padding(5);
-            _bottomPanel.Size = new Size(591, 92);
+            _bottomPanel.Size = new Size(650, 85);
             _bottomPanel.TabIndex = 1;
             // 
             // _buttonPanel
@@ -1062,9 +1271,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _buttonPanel.Controls.Add(_btnLoadSettings);
             _buttonPanel.Controls.Add(_btnCancel);
             _buttonPanel.Dock = DockStyle.Top;
-            _buttonPanel.Location = new Point(5, 50);
+            _buttonPanel.Location = new Point(5, 47);
             _buttonPanel.Name = "_buttonPanel";
-            _buttonPanel.Size = new Size(581, 35);
+            _buttonPanel.Size = new Size(640, 35);
             _buttonPanel.TabIndex = 0;
             // 
             // _btnRunComparison
@@ -1074,9 +1283,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnRunComparison.FlatStyle = FlatStyle.Flat;
             _btnRunComparison.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _btnRunComparison.ForeColor = Color.White;
-            _btnRunComparison.Location = new Point(10, 3);
+            _btnRunComparison.Location = new Point(10, 5);
             _btnRunComparison.Name = "_btnRunComparison";
-            _btnRunComparison.Size = new Size(130, 30);
+            _btnRunComparison.Size = new Size(130, 28);
             _btnRunComparison.TabIndex = 0;
             _btnRunComparison.Text = "Run Comparison";
             _btnRunComparison.UseVisualStyleBackColor = false;
@@ -1088,9 +1297,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnSaveSettings.FlatStyle = FlatStyle.Flat;
             _btnSaveSettings.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _btnSaveSettings.ForeColor = Color.White;
-            _btnSaveSettings.Location = new Point(150, 3);
+            _btnSaveSettings.Location = new Point(150, 5);
             _btnSaveSettings.Name = "_btnSaveSettings";
-            _btnSaveSettings.Size = new Size(120, 30);
+            _btnSaveSettings.Size = new Size(120, 28);
             _btnSaveSettings.TabIndex = 1;
             _btnSaveSettings.Text = "Save Settings";
             _btnSaveSettings.UseVisualStyleBackColor = false;
@@ -1102,9 +1311,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnLoadSettings.FlatStyle = FlatStyle.Flat;
             _btnLoadSettings.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _btnLoadSettings.ForeColor = Color.White;
-            _btnLoadSettings.Location = new Point(280, 3);
+            _btnLoadSettings.Location = new Point(280, 5);
             _btnLoadSettings.Name = "_btnLoadSettings";
-            _btnLoadSettings.Size = new Size(120, 30);
+            _btnLoadSettings.Size = new Size(120, 28);
             _btnLoadSettings.TabIndex = 2;
             _btnLoadSettings.Text = "Load Settings";
             _btnLoadSettings.UseVisualStyleBackColor = false;
@@ -1116,21 +1325,21 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _btnCancel.FlatStyle = FlatStyle.Flat;
             _btnCancel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _btnCancel.ForeColor = Color.White;
-            _btnCancel.Location = new Point(410, 3);
+            _btnCancel.Location = new Point(410, 5);
             _btnCancel.Name = "_btnCancel";
-            _btnCancel.Size = new Size(100, 30);
+            _btnCancel.Size = new Size(100, 28);
             _btnCancel.TabIndex = 3;
             _btnCancel.Text = "Cancel";
             _btnCancel.UseVisualStyleBackColor = false;
             // 
             // _lblStatus
             // 
-            _lblStatus.BackColor = Color.FromArgb(240, 240, 240);
+            _lblStatus.BackColor = Color.White;
             _lblStatus.BorderStyle = BorderStyle.FixedSingle;
             _lblStatus.Dock = DockStyle.Top;
-            _lblStatus.Location = new Point(5, 25);
+            _lblStatus.Location = new Point(5, 22);
             _lblStatus.Name = "_lblStatus";
-            _lblStatus.Size = new Size(581, 25);
+            _lblStatus.Size = new Size(640, 25);
             _lblStatus.TabIndex = 1;
             _lblStatus.Text = "Ready";
             _lblStatus.TextAlign = ContentAlignment.MiddleLeft;
@@ -1140,17 +1349,58 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _progressBar.Dock = DockStyle.Top;
             _progressBar.Location = new Point(5, 5);
             _progressBar.Name = "_progressBar";
-            _progressBar.Size = new Size(581, 20);
+            _progressBar.Size = new Size(640, 17);
             _progressBar.Style = ProgressBarStyle.Continuous;
             _progressBar.TabIndex = 2;
+            // 
+            // colEnabled
+            // 
+            colEnabled.Name = "colEnabled";
+            // 
+            // colAlgorithm
+            // 
+            colAlgorithm.Name = "colAlgorithm";
+            // 
+            // colMetric
+            // 
+            colMetric.Name = "colMetric";
+            // 
+            // colParameters
+            // 
+            colParameters.Name = "colParameters";
+            // 
+            // colEdit
+            // 
+            colEdit.Name = "colEdit";
+            // 
+            // colDuplicate
+            // 
+            colDuplicate.Name = "colDuplicate";
+            // 
+            // _cboAlgorithm
+            // 
+            _cboAlgorithm.Text = "Lambda (λ) - Obstacle weight";
+            _cboAlgorithm.Location = new Point(150, 9);
+            _cboAlgorithm.Name = "_cboAlgorithm";
+            _cboAlgorithm.Size = new Size(229, 23);
+            _cboAlgorithm.TabIndex = 2;
+            _cboAlgorithm.Text = "Lambda (λ) - Obstacle weight";
+            // 
+            // _lblAlgorithm
+            // 
+            _lblAlgorithm.Location = new Point(44, 11);
+            _lblAlgorithm.Name = "_lblAlgorithm";
+            _lblAlgorithm.Size = new Size(100, 23);
+            _lblAlgorithm.TabIndex = 1;
+            _lblAlgorithm.Text = "Algorithm:";
             // 
             // frmExperimentDesigner
             // 
             BackColor = Color.White;
-            ClientSize = new Size(591, 610);
+            ClientSize = new Size(650, 716);
             Controls.Add(_mainTabControl);
             Controls.Add(_bottomPanel);
-            MinimumSize = new Size(500, 500);
+            MinimumSize = new Size(600, 600);
             Name = "frmExperimentDesigner";
             StartPosition = FormStartPosition.CenterParent;
             Text = "Experiment Designer";
@@ -1161,28 +1411,35 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             _grpMLSettings.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)_nudLearningRate).EndInit();
             _tabMapSettings.ResumeLayout(false);
+            groupBox1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)_nudDynamicObstacles).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudStaticObstacles).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudRoughTerrain).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudSemiStaticObstacles).EndInit();
+            _grpMapPoints.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)_nudParkingCount).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudGoalCount).EndInit();
             _grpMapSource.ResumeLayout(false);
             _grpMapSource.PerformLayout();
             _grpMapProperties.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)_nudGridWidth).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudGridHeight).EndInit();
             ((System.ComponentModel.ISupportInitialize)_nudCellSize).EndInit();
-            ((System.ComponentModel.ISupportInitialize)numericUpDown1).EndInit();
-            ((System.ComponentModel.ISupportInitialize)numericUpDown2).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudGoalCount).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudParkingCount).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudSemiStaticObstacles).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudStaticObstacles).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudDynamicObstacles).EndInit();
             _grpRobotProperties.ResumeLayout(false);
             _grpRobotProperties.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)_nudSafetyMargin).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudDetectionRange).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudRobotHeight).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudRobotWidth).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudViewAngle).EndInit();
             ((System.ComponentModel.ISupportInitialize)_nudRobotSpeed).EndInit();
             ((System.ComponentModel.ISupportInitialize)_nudRobotBattery).EndInit();
             ((System.ComponentModel.ISupportInitialize)_nudConsumptionRate).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudHeight).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudViewAngle).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudWidth).EndInit();
-            ((System.ComponentModel.ISupportInitialize)_nudDetectionRange).EndInit();
             ((System.ComponentModel.ISupportInitialize)_nudChargingTime).EndInit();
+            ((System.ComponentModel.ISupportInitialize)_nudSafetyMargin).EndInit();
+            _tabSensitivity.ResumeLayout(false);
+            pnlSensitivity.ResumeLayout(false);
+            pnlSensitivity.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)_dgvSensitivityResults).EndInit();
             _tabExperimentSettings.ResumeLayout(false);
             _grpExperimentSettings.ResumeLayout(false);
             _grpExperimentSettings.PerformLayout();
@@ -1193,369 +1450,19 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner
             ResumeLayout(false);
         }
 
-        private void InitializeSensitivityTab()
-        {
-            _tabSensitivity = new TabPage("🔬 Sensitivity Analysis");
-
-            // Create panel
-            var pnlSensitivity = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(10),
-                AutoScroll = true
-            };
-
-            int y = 10;
-
-            // Enable CheckBox
-            _chkEnableSensitivity = new CheckBox
-            {
-                Text = "Enable Sensitivity Analysis",
-                Location = new Point(10, y),
-                Size = new Size(200, 25),
-                Checked = false
-            };
-            _chkEnableSensitivity.CheckedChanged += (s, e) => UpdateSensitivityControlsState();
-            pnlSensitivity.Controls.Add(_chkEnableSensitivity);
-            y += 35;
-
-            // Parameter selection
-            _lblParameter = new Label
-            {
-                Text = "Parameter to analyze:",
-                Location = new Point(10, y),
-                Size = new Size(150, 25),
-                Enabled = false
-            };
-            pnlSensitivity.Controls.Add(_lblParameter);
-
-            _cboSensitivityParameter = new ComboBox
-            {
-                Location = new Point(160, y),
-                Size = new Size(180, 25),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Enabled = false
-            };
-            _cboSensitivityParameter.Items.AddRange(new string[]
-            {
-        "Lambda (λ) - Obstacle weight",
-        "LearningRate (α) - Memory weight (SPPA-DL only)",
-        "PredictionWeight (β) - ML risk weight (SPPA-DL only)",
-        "Alpha_S - Static obstacle weight",
-        "Alpha_SS - Semi-static obstacle weight",
-        "Alpha_D - Dynamic obstacle weight"
-            });
-            _cboSensitivityParameter.SelectedIndex = 0;
-            pnlSensitivity.Controls.Add(_cboSensitivityParameter);
-            y += 35;
-
-            // Values input
-            _lblValues = new Label
-            {
-                Text = "Values (comma-separated):",
-                Location = new Point(10, y),
-                Size = new Size(150, 25),
-                Enabled = false
-            };
-            pnlSensitivity.Controls.Add(_lblValues);
-
-            _txtSensitivityValues = new TextBox
-            {
-                Location = new Point(160, y),
-                Size = new Size(200, 25),
-                Text = "1.0,1.5,2.0,2.5,3.0",
-                Enabled = false
-            };
-            pnlSensitivity.Controls.Add(_txtSensitivityValues);
-
-            _btnValidateValues = new Button
-            {
-                Text = "Validate",
-                Location = new Point(370, y),
-                Size = new Size(70, 25),
-                Enabled = false,
-                BackColor = Color.FromArgb(52, 152, 219),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            _btnValidateValues.Click += BtnValidateValues_Click;
-            pnlSensitivity.Controls.Add(_btnValidateValues);
-            y += 35;
-
-            // Results DataGridView
-            _dgvSensitivityResults = new DataGridView
-            {
-                Location = new Point(10, y),
-                Size = new Size(550, 250),
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                ReadOnly = true,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells,
-                BackgroundColor = Color.White,
-                RowHeadersVisible = false
-            };
-
-            // Add columns
-            _dgvSensitivityResults.Columns.Add("ParamValue", "Parameter Value");
-            _dgvSensitivityResults.Columns.Add("PathLength", "Path Length (cells)");
-            _dgvSensitivityResults.Columns.Add("TimeMs", "Time (ms)");
-            _dgvSensitivityResults.Columns.Add("Success", "Success");
-            _dgvSensitivityResults.Columns.Add("Collisions", "Collisions");
-
-            pnlSensitivity.Controls.Add(_dgvSensitivityResults);
-            y += 260;
-
-            // Run button
-            _btnRunSensitivity = new Button
-            {
-                Text = "▶ Run Sensitivity Analysis",
-                Location = new Point(10, y),
-                Size = new Size(200, 35),
-                Enabled = false,
-                BackColor = Color.FromArgb(46, 204, 113),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            _btnRunSensitivity.Click += BtnRunSensitivity_Click;
-            pnlSensitivity.Controls.Add(_btnRunSensitivity);
-            y += 45;
-
-            // Status label
-            _lblSensitivityStatus = new Label
-            {
-                Text = "Ready",
-                Location = new Point(10, y),
-                Size = new Size(400, 25),
-                ForeColor = Color.Gray
-            };
-            pnlSensitivity.Controls.Add(_lblSensitivityStatus);
-
-            _tabSensitivity.Controls.Add(pnlSensitivity);
-            _mainTabControl.TabPages.Add(_tabSensitivity);
-        }
-
-        private void UpdateSensitivityControlsState()
-        {
-            bool enabled = _chkEnableSensitivity.Checked;
-            _lblParameter.Enabled = enabled;
-            _cboSensitivityParameter.Enabled = enabled;
-            _lblValues.Enabled = enabled;
-            _txtSensitivityValues.Enabled = enabled;
-            _btnValidateValues.Enabled = enabled;
-            _btnRunSensitivity.Enabled = enabled;
-        }
-        #endregion
-
-        private Label label1;
-        private NumericUpDown _nudSemiStaticObstacles;
-        private DataGridView _dgvAlgorithems;
+        private Panel pnlSensitivity;
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn1;
-        private DataGridViewComboBoxColumn dataGridViewTextBoxColumn2;
+        private DataGridViewTextBoxColumn dataGridViewTextBoxColumn2;
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn3;
-        private DataGridViewButtonColumn AlgorithmPrameters;
-        private DataGridViewCheckBoxColumn colEnabled;
-        private DataGridViewTextBoxColumn colAlgorithm;
-        private DataGridViewComboBoxColumn colMetric;
-        private DataGridViewTextBoxColumn colParameters;
-        private DataGridViewButtonColumn colEdit;
-        private DataGridViewButtonColumn colDuplicate;
-
-        private void SetupAlgorithmGrid()
-        {
-            _dgvAlgorithems.AllowUserToAddRows = false;
-            _dgvAlgorithems.AllowUserToDeleteRows = false;
-            _dgvAlgorithems.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            _dgvAlgorithems.BackgroundColor = Color.White;
-            _dgvAlgorithems.BorderStyle = BorderStyle.Fixed3D;
-            _dgvAlgorithems.RowHeadersVisible = false;
-            _dgvAlgorithems.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            _dgvAlgorithems.MultiSelect = false;
-            _dgvAlgorithems.Dock = DockStyle.Fill;
-            _dgvAlgorithems.Location = new Point(3, 22);
-            _dgvAlgorithems.Size = new Size(609, 288);
-            _dgvAlgorithems.TabIndex = 0;
-
-            // مسح الأعمدة الحالية
-            _dgvAlgorithems.Columns.Clear();
-
-            // عمود Enabled (CheckBox) - حجم صغير جداً
-            colEnabled = new DataGridViewCheckBoxColumn
-            {
-                Name = "colEnabled",
-                HeaderText = "",
-                Width = 30,  // حجم صغير جداً ليتسع فقط للـ CheckBox
-                FillWeight = 3,
-                Resizable = DataGridViewTriState.False,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-            };
-
-            // عمود Algorithm - حجم مناسب
-            colAlgorithm = new DataGridViewTextBoxColumn
-            {
-                Name = "colAlgorithm",
-                HeaderText = "Algorithm",
-                Width = 90,  // تصغير الحجم
-                FillWeight = 15,
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-            };
-
-            // عمود Metric (ComboBox) - حجم مناسب
-            colMetric = new DataGridViewComboBoxColumn
-            {
-                Name = "colMetric",
-                HeaderText = "Metric",
-                Width = 100,  // تصغير الحجم
-                FillWeight = 18,
-                FlatStyle = FlatStyle.Flat,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-            };
-            colMetric.Items.AddRange(new string[] {
-        "Manhattan", "Euclidean", "MaxDXDY",
-        "DiagonalShortcut", "EuclideanNoSQR"
-    });
-
-            // عمود Parameters - يأخذ المساحة المتبقية الأكبر
-            colParameters = new DataGridViewTextBoxColumn
-            {
-                Name = "colParameters",
-                HeaderText = "Parameters",
-                FillWeight = 50,  // أكبر وزن
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill  // يملأ المساحة المتبقية
-            };
-
-            // عمود Edit (زر التعديل) - حجم صغير جداً
-            colEdit = new DataGridViewButtonColumn
-            {
-                Name = "colEdit",
-                HeaderText = "",
-                Text = "✎",
-                UseColumnTextForButtonValue = true,
-                Width = 25,  // حجم صغير جداً
-                FillWeight = 2,
-                FlatStyle = FlatStyle.Flat,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Resizable = DataGridViewTriState.False
-            };
-
-            // عمود Duplicate (زر النسخ) - حجم صغير جداً
-            colDuplicate = new DataGridViewButtonColumn
-            {
-                Name = "colDuplicate",
-                HeaderText = "",
-                Text = "📋",
-                UseColumnTextForButtonValue = true,
-                Width = 25,  // حجم صغير جداً
-                FillWeight = 2,
-                FlatStyle = FlatStyle.Flat,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Resizable = DataGridViewTriState.False
-            };
-
-            // إضافة الأعمدة
-            _dgvAlgorithems.Columns.Add(colEnabled);
-            _dgvAlgorithems.Columns.Add(colAlgorithm);
-            _dgvAlgorithems.Columns.Add(colMetric);
-            _dgvAlgorithems.Columns.Add(colParameters);
-            _dgvAlgorithems.Columns.Add(colEdit);
-            _dgvAlgorithems.Columns.Add(colDuplicate);
-
-            // إعداد ارتفاع الصفوف ليكون مناسباً
-            _dgvAlgorithems.RowTemplate.Height = 28;
-
-            // إعداد نمط الخلايا لتحسين المظهر
-            _dgvAlgorithems.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-            _dgvAlgorithems.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-            _dgvAlgorithems.EnableHeadersVisualStyles = false;
-            _dgvAlgorithems.ColumnHeadersHeight = 30;
-            _dgvAlgorithems.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-            // إضافة الصفوف الافتراضية
-            AddDefaultAlgorithmRows();
-        }
-        private void AddDefaultAlgorithmRows()
-        {
-            // A*
-            int rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = true;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "AStar";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "h=2, Limit=20000";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("AStar");
-
-            // SPPA
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = true;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "SPPA";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "λ=1.5, h=2";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("SPPA");
-
-            // SPPA_DL
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = true;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "SPPA_DL";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "λ=1.5, α=2.0";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("SPPA_DL");
-
-            // ACO
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = false;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "ACO";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "Ants=20, Iter=100";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("ACO");
-
-            // DStar
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = false;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "DStar";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "Range=10";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("DStar");
-
-            // KNN
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = false;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "KNN";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "K=5";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("KNN");
-
-            // BruteForce
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = false;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "BruteForce";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "Depth=100";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("BruteForce");
-
-            // RRT
-            rowIndex = _dgvAlgorithems.Rows.Add();
-            _dgvAlgorithems.Rows[rowIndex].Cells["colEnabled"].Value = false;
-            _dgvAlgorithems.Rows[rowIndex].Cells["colAlgorithm"].Value = "RRT";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colMetric"].Value = "Manhattan";
-            _dgvAlgorithems.Rows[rowIndex].Cells["colParameters"].Value = "Iter=5000";
-            _dgvAlgorithems.Rows[rowIndex].Tag = GetDefaultParameters("RRT"); 
-        }
-
-
-        private Dictionary<string, object> GetDefaultParameters(string algorithmName)
-        {
-            return AlgorithmParametersRegistry.GetDefaultParameters(algorithmName);
-        }
-
-        private Label label3;
-        private NumericUpDown _nudHeight;
+        private DataGridViewTextBoxColumn dataGridViewTextBoxColumn4;
+        private DataGridViewTextBoxColumn dataGridViewTextBoxColumn5;
+        private NumericUpDown _nudRobotHeight;
+        private NumericUpDown _nudRobotWidth;
         private Label label2;
-        private NumericUpDown _nudWidth;
-        private Label label5;
-        private NumericUpDown numericUpDown2;
-        private Label label4;
-        private NumericUpDown numericUpDown1;
-        private NumericUpDown _nudCellSize;
-        private Label _lblCellSize;
+        private Label label1;
+        private GroupBox _grpMapPoints;
+        private GroupBox groupBox1;
+        private Label _lblAlgorithm;
+        private ComboBox _cboAlgorithm;
     }
 }

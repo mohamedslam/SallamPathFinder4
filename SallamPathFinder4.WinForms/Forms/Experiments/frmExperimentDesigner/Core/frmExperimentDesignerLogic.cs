@@ -33,18 +33,18 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         #endregion
 
         #region Algorithm Selection
+        /// <summary>
+        /// Gets selected algorithms from the DataGridView
+        /// </summary>
         public List<string> GetSelectedAlgorithms(Form form)
         {
             var algorithms = new List<string>();
-
-            // البحث عن DataGridView في النموذج
             var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
 
             if (dgv != null)
             {
                 foreach (DataGridViewRow row in dgv.Rows)
                 {
-                    // التحقق من وجود الصف وقيمة Enabled
                     if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
                     {
                         string algorithm = row.Cells["colAlgorithm"]?.Value?.ToString();
@@ -58,11 +58,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
 
             return algorithms;
         }
+
+        /// <summary>
+        /// Gets selected metrics from the DataGridView
+        /// </summary>
         public List<string> GetSelectedMetrics(Form form)
         {
             var metrics = new List<string>();
-
-            // البحث عن DataGridView في النموذج
             var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
 
             if (dgv != null)
@@ -83,14 +85,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             if (metrics.Count == 0) metrics.Add("Manhattan");
             return metrics;
         }
-        #endregion
+
         /// <summary>
         /// Gets selected algorithms with their metrics and parameters from DataGridView
         /// </summary>
         public List<(string algorithm, string metric, Dictionary<string, object> parameters)> GetSelectedAlgorithmsWithParams(Form form)
         {
             var result = new List<(string, string, Dictionary<string, object>)>();
-
             var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
 
             if (dgv != null)
@@ -157,8 +158,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
 
             return new Dictionary<string, object>();
         }
+        #endregion
+
         #region Settings Management
-        public  ExperimentSettings GetCurrentSettings(Form form)
+        /// <summary>
+        /// Gets current settings from the form
+        /// </summary>
+        public ExperimentSettings GetCurrentSettings(Form form)
         {
             var nudGoalCount = form.Controls.Find("_nudGoalCount", true).FirstOrDefault() as NumericUpDown;
             var nudParkingCount = form.Controls.Find("_nudParkingCount", true).FirstOrDefault() as NumericUpDown;
@@ -172,14 +178,11 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             var txtSavePath = form.Controls.Find("_txtSavePath", true).FirstOrDefault() as TextBox;
             var (enableDynamicCharging, chargingTime, safetyMargin) = GetDynamicChargingSettings(form);
             var (useCustomStartPoint, customStartPoint) = GetStartPointSettings(form);
-            bool orderGoalsByDistance = GetOrderGoalsByDistance(form);
 
-            // الحصول على الإعدادات من الـ DataGridView
             var selectedAlgorithms = GetSelectedAlgorithms(form);
             var selectedMetrics = GetSelectedMetrics(form);
             var distanceMetric = selectedMetrics.FirstOrDefault() ?? "Manhattan";
 
-            // الحصول على إعدادات HeuristicWeight و SearchLimit من أول خوارزمية مفعلة
             int heuristicWeight = 2;
             int searchLimit = 20000;
 
@@ -198,12 +201,12 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                             if (parameters.ContainsKey("SearchLimit"))
                                 searchLimit = Convert.ToInt32(parameters["SearchLimit"]);
                         }
-                        break; // خذ أول خوارزمية مفعلة
+                        break;
                     }
                 }
             }
 
-            return new SallamPathFinder4.Core.Models.Experiments.ExperimentSettings
+            return new ExperimentSettings
             {
                 ExperimentName = txtExperimentName?.Text ?? "Experiment",
                 SelectedAlgorithms = selectedAlgorithms,
@@ -214,8 +217,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 DynamicObstacles = (int)(nudDynamicObstacles?.Value ?? 5),
                 HeuristicWeight = heuristicWeight,
                 SearchLimit = searchLimit,
-                AllowDiagonals = true,  // Default value
-                HeavyDiagonals = false,  // Default value
+                AllowDiagonals = true,
+                HeavyDiagonals = false,
                 Iterations = (int)(nudIterations?.Value ?? 5),
                 SaveScreenshots = chkSaveScreenshots?.Checked == true,
                 SaveReplay = chkSaveReplay?.Checked == true,
@@ -226,12 +229,15 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 SafetyMarginPercent = safetyMargin,
                 UseCustomStartPoint = useCustomStartPoint,
                 CustomStartPoint = customStartPoint,
-                OrderGoalsByDistance = orderGoalsByDistance,
+                OrderGoalsByDistance = GetOrderGoalsByDistance(form),
                 DistanceMetric = distanceMetric
             };
         }
 
-        public void ApplySettingsToForm(Form form, SallamPathFinder4.Core.Models.Experiments.ExperimentSettings settings)
+        /// <summary>
+        /// Applies settings to the form
+        /// </summary>
+        public void ApplySettingsToForm(Form form, ExperimentSettings settings)
         {
             var txtExperimentName = form.Controls.Find("_txtExperimentName", true).FirstOrDefault() as TextBox;
             var nudGoalCount = form.Controls.Find("_nudGoalCount", true).FirstOrDefault() as NumericUpDown;
@@ -255,26 +261,25 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             if (chkShowPath != null) chkShowPath.Checked = settings.ShowPathOnScreenshots;
             if (txtSavePath != null && !string.IsNullOrEmpty(settings.SavePath)) txtSavePath.Text = settings.SavePath;
 
-            // تطبيق إعدادات الخوارزميات على الـ DataGridView
             ApplyAlgorithmsToGrid(form, settings);
-
             ApplyDynamicChargingSettings(form, settings.EnableDynamicCharging, settings.ChargingTimeSeconds, settings.SafetyMarginPercent);
             ApplyStartPointSettings(form, settings.UseCustomStartPoint, settings.CustomStartPoint);
             ApplyOrderGoalsByDistance(form, settings.OrderGoalsByDistance);
         }
 
+        /// <summary>
+        /// Applies algorithms to the DataGridView
+        /// </summary>
         private void ApplyAlgorithmsToGrid(Form form, ExperimentSettings settings)
         {
             var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
             if (dgv == null) return;
 
-            // إلغاء تحديد جميع الخوارزميات أولاً
             foreach (DataGridViewRow row in dgv.Rows)
             {
                 row.Cells["colEnabled"].Value = false;
             }
 
-            // تفعيل الخوارزميات المحددة في الإعدادات
             foreach (string algorithm in settings.SelectedAlgorithms)
             {
                 foreach (DataGridViewRow row in dgv.Rows)
@@ -283,8 +288,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                     if (alg == algorithm)
                     {
                         row.Cells["colEnabled"].Value = true;
-
-                        // تعيين الميترك إذا كان موجوداً
                         if (settings.SelectedMetrics != null && settings.SelectedMetrics.Count > 0)
                         {
                             row.Cells["colMetric"].Value = settings.SelectedMetrics[0];
@@ -295,18 +298,24 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             }
         }
 
-        public void SaveSettingsToFile(SallamPathFinder4.Core.Models.Experiments.ExperimentSettings settings, string filePath)
+        /// <summary>
+        /// Saves settings to file
+        /// </summary>
+        public void SaveSettingsToFile(ExperimentSettings settings, string filePath)
         {
             var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
         }
 
-        public SallamPathFinder4.Core.Models.Experiments.ExperimentSettings LoadSettingsFromFile(string filePath)
+        /// <summary>
+        /// Loads settings from file
+        /// </summary>
+        public ExperimentSettings LoadSettingsFromFile(string filePath)
         {
             try
             {
                 string json = File.ReadAllText(filePath);
-                return JsonSerializer.Deserialize<SallamPathFinder4.Core.Models.Experiments.ExperimentSettings>(json);
+                return JsonSerializer.Deserialize<ExperimentSettings>(json);
             }
             catch (Exception ex)
             {
@@ -314,9 +323,36 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 return null;
             }
         }
+
+        /// <summary>
+        /// Gets OrderGoalsByDistance setting from the DataGridView
+        /// </summary>
+        public bool GetOrderGoalsByDistance(Form form)
+        {
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        var parameters = row.Tag as Dictionary<string, object>;
+                        if (parameters != null && parameters.ContainsKey("OrderGoalsByDistance"))
+                        {
+                            return Convert.ToBoolean(parameters["OrderGoalsByDistance"]);
+                        }
+                        break;
+                    }
+                }
+            }
+            return false;
+        }
         #endregion
 
         #region Robot and ML Settings
+        /// <summary>
+        /// Gets robot settings from the form
+        /// </summary>
         public RobotSettings GetRobotSettings(Form form)
         {
             var txtRobotName = form.Controls.Find("_txtRobotName", true).FirstOrDefault() as TextBox;
@@ -343,6 +379,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             };
         }
 
+        /// <summary>
+        /// Gets ML settings from the form
+        /// </summary>
         public MLSettings GetMLSettings(Form form)
         {
             var chkEnableDynamicLearning = form.Controls.Find("_chkEnableDynamicLearning", true).FirstOrDefault() as CheckBox;
@@ -365,6 +404,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         #endregion
 
         #region Map Data
+        /// <summary>
+        /// Gets real goals from the view model
+        /// </summary>
         public List<Point> GetRealGoals(MainViewModel viewModel, bool useCurrentMap)
         {
             if (!useCurrentMap || viewModel?.Goals == null || viewModel.Goals.Count == 0)
@@ -373,6 +415,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             return viewModel.Goals.Select(g => g.Location).ToList();
         }
 
+        /// <summary>
+        /// Gets parking points from the view model
+        /// </summary>
         public List<Point> GetParkingPoints(MainViewModel viewModel, bool useCurrentMap)
         {
             if (!useCurrentMap || viewModel?.ParkingPoints == null || viewModel.ParkingPoints.Count == 0)
@@ -383,6 +428,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         #endregion
 
         #region Pathfinding
+        /// <summary>
+        /// Creates an algorithm finder with parameters
+        /// </summary>
         public IPathFinder CreateAlgorithmFinder(MapGrid grid, string algorithm, MLSettings mlSettings, Dictionary<string, object> parameters = null)
         {
             var factory = new AlgorithmFactory(grid);
@@ -395,7 +443,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 finder = factory.Create(algoType, mlSettings.UseNeuralNetwork,
                     mlSettings.CollectTrainingData, mlSettings.LearningRate);
 
-                // تطبيق البارامترات إذا وجدت
                 if (finder is SPPA_DLFinder sppaDLFinder && parameters != null)
                 {
                     ApplyParametersToSPPA_DL(sppaDLFinder, parameters);
@@ -437,7 +484,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         }
 
         #region Apply Parameters Methods
-
         private void ApplyParametersToAStar(AStarFinder finder, Dictionary<string, object> parameters)
         {
             if (parameters.ContainsKey("HeuristicWeight"))
@@ -448,7 +494,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 finder.AllowDiagonals = Convert.ToBoolean(parameters["AllowDiagonals"]);
             if (parameters.ContainsKey("HeavyDiagonals"))
                 finder.HeavyDiagonals = Convert.ToBoolean(parameters["HeavyDiagonals"]);
-         }
+        }
 
         private void ApplyParametersToSPPA(SPPAFinder finder, Dictionary<string, object> parameters)
         {
@@ -468,8 +514,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 finder.AlphaSS = Convert.ToDouble(parameters["AlphaSS"]);
             if (parameters.ContainsKey("AlphaD"))
                 finder.AlphaD = Convert.ToDouble(parameters["AlphaD"]);
-
-            System.Diagnostics.Debug.WriteLine($"[SPPA] Applied params: h={finder.HeuristicWeight}, λ={finder.Lambda}");
         }
 
         private void ApplyParametersToSPPA_DL(SPPA_DLFinder finder, Dictionary<string, object> parameters)
@@ -494,8 +538,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 finder.AlphaSS = Convert.ToDouble(parameters["AlphaSS"]);
             if (parameters.ContainsKey("AlphaD"))
                 finder.AlphaD = Convert.ToDouble(parameters["AlphaD"]);
-
-            System.Diagnostics.Debug.WriteLine($"[SPPA-DL] Applied params: h={finder.HeuristicWeight}, λ={finder.Lambda}, α={finder.LearningRate}, β={finder.PredictionWeight}");
         }
 
         private void ApplyParametersToACO(ACOFinder finder, Dictionary<string, object> parameters)
@@ -510,48 +552,29 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
 
             if (parameters.ContainsKey("AllowDiagonals"))
                 finder.AllowDiagonals = Convert.ToBoolean(parameters["AllowDiagonals"]);
-
-            System.Diagnostics.Debug.WriteLine($"[ACO] Applied params: Ants={ants}, Iter={iterations}, α={alpha}, β={beta}");
         }
-
         #endregion
 
+        /// <summary>
+        /// Configures the finder with basic settings (only metric)
+        /// </summary>
         public void ConfigureFinder(IPathFinder finder, string metric, Form form)
         {
-            // فقط قم بتعيين الإعدادات الأساسية التي لا تتعارض مع بارامترات المستخدم
+            // Only set the metric - other parameters come from the grid
             finder.Metric = ExperimentSharedLogic.GetDistanceMetric(metric);
-
-            // هذه القيم قد تكون تم تعيينها بالفعل من البارامترات
-            // لذا نتحقق أولاً إذا كانت القيم الافتراضية فقط هي التي تم تعيينها
-            var chkAllowDiagonals = form.Controls.Find("_chkAllowDiagonals", true).FirstOrDefault() as CheckBox;
-            var chkHeavyDiagonals = form.Controls.Find("_chkHeavyDiagonals", true).FirstOrDefault() as CheckBox;
-            var nudHeuristicWeight = form.Controls.Find("_nudHeuristicWeight", true).FirstOrDefault() as NumericUpDown;
-            var nudSearchLimit = form.Controls.Find("_nudSearchLimit", true).FirstOrDefault() as NumericUpDown;
-
-            // فقط إذا كانت القيم لم تُعيين بعد (قيم افتراضية)
-            if (finder.AllowDiagonals == false && finder.AllowDiagonals != (chkAllowDiagonals?.Checked == true))
-                finder.AllowDiagonals = chkAllowDiagonals?.Checked == true;
-
-            if (finder.HeavyDiagonals == false && finder.HeavyDiagonals != (chkHeavyDiagonals?.Checked == true))
-                finder.HeavyDiagonals = chkHeavyDiagonals?.Checked == true;
-
-            if (finder.HeuristicWeight == 2 && nudHeuristicWeight != null && finder.HeuristicWeight != (int)nudHeuristicWeight.Value)
-                finder.HeuristicWeight = nudHeuristicWeight != null ? (int)nudHeuristicWeight.Value : 2;
-
-            if (finder.SearchLimit == 20000 && nudSearchLimit != null && finder.SearchLimit != (int)nudSearchLimit.Value)
-                finder.SearchLimit = nudSearchLimit != null ? (int)nudSearchLimit.Value : 20000;
         }
 
+        /// <summary>
+        /// Finds sequential path through all goals
+        /// </summary>
         public async Task<SequentialPathResult> FindSequentialPath(IPathFinder finder, Point start, List<Point> goals)
         {
-            System.Diagnostics.Debug.WriteLine($"[FindSequentialPath] START: start=({start.X},{start.Y}), goals={goals.Count}");
             var fullPath = new List<PathNode>();
             Point currentPos = start;
             double totalTimeMs = 0;
 
             for (int i = 0; i < goals.Count; i++)
             {
-                // التحقق من صحة الهدف
                 if (goals[i] == null)
                 {
                     return SequentialPathResult.CreateFailure($"Goal {i + 1} is null");
@@ -576,23 +599,21 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
 
                 totalTimeMs += pathResult.ComputationTimeSeconds * 1000;
                 currentPos = goals[i];
-                System.Diagnostics.Debug.WriteLine($"[FindSequentialPath] Goal {i + 1} completed. Path so far: {fullPath.Count} cells");
-            
-        }
-            System.Diagnostics.Debug.WriteLine($"[FindSequentialPath] SUCCESS: Total path={fullPath.Count} cells, Time={totalTimeMs:F2}ms");
+            }
+
             return SequentialPathResult.CreateSuccess(fullPath, currentPos, totalTimeMs);
         }
 
+        /// <summary>
+        /// Finds return path to nearest parking point
+        /// </summary>
         public async Task<ReturnPathResult> FindReturnPath(IPathFinder finder, Point currentPos, List<Point> parkingPoints)
         {
-            System.Diagnostics.Debug.WriteLine($"[FindReturnPath] START: currentPos=({currentPos.X},{currentPos.Y}), parkingPoints={parkingPoints?.Count ?? 0}");
             if (parkingPoints == null || parkingPoints.Count == 0)
             {
-                System.Diagnostics.Debug.WriteLine("[FindReturnPath] No parking points available");
                 return null;
             }
 
-            // البحث عن أقرب نقطة باركينج
             Point nearestParking = Point.Empty;
             int minDistance = int.MaxValue;
 
@@ -608,26 +629,22 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
 
             if (nearestParking == Point.Empty)
             {
-                System.Diagnostics.Debug.WriteLine("[FindReturnPath] No valid parking point found");
                 return null;
             }
 
-            System.Diagnostics.Debug.WriteLine($"[FindReturnPath] Nearest parking: ({nearestParking.X},{nearestParking.Y}), Distance={minDistance}");
-            
             var pathResult = await Task.Run(() => finder.FindPath(currentPos, nearestParking));
 
             if (!pathResult.Success || pathResult.Path == null)
             {
-                System.Diagnostics.Debug.WriteLine($"[FindReturnPath] Failed to find return path: {pathResult.ErrorMessage}");
                 return null;
-            }
-            else { 
-                        System.Diagnostics.Debug.WriteLine($"[FindReturnPath] Result: Success={pathResult.Success}, PathLength={pathResult.PathLength}");
             }
 
             return ReturnPathResult.CreateSuccess(pathResult.Path.ToList(), pathResult.ComputationTimeSeconds * 1000);
         }
 
+        /// <summary>
+        /// Combines forward and return paths
+        /// </summary>
         public List<PathNode> CombinePaths(List<PathNode> forwardPath, List<PathNode> returnPath)
         {
             var combined = new List<PathNode>(forwardPath);
@@ -640,8 +657,11 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             return combined;
         }
 
+        /// <summary>
+        /// Creates an empty result object
+        /// </summary>
         public ComparisonResult CreateEmptyResult(string algorithm, string metric, int iteration,
-       RobotSettings robotSettings, Form form)
+            RobotSettings robotSettings, Form form)
         {
             var nudGoalCount = form.Controls.Find("_nudGoalCount", true).FirstOrDefault() as NumericUpDown;
             var nudParkingCount = form.Controls.Find("_nudParkingCount", true).FirstOrDefault() as NumericUpDown;
@@ -653,7 +673,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             int staticObstacles = nudStaticObstacles != null ? (int)nudStaticObstacles.Value : 20;
             int dynamicObstacles = nudDynamicObstacles != null ? (int)nudDynamicObstacles.Value : 5;
 
-            // الحصول على HeuristicWeight و SearchLimit من البارامترات إذا أمكن
             int heuristicWeight = 2;
             int searchLimit = 20000;
 
@@ -701,11 +720,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         #endregion
 
         #region Export
+        /// <summary>
+        /// Saves results to CSV file
+        /// </summary>
         public void SaveResultsToCsv(List<ComparisonResult> results, string filePath)
         {
             using var writer = new StreamWriter(filePath);
 
-            // CSV Header with new battery columns
             writer.WriteLine("Algorithm,Metric,Iteration,Success,PathLength,TimeMs," +
                 "InitialBattery%,FinalBattery%,TotalConsumed%,ChargingUnits,ChargingCycles,ChargingTimeSec," +
                 "Collisions,Errors,AvgSpeed,GoalCount,ParkingCount,StaticObstacles,DynamicObstacles," +
@@ -721,10 +742,11 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                     $"\"{r.InitialScreenshotPath}\",\"{r.PathScreenshotPath}\",\"{r.CompletedScreenshotPath}\"," +
                     $"\"{r.ErrorMessage}\"");
             }
-
-            System.Diagnostics.Debug.WriteLine($"[SaveResultsToCsv] Saved {results.Count} results to {filePath}");
         }
 
+        /// <summary>
+        /// Generates a summary report
+        /// </summary>
         public void GenerateSummaryReport(List<ComparisonResult> results, string filePath, string experimentName)
         {
             using var writer = new StreamWriter(filePath);
@@ -748,12 +770,12 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             }
         }
         #endregion
-        #region Private Method - CalculateAndFillResultData
 
+        #region Calculate and Fill Result Data
         /// <summary>
         /// Calculates all battery, time, and path statistics and fills the result object
         /// </summary>
-        public  void CalculateAndFillResultData(
+        public void CalculateAndFillResultData(
             ComparisonResult result,
             List<PathNode> fullPath,
             Point startPoint,
@@ -765,7 +787,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             bool orderGoalsByDistance,
             double pathfindingTimeMs)
         {
-            // ========== 1. BASIC PATH METRICS ==========
+            // Basic path metrics
             result.PathLength = fullPath.Count;
             result.Path = fullPath.Select(p => new Point(p.X, p.Y)).ToList();
             result.ComputationTimeMs = pathfindingTimeMs;
@@ -773,7 +795,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             result.EndPointReached = endPoint;
             result.OrderedByDistance = orderGoalsByDistance;
 
-            // ========== 2. GOAL ORDER ==========
+            // Goal order
             if (orderGoalsByDistance)
             {
                 var orderedGoals = goals
@@ -786,7 +808,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 result.GoalOrder = string.Join(" → ", goals.Select(g => $"({g.X},{g.Y})"));
             }
 
-            // ========== 3. TIME STATISTICS ==========
+            // Time statistics
             if (cellSizeCm <= 0) cellSizeCm = 10.0;
             double totalDistanceCm = fullPath.Count * cellSizeCm;
             double travelTimeSeconds = totalDistanceCm / Math.Max(0.1, robotSettings.InitialSpeedCmS);
@@ -794,7 +816,7 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             result.TotalTravelTimeSeconds = travelTimeSeconds;
             result.AverageActualSpeed = travelTimeSeconds > 0 ? totalDistanceCm / travelTimeSeconds : robotSettings.InitialSpeedCmS;
 
-            // ========== 4. BATTERY STATISTICS ==========
+            // Battery statistics
             double batteryConsumedPerCell = robotSettings.BatteryConsumptionRate;
             if (batteryConsumedPerCell <= 0) batteryConsumedPerCell = 1.0;
 
@@ -811,19 +833,12 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
             result.TotalChargingTimeSeconds = totalChargingTimeSeconds;
             result.RemainingBattery = result.FinalBatteryPercent;
 
-            // ========== 5. TOTAL TIME ==========
-            result.TotalOverheadTimeSeconds = 0; // Can be updated when actual charging occurs
+            // Total time
+            result.TotalOverheadTimeSeconds = 0;
             result.TotalTimeSeconds = travelTimeSeconds + totalChargingTimeSeconds;
-
-            // ========== 6. DEBUG OUTPUT ==========
-            System.Diagnostics.Debug.WriteLine($"[CalculateResult] PathLength={result.PathLength}, Distance={totalDistanceCm:F1}cm");
-            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Battery: Initial={result.InitialBatteryPercent:F1}%, Consumed={result.TotalBatteryConsumedPercent:F1}%, Final={result.FinalBatteryPercent:F1}%");
-            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Charging: Units={result.TotalChargingUnits:F2}, Cycles={result.TotalChargingCycles}, Time={result.TotalChargingTimeSeconds:F0}s");
-            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Time: Travel={result.TotalTravelTimeSeconds:F2}s, Total={result.TotalTimeSeconds:F2}s");
-            System.Diagnostics.Debug.WriteLine($"[CalculateResult] Start=({result.StartPointUsed.X},{result.StartPointUsed.Y}), End=({result.EndPointReached.X},{result.EndPointReached.Y})");
         }
-
         #endregion
+
         #region Dynamic Charging Settings
         /// <summary>
         /// Gets dynamic charging settings from form
@@ -877,79 +892,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         }
 
         /// <summary>
-        /// Updates start point display
-        /// </summary>
-        public void UpdateStartPointDisplay(Form form, Point startPoint)
-        {
-            var lblCurrent = form.Controls.Find("_lblCurrentStartPoint", true).FirstOrDefault() as Label;
-            if (lblCurrent != null)
-            {
-                lblCurrent.Text = $"Current: ({startPoint.X}, {startPoint.Y})";
-                lblCurrent.Tag = startPoint;
-            }
-        }
-        #endregion
-
-        #region Goal Ordering Settings
-        /// <summary>
-        /// Gets goal ordering setting from form
-        /// </summary>
-        public bool GetOrderGoalsByDistance(Form form)
-        {
-            var chkOrder = form.Controls.Find("_chkOrderGoalsByDistance", true).FirstOrDefault() as CheckBox;
-            return chkOrder?.Checked ?? false;
-        }
-        #endregion
-
-        #region Distance Metric Helpers
-
-        /// <summary>
-        /// Gets selected distance metric from form
-        /// </summary>
-        public string GetSelectedDistanceMetric(Form form)
-        {
-            var cboMetric = form.Controls.Find("_cboDistanceMetric", true).FirstOrDefault() as ComboBox;
-            if (cboMetric != null && cboMetric.SelectedItem != null)
-            {
-                string selected = cboMetric.SelectedItem.ToString();
-                if (selected.Contains("Manhattan")) return "Manhattan";
-                if (selected.Contains("Euclidean")) return "Euclidean";
-                if (selected.Contains("MaxDXDY")) return "MaxDXDY";
-                if (selected.Contains("DiagonalShortcut")) return "DiagonalShortcut";
-                if (selected.Contains("EuclideanNoSQR")) return "EuclideanNoSQR";
-                if (selected.Contains("Custom")) return "Custom";
-            }
-            return "Manhattan";
-        }
-
-        /// <summary>
-        /// Applies distance metric to form
-        /// </summary>
-        public void ApplyDistanceMetric(Form form, string metric)
-        {
-            var cboMetric = form.Controls.Find("_cboDistanceMetric", true).FirstOrDefault() as ComboBox;
-            if (cboMetric == null) return;
-
-            int index = metric switch
-            {
-                "Manhattan" => 0,
-                "Euclidean" => 1,
-                "MaxDXDY" => 2,
-                "DiagonalShortcut" => 3,
-                "EuclideanNoSQR" => 4,
-                "Custom" => 5,
-                _ => 0
-            };
-
-            if (index < cboMetric.Items.Count)
-                cboMetric.SelectedIndex = index;
-        }
-
-        #endregion
-
-        #region Start Point Helpers
-
-        /// <summary>
         /// Applies start point settings to form
         /// </summary>
         public void ApplyStartPointSettings(Form form, bool useCustom, Point startPoint)
@@ -966,25 +908,85 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 lblCurrent.Tag = startPoint;
             }
         }
-
-     
         #endregion
 
         #region Goal Ordering Helpers
-
         /// <summary>
         /// Applies goal ordering setting to form
         /// </summary>
         public void ApplyOrderGoalsByDistance(Form form, bool orderByDistance)
         {
-            var chkOrder = form.Controls.Find("_chkOrderGoalsByDistance", true).FirstOrDefault() as CheckBox;
-            if (chkOrder != null)
-                chkOrder.Checked = orderByDistance;
+            // Apply to all enabled algorithms in the grid
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        var parameters = row.Tag as Dictionary<string, object>;
+                        if (parameters != null)
+                        {
+                            parameters["OrderGoalsByDistance"] = orderByDistance;
+                            UpdateParameterSummary(row.Index, parameters);
+                        }
+                    }
+                }
+            }
         }
 
-
+        private void UpdateParameterSummary(int rowIndex, Dictionary<string, object> parameters)
+        {
+            // This method would be implemented to update the display
+            // For now, it's a placeholder
+        }
         #endregion
-   
+
+        #region Distance Metric Helpers
+        /// <summary>
+        /// Gets selected distance metric from form
+        /// </summary>
+        public string GetSelectedDistanceMetric(Form form)
+        {
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        string metric = row.Cells["colMetric"]?.Value?.ToString();
+                        if (!string.IsNullOrEmpty(metric))
+                            return metric;
+                    }
+                }
+            }
+            return "Manhattan";
+        }
+
+        /// <summary>
+        /// Applies distance metric to form
+        /// </summary>
+        public void ApplyDistanceMetric(Form form, string metric)
+        {
+            var dgv = form.Controls.Find("_dgvAlgorithems", true).FirstOrDefault() as DataGridView;
+            if (dgv != null)
+            {
+                foreach (DataGridViewRow row in dgv.Rows)
+                {
+                    if (row.Cells["colEnabled"]?.Value != null && (bool)row.Cells["colEnabled"].Value)
+                    {
+                        row.Cells["colMetric"].Value = metric;
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region Path Analysis
+        /// <summary>
+        /// Analyzes path for errors
+        /// </summary>
         public PathErrorAnalysis AnalyzePathDetailed(IReadOnlyList<PathNode> path, MapGrid grid)
         {
             var analysis = new PathErrorAnalysis();
@@ -994,7 +996,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                 var node = path[i];
                 var cell = grid[node.X, node.Y];
 
-                // فحص عبور الجدران
                 if (cell.ElementType == MapElementType.Wall)
                 {
                     analysis.HasError = true;
@@ -1008,7 +1009,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                     });
                 }
 
-                // فحص عبور النوافذ
                 if (cell.ElementType == MapElementType.Window)
                 {
                     analysis.HasError = true;
@@ -1022,7 +1022,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
                     });
                 }
 
-                // فحص الاقتراب الشديد من العقبات
                 if (cell.OccupyingObstacle != null)
                 {
                     analysis.HasError = true;
@@ -1038,10 +1037,13 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
 
             return analysis;
         }
+        #endregion
     }
 
     #region Helper Result Classes
-
+    /// <summary>
+    /// Result of sequential path finding
+    /// </summary>
     public sealed class SequentialPathResult
     {
         public bool Success { get; set; }
@@ -1072,6 +1074,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         }
     }
 
+    /// <summary>
+    /// Result of return path finding
+    /// </summary>
     public sealed class ReturnPathResult
     {
         public bool Success { get; set; }
@@ -1089,14 +1094,14 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner.Cor
         }
     }
 
+    /// <summary>
+    /// Path error analysis result
+    /// </summary>
     public class PathErrorAnalysis
     {
         public bool HasError { get; set; }
         public List<PathError> Errors { get; set; } = new List<PathError>();
         public bool IsPathValid { get; set; } = true;
     }
-
     #endregion
-
-
 }

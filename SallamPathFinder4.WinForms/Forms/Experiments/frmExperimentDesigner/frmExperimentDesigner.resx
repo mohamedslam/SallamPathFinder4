@@ -118,8 +118,11 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="_lblInfo.Text" xml:space="preserve">
-    <value>This experiment will test selected algorithms with chosen parameters.
-Results include path length, computation time, success rate, collisions, and more.
-Screenshots will be saved automatically to the selected location.</value>
+    <value>This tool allows you to compare multiple pathfinding algorithms under the same conditions.
+
+• Select algorithms to compare
+• Configure robot and map settings
+• Run experiments with multiple iterations
+• View detailed comparison results</value>
   </data>
 </root>

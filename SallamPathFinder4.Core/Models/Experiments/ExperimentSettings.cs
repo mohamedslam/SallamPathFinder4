@@ -77,6 +77,11 @@ namespace SallamPathFinder4.Core.Models.Experiments
         public RobotSettings RobotSettings { get; set; }
         public MLSettings MLSettings { get; set; }
         #endregion
+        public int GridWidth { get; set; }
+        public int GridHeight { get; set; }
+        public int SemiStaticObstacles { get; set; }
+        public int RoughTerrainCount { get; set; }
+        public double RoughTerrainWeight { get; set; }
     }
 
     #region Class Documentation

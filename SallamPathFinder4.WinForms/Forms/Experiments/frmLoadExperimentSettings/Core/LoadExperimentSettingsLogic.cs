@@ -48,6 +48,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmLoadExperimentSettings
         #endregion
 
         #region Public Methods
+         
+
         /// <summary>
         /// Gets all saved settings files
         /// </summary>

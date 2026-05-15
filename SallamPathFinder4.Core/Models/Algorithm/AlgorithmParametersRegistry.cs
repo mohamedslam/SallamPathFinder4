@@ -68,6 +68,14 @@ namespace SallamPathFinder4.Core.Models.Algorithms
                     Description = "Maximum number of nodes to explore before giving up. Increase for complex maps, decrease for faster execution.",
                     Formula = "Stops after exploring N nodes"
                 },
+                 new AlgorithmParameterDefinition
+                {
+                    Name = "SequentialMode",
+                    DisplayName = "Sequential Mode",
+                    Type = ParameterType.Boolean,
+                    DefaultValue = false,
+                    Description = "Each iteration starts from the previous iteration's endpoint"
+                },
                 new AlgorithmParameterDefinition
                 {
                     Name = "AllowDiagonals",
