@@ -335,9 +335,14 @@ namespace SallamPathFinder4.WinForms.Panels
         {
             int width = (int)_nudWidth.Value;
             int length = (int)_nudLength.Value;
-            int height = 30;  // قيمة ثابتة (30 سم) افتراضياً
+            int height = 30;  // قيمة ثابتة
 
-            RobotDimensionsChanged?.Invoke(width, length, height);
+            // استدعاء الحدث بأمان
+            var handler = RobotDimensionsChanged;
+            if (handler != null)
+            {
+                handler(width, length, height);
+            }
         }
         private void _nudSpeed_ValueChanged(object? sender, EventArgs e)
         {
@@ -549,5 +554,36 @@ namespace SallamPathFinder4.WinForms.Panels
             ChargingSettingsChanged?.Invoke(this, EventArgs.Empty);
         }
         #endregion
+
+     
+        /// <summary>
+        /// Public method to trigger dimensions update from external code
+        /// </summary>
+        public void UpdateDimensionsExternally(int width, int length, int height)
+        {
+            // تحديث قيم الـ NumericUpDown
+            if (_nudWidth != null) _nudWidth.Value = width;
+            if (_nudLength != null) _nudLength.Value = length;
+
+            // استدعاء الدالة الداخلية التي تطلق الحدث
+            UpdateDimensions();
+        }
+      
+        /// <summary>
+        /// Event args for robot dimensions
+        /// </summary>
+        public class RobotDimensionsEventArgs : EventArgs
+        {
+            public int WidthCm { get; }
+            public int LengthCm { get; }
+            public int HeightCm { get; }
+
+            public RobotDimensionsEventArgs(int widthCm, int lengthCm, int heightCm)
+            {
+                WidthCm = widthCm;
+                LengthCm = lengthCm;
+                HeightCm = heightCm;
+            }
+        }
     }
 }

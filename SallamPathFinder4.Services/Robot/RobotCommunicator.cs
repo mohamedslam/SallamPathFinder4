@@ -270,7 +270,7 @@ namespace SallamPathFinder4.Services.Robot
             {
                 byte[] imageBytes = Convert.FromBase64String(imageBase64.GetString());
                 using var ms = new MemoryStream(imageBytes);
-                var image = System.Drawing.Image.FromStream(ms);
+                var image =  Image.FromStream(ms);
                 CameraFrameReceived?.Invoke(image);
             }
         }
@@ -298,7 +298,7 @@ namespace SallamPathFinder4.Services.Robot
             try
             {
                 using var ms = new MemoryStream(data);
-                var image = System.Drawing.Image.FromStream(ms);
+                var image =  Image.FromStream(ms);
                 CameraFrameReceived?.Invoke(image);
             }
             catch (ArgumentException)

@@ -140,7 +140,12 @@ namespace SallamPathFinder4.WinForms.Forms
             this.showGridItem = showGridItem;
             this.showCoordsItem = showCoordsItem;
             // ========== ROBOT MENU ==========
-            var robotMenuItem = new ToolStripMenuItem("Robot");
+            var robotMenuItem = new ToolStripMenuItem("🤖 Robot");
+            robotMenuItem.DropDownItems.Add("Select Robot...", null, (s, e) => OpenRobotSelector());
+            robotMenuItem.DropDownItems.Add("Create New Robot...", null, (s, e) => CreateNewRobot());
+            robotMenuItem.DropDownItems.Add("Edit Current Robot...", null, (s, e) => EditCurrentRobot());
+            robotMenuItem.DropDownItems.Add(new ToolStripSeparator());
+            robotMenuItem.DropDownItems.Add("Robot Information", null, (s, e) => ShowRobotInfo());
             robotMenuItem.DropDownItems.Add("Robot Dashboard...", null, (s, e) => ShowDashboard());
 
             // View menu - add separator and order goals option

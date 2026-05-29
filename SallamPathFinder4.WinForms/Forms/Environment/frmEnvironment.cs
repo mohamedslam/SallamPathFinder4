@@ -12,17 +12,20 @@ using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Interfaces.Services;
 using SallamPathFinder4.Core.Models.Goals;
 using SallamPathFinder4.Core.Models.Map;
+using SallamPathFinder4.Core.Models.Robot;
+using SallamPathFinder4.Core.Models.Sensors;
 using SallamPathFinder4.Services.Simulation;
 using SallamPathFinder4.WinForms.Container;
 using SallamPathFinder4.WinForms.Controls;
 using SallamPathFinder4.WinForms.Forms.Dashboard.frmRobotDashboard;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentBrowser;
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentDesigner;
+using SallamPathFinder4.WinForms.Forms.RobotDesigner;
 using SallamPathFinder4.WinForms.Forms.Settings.frmMapSettings;
 using SallamPathFinder4.WinForms.Forms.Settings.frmObstacleSettings;
 using SallamPathFinder4.WinForms.Helpers;
 using SallamPathFinder4.WinForms.Panels;
-using SallamPathFinder4.WinForms.ViewModels;
+using SallamPathFinder4.WinForms.ViewModels; 
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms
@@ -68,10 +71,15 @@ namespace SallamPathFinder4.WinForms.Forms
             #region Private Fields - Start Point
             private bool _isSettingStartPoint;
             #endregion
-           #region Private Fields - Goals Ordering
+            #region Private Fields - Goals Ordering
             private bool _orderGoalsByDistance;
             private List<GoalPoint> _originalGoalsOrder;
-           #endregion
+            #endregion
+
+            #region Private Fields - Robot Management
+            private RobotDefinition _currentRobot;
+            private string _currentRobotPath;
+        #endregion
         #endregion
 
         #region Constructor
@@ -82,6 +90,13 @@ namespace SallamPathFinder4.WinForms.Forms
                 CreateMenuAndToolbar();
                 InitializeComponent();
                 InitializeCustomComponents();
+
+                // مؤقتاً: لا تحمل روبوت تلقائياً
+                // LoadDefaultRobot();
+                _currentRobot = new RobotDefinition();
+                _currentRobot.RobotName = "Default Robot"; 
+                 
+                System.Diagnostics.Debug.WriteLine("frmEnvironment initialized successfully");
             }
             catch (Exception ex)
             {
@@ -1404,5 +1419,327 @@ namespace SallamPathFinder4.WinForms.Forms
             _gifRecorder?.Dispose();
             _gifRecorder = null;
         }
+
+        #region Private Methods - Robot Management
+        private void LoadDefaultRobot()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("LoadDefaultRobot START");
+
+                // إنشاء روبوت افتراضي مباشرة بدون تحميل من ملف
+                CreateDefaultRobot();
+
+                System.Diagnostics.Debug.WriteLine("Applying selected robot...");
+                ApplySelectedRobot();
+
+                System.Diagnostics.Debug.WriteLine("LoadDefaultRobot END");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ERROR in LoadDefaultRobot: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        private void CreateDefaultRobot()
+        {
+            _currentRobot = new RobotDefinition
+            {
+                RobotId = "robot_default_001",
+                RobotName = "Default Robot",
+                RobotType = RobotType.Wheeled,
+                Description = "Default wheeled robot"
+            };
+
+            _currentRobot.Appearance.Width = 50;
+            _currentRobot.Appearance.Height = 30;
+            _currentRobot.Appearance.Length = 60;
+            _currentRobot.Appearance.Color = "#3498db";
+
+            _currentRobot.Kinematics.MaxForwardSpeed = 1.5;
+            _currentRobot.Kinematics.MaxReverseSpeed = 0.8;
+            _currentRobot.Kinematics.MaxTurnRate = 90;
+            _currentRobot.Kinematics.MinTurnRadius = 30;
+
+            // إزالة الحساسات القديمة - نستخدم SimpleSensor الآن
+            _currentRobot.Sensors.Clear();
+
+            // إضافة حساسات افتراضية باستخدام SimpleSensor
+            _currentRobot.Sensors.Add(new SimpleSensor
+            {
+                SensorId = Guid.NewGuid().ToString(),
+                SensorName = "Front Ultrasonic",
+                SensorType = "Ultrasonic",
+                Position = new Point(25, 0),
+                MountAngle = 0
+            });
+
+            _currentRobot.Sensors.Add(new SimpleSensor
+            {
+                SensorId = Guid.NewGuid().ToString(),
+                SensorName = "Front Bumper",
+                SensorType = "Proximity",
+                Position = new Point(20, -15),
+                MountAngle = 0
+            });
+            if (mapControl != null)
+                mapControl.CurrentRobot = _currentRobot;
+             
+        }
+
+        private void UpdateRobotUI()
+        {
+            if (_currentRobot == null) return;
+
+            // ========== 1. تحديث MapControl ==========
+            mapControl.CurrentRobot = _currentRobot;
+
+            // ========== 2. تحديث ViewModel ==========
+            _viewModel?.SetCurrentRobot(_currentRobot);
+
+            // ========== 3. تحديث شريط الحالة ==========
+            UpdateRobotStatusDisplay();
+
+            // ========== 4. تحديث RobotPanel ==========
+            if (robotPanel != null)
+            {
+                try
+                {
+                    // تحديث السرعة
+                    var nudSpeed = robotPanel.Controls.Find("_nudSpeed", true).FirstOrDefault() as NumericUpDown;
+                    if (nudSpeed != null)
+                    {
+                        nudSpeed.Value = (decimal)(_currentRobot.Kinematics.MaxForwardSpeed * 100);
+                    }
+
+                    // تحديث العرض (Width)
+                    var nudWidth = robotPanel.Controls.Find("_nudWidth", true).FirstOrDefault() as NumericUpDown;
+                    if (nudWidth != null)
+                    {
+                        nudWidth.Value = (decimal)_currentRobot.Appearance.Width;
+                    }
+
+                    // تحديث الطول (Length)
+                    var nudLength = robotPanel.Controls.Find("_nudLength", true).FirstOrDefault() as NumericUpDown;
+                    if (nudLength != null)
+                    {
+                        nudLength.Value = (decimal)_currentRobot.Appearance.Length;
+                    }
+
+                    robotPanel.UpdateDimensionsExternally(
+                        (int)_currentRobot.Appearance.Width,
+                        (int)_currentRobot.Appearance.Length,
+                        (int)_currentRobot.Appearance.Height    );
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error updating RobotPanel: {ex.Message}");
+                }
+            }
+        }
+        private void UpdateRobotStatusDisplay()
+        {
+            if (_currentRobot == null) return;
+
+            if (InvokeRequired)
+            {
+                Invoke(new Action(UpdateRobotStatusDisplay));
+                return;
+            }
+
+            // تحديث شريط الحالة بمعلومات الروبوت
+            lblStatus.Text = $"Robot: {_currentRobot.RobotName} | Type: {_currentRobot.RobotType} | Speed: {_currentRobot.Kinematics.MaxForwardSpeed:F1} m/s | Sensors: {_currentRobot.Sensors.Count}";
+        }
+
+        private void OpenRobotSelector()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OpenRobotSelector START");
+
+                // تأكد من وجود المجلدات
+                string robotsDir = Path.Combine(Application.StartupPath, "Robots");
+                if (!Directory.Exists(robotsDir))
+                {
+                    Directory.CreateDirectory(robotsDir);
+                }
+
+                // إنشاء Selector جديد
+                var selector = new frmRobotSelector();
+
+                if (selector.ShowDialog() == DialogResult.OK && selector.SelectedRobot != null)
+                {
+                    _currentRobot = selector.SelectedRobot;
+                    ApplySelectedRobot();
+
+                    MessageBox.Show($"Robot '{_currentRobot.RobotName}' selected successfully.",
+                        "Robot Selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
+                System.Diagnostics.Debug.WriteLine("OpenRobotSelector END");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ERROR in OpenRobotSelector: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                MessageBox.Show($"Error opening robot selector: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        private void EditCurrentRobot()
+        {
+            if (_currentRobot != null)
+            {
+                using (var designer = new frmRobotDesigner(_currentRobot))
+                {
+                    if (designer.ShowDialog() == DialogResult.OK)
+                    {
+                        UpdateRobotUI();
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("No robot selected. Please select a robot first.", "No Robot",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void ShowRobotInfo()
+        {
+            if (_currentRobot == null)
+            {
+                MessageBox.Show("No robot selected.", "Robot Info",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string info = $"═══════════════════════════════════════════════════════════\n" +
+                         $"                    ROBOT INFORMATION\n" +
+                         $"═══════════════════════════════════════════════════════════\n\n" +
+                         $"Name:           {_currentRobot.RobotName}\n" +
+                         $"Type:           {_currentRobot.RobotType}\n" +
+                         $"ID:             {_currentRobot.RobotId}\n" +
+                         $"Description:    {_currentRobot.Description}\n\n" +
+                         $"Dimensions:     {_currentRobot.Appearance.Width:F0} x {_currentRobot.Appearance.Height:F0} x {_currentRobot.Appearance.Length:F0} cm\n" +
+                         $"Max Speed:      {_currentRobot.Kinematics.MaxForwardSpeed:F1} m/s\n" +
+                         $"Turn Rate:      {_currentRobot.Kinematics.MaxTurnRate:F0}°/s\n" +
+                         $"Turn Radius:    {_currentRobot.Kinematics.MinTurnRadius:F0} cm\n" +
+                         $"Maneuverability: {_currentRobot.Kinematics.GetManeuverabilityScore():F0}%\n\n" +
+                         $"Sensors:        {_currentRobot.Sensors.Count}\n" +
+                         $"Created:        {_currentRobot.CreatedAt:yyyy-MM-dd HH:mm}";
+
+            MessageBox.Show(info, "Robot Information",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        #endregion
+        #region Robot Management Methods
+      
+        private void CreateNewRobot()
+        {
+            using (var designer = new frmRobotDesigner())
+            {
+                if (designer.ShowDialog() == DialogResult.OK)
+                {
+                    // بعد إنشاء روبوت جديد، افتح المحدد لاختياره
+                    OpenRobotSelector();
+                }
+            }
+        }
+        private void ApplySelectedRobot()
+        {
+            if (_currentRobot == null)
+            {
+                System.Diagnostics.Debug.WriteLine("ApplySelectedRobot: _currentRobot is null");
+                return;
+            }
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"ApplySelectedRobot: {_currentRobot.RobotName}");
+
+                // تحديث MapControl (تأكد من وجود الخاصية)
+                try
+                {
+                    if (mapControl != null)
+                    {
+                         
+                            mapControl.CurrentRobot = _currentRobot;
+                        
+                        // استخدام Reflection للتحقق من وجود الخاصية
+                        var prop = mapControl.GetType().GetProperty("CurrentRobot");
+                        if (prop != null && prop.CanWrite)
+                        {
+                            prop.SetValue(mapControl, _currentRobot);
+                        } 
+                        mapControl.Invalidate();  
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error setting MapControl.CurrentRobot: {ex.Message}");
+                }
+
+                // تحديث RobotPanel
+                try
+                {
+                    if (robotPanel != null)
+                    {
+                        var nudSpeed = robotPanel.Controls.Find("_nudSpeed", true).FirstOrDefault() as NumericUpDown;
+                        if (nudSpeed != null)
+                        {
+                            nudSpeed.Value = (decimal)(_currentRobot.Kinematics.MaxForwardSpeed * 100);
+                        }
+
+                        var nudWidth = robotPanel.Controls.Find("_nudWidth", true).FirstOrDefault() as NumericUpDown;
+                        if (nudWidth != null)
+                        {
+                            nudWidth.Value = (decimal)_currentRobot.Appearance.Width;
+                        }
+
+                        var nudLength = robotPanel.Controls.Find("_nudLength", true).FirstOrDefault() as NumericUpDown;
+                        if (nudLength != null)
+                        {
+                            nudLength.Value = (decimal)_currentRobot.Appearance.Length;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error updating RobotPanel: {ex.Message}");
+                }
+
+                // تحديث ViewModel
+                try
+                {
+                    if (_viewModel != null)
+                    {
+                        var method = _viewModel.GetType().GetMethod("SetCurrentRobot");
+                        if (method != null)
+                        {
+                            method.Invoke(_viewModel, new object[] { _currentRobot });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error updating ViewModel: {ex.Message}");
+                }
+
+                // تحديث شريط الحالة
+                if (lblStatus != null)
+                {
+                    lblStatus.Text = $"Robot: {_currentRobot.RobotName} | Type: {_currentRobot.RobotType}";
+                }
+
+                System.Diagnostics.Debug.WriteLine("ApplySelectedRobot END");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ERROR in ApplySelectedRobot: {ex.Message}");
+            }
+        }
+        #endregion
     }
 }

@@ -3,7 +3,7 @@
 /// File: MapControl.cs
 /// Description: Professional map control for grid-based pathfinding visualization
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-04
+/// Date: 2026-05-18
 /// </summary>
 #endregion
 
@@ -13,8 +13,10 @@ using SallamPathFinder4.Core.Models.Goals;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
+using SallamPathFinder4.Core.Models.Robot;
 using SallamPathFinder4.WinForms.Helpers;
 using System.Drawing.Drawing2D;
+using System.Text.Json;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Controls
@@ -42,7 +44,8 @@ namespace SallamPathFinder4.WinForms.Controls
         private const double SQRT2 = 1.4142135623730951;
         private const int NORMAL_PATH_THICKNESS = 4;
         private const int RETURN_PATH_THICKNESS = 2;
-        private const int CHARGING_PATH_THICKNESS = 4; 
+        private const int CHARGING_PATH_THICKNESS = 4;
+        private const string ROBOTS_FOLDER = "Robots";
         #endregion
 
         #region Private Fields - Special Cells
@@ -50,9 +53,6 @@ namespace SallamPathFinder4.WinForms.Controls
         private HashSet<Point> _collisionCells;
         private HashSet<Point> _scannedCells;
         private HashSet<Point> _invalidPathCells;
-        /// <summary>
-        /// Dictionary of start points with their index (S0, S1, S2, ...)
-        /// </summary>
         private Dictionary<(int, int), int> _startPoints;
         private int _nextStartIndex;
         #endregion
@@ -71,21 +71,27 @@ namespace SallamPathFinder4.WinForms.Controls
         private float _zoomLevel;
         private PointF _viewOffset;
         private Point? _highlightedCell;
-        private bool _showOrderNumbers = false;  
-
+        private bool _showOrderNumbers = false;
         #endregion
 
-        #region Private Fields - Robot
+        #region Private Fields - Robot (Legacy - For backward compatibility)
         private Point _robotPosition;
-        private float _robotAngle=0;
-        private bool _showRobot; 
+        private float _robotAngle = 0;
+        private bool _showRobot = true;
         private double _robotSpeed = 10.0;
         private bool _isMovingForward = false;
         private bool _isMovingBackward = false;
-        private int _robotWidthCm = 20;
-        private int _robotLengthCm = 20;
-        private int _robotHeightCm = 30;   
+        private int _robotWidthCm = 30;
+        private int _robotLengthCm = 30;
+        private int _robotHeightCm = 40;
         private double _scaleCmPerCell = 10.0;
+        #endregion
+
+        #region Private Fields - Robot Management
+        private List<RobotDefinition> _availableRobots;
+        private RobotDefinition _selectedRobot;
+        private string _robotsDirectoryPath;
+        private bool _useCustomRobot = false;
         #endregion
 
         #region Private Fields - Obstacles
@@ -108,16 +114,29 @@ namespace SallamPathFinder4.WinForms.Controls
 
         #region Private Fields - Start Point
         private Point _robotStartPoint;
+        #endregion
+
         #region Private Fields - Robot Friction
         private double _currentSpeed = 0;
-        private System.Windows.Forms. Timer _frictionTimer;
+        private System.Windows.Forms.Timer _frictionTimer;
         private bool _isMoving = false;
         #endregion
-        #endregion
-        
+
         #region Private Fields - GIF Recording
         private GifRecorder _gifRecorder;
         private bool _isRecording = false;
+        #endregion
+
+        #region Private Fields - Search Visualization
+        private HashSet<Point> _openCells = new HashSet<Point>();
+        private HashSet<Point> _closedCells = new HashSet<Point>();
+        private Point? _currentCell = null;
+        private List<Point> _pathCells = new List<Point>();
+        private Dictionary<Point, Point> _cellParents = new Dictionary<Point, Point>();
+        private Dictionary<Point, int> _cellOrder = new Dictionary<Point, int>();
+        private int _currentOrder = 0;
+        private int _arrowDrawCounter = 0;
+        private const int ARROW_DRAW_INTERVAL = 10;
         #endregion
 
         #region Constructor
@@ -132,6 +151,8 @@ namespace SallamPathFinder4.WinForms.Controls
 
             BackColor = Color.White;
             AutoScroll = false;
+
+            InitializeRobotManagement();
 
             _goals = new List<GoalPoint>();
             _parkingPoints = new List<ParkingPoint>();
@@ -164,9 +185,6 @@ namespace SallamPathFinder4.WinForms.Controls
             _startPoint = new Point(10, 10);
             _startPoints = new Dictionary<(int, int), int>();
             _nextStartIndex = 0;
-            _collisionCells = new HashSet<Point>();
-            _scannedCells = new HashSet<Point>();
-            _invalidPathCells = new HashSet<Point>();
         }
 
         private void InitializeComponent()
@@ -176,13 +194,788 @@ namespace SallamPathFinder4.WinForms.Controls
         }
         #endregion
 
+        #region Robot Management Initialization
+        /// <summary>
+        /// Initializes the robot management system
+        /// Creates robots directory if not exists and loads all saved robots
+        /// </summary>
+        private void InitializeRobotManagement()
+        {
+            _availableRobots = new List<RobotDefinition>();
+            _robotsDirectoryPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ROBOTS_FOLDER);
+
+            // Create robots directory if it doesn't exist
+            if (!Directory.Exists(_robotsDirectoryPath))
+            {
+                Directory.CreateDirectory(_robotsDirectoryPath);
+            }
+
+            // Load all saved robots
+            LoadAllRobots();
+
+            // If no robots exist, create a default robot from legacy settings
+            if (_availableRobots.Count == 0)
+            {
+                CreateDefaultRobotFromLegacy();
+            }
+
+            // Select the first robot as default
+            _selectedRobot = _availableRobots.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Creates a default robot from the legacy settings for backward compatibility
+        /// </summary>
+        private void CreateDefaultRobotFromLegacy()
+        {
+            var defaultRobot = new RobotDefinition
+            {
+                RobotId = Guid.NewGuid().ToString(),
+                RobotName = "Default Robot",
+                RobotType = RobotType.Wheeled,
+                CreatedAt = DateTime.Now,
+                Description = "Default robot created from legacy settings",
+                Appearance = new RobotAppearance
+                {
+                    ShapeType = RobotShapeType.RoundedRect,
+                    Width = _robotWidthCm,
+                    Height = _robotHeightCm,
+                    Length = _robotLengthCm,
+                    Color = "#3498db",
+                    Icon = "🤖",
+                    ShowWheels = true,
+                    ShowDirectionArrow = true,
+                    ShowSensorPoints = true
+                },
+                Kinematics = new RobotKinematics
+                {
+                    MaxForwardSpeed = 1.5,
+                    MaxReverseSpeed = 0.8,
+                    MaxLateralSpeed = 0.5,
+                    MaxTurnRate = 90,
+                    MinTurnRadius = 30,
+                    TurnAcceleration = 45,
+                    LinearAcceleration = 0.5,
+                    LinearDeceleration = 1.0,
+                    MaxSlopeAngle = 30,
+                    MaxStepHeight = 5,
+                    MaxGapWidth = 10,
+                    Wheelbase = 40,
+                    TrackWidth = 35
+                }
+            };
+
+            _availableRobots.Add(defaultRobot);
+            SaveRobot(defaultRobot);
+        }
+        #endregion
+
+        #region Robot Management - Public Methods
+        /// <summary>
+        /// Gets the list of available robot names for UI display
+        /// </summary>
+        /// <returns>List of robot names</returns>
+        public List<string> GetRobotNames()
+        {
+            return _availableRobots?.Select(r => r.RobotName).ToList() ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Gets the list of available robots
+        /// </summary>
+        public List<RobotDefinition> GetAvailableRobots() => _availableRobots;
+
+        /// <summary>
+        /// Gets the currently selected robot
+        /// </summary>
+        public RobotDefinition GetSelectedRobot() => _selectedRobot;
+
+        /// <summary>
+        /// Sets whether to use custom robot drawing or legacy drawing
+        /// </summary>
+        /// <param name="use">True to use custom robot, false to use legacy</param>
+        public void SetUseCustomRobot(bool use)
+        {
+            _useCustomRobot = use;
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Gets whether custom robot drawing is enabled
+        /// </summary>
+        public bool IsUsingCustomRobot() => _useCustomRobot;
+
+        /// <summary>
+        /// Selects a robot by its ID
+        /// </summary>
+        /// <param name="robotId">The robot ID to select</param>
+        /// <returns>True if found and selected, false otherwise</returns>
+        public bool SelectRobot(string robotId)
+        {
+            var robot = _availableRobots?.FirstOrDefault(r => r.RobotId == robotId);
+            if (robot != null)
+            {
+                _selectedRobot = robot;
+
+                // Update legacy properties for backward compatibility
+                UpdateLegacyPropertiesFromRobot(robot);
+
+                Invalidate();
+                OnRobotSelected?.Invoke(robot);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Selects a robot by its name
+        /// </summary>
+        /// <param name="robotName">The robot name to select</param>
+        /// <returns>True if found and selected, false otherwise</returns>
+        public bool SelectRobotByName(string robotName)
+        {
+            var robot = _availableRobots?.FirstOrDefault(r => r.RobotName == robotName);
+            if (robot != null)
+            {
+                return SelectRobot(robot.RobotId);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Adds a new custom robot to the collection
+        /// </summary>
+        /// <param name="robot">The robot definition to add</param>
+        public void AddCustomRobot(RobotDefinition robot)
+        {
+            if (robot == null) throw new ArgumentNullException(nameof(robot));
+
+            if (_availableRobots == null)
+                _availableRobots = new List<RobotDefinition>();
+
+            // Ensure robot has an ID
+            if (string.IsNullOrEmpty(robot.RobotId))
+                robot.RobotId = Guid.NewGuid().ToString();
+
+            _availableRobots.Add(robot);
+            SaveRobot(robot);
+
+            // Auto-select if this is the first robot
+            if (_selectedRobot == null)
+                SelectRobot(robot.RobotId);
+
+            OnRobotAdded?.Invoke(robot);
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Deletes a robot by its ID
+        /// </summary>
+        /// <param name="robotId">The robot ID to delete</param>
+        /// <returns>True if deleted successfully, false otherwise</returns>
+        public bool DeleteRobot(string robotId)
+        {
+            if (_availableRobots == null || _availableRobots.Count <= 1)
+            {
+                // Cannot delete the last robot
+                System.Diagnostics.Debug.WriteLine("Cannot delete the last robot");
+                return false;
+            }
+
+            var robot = _availableRobots.FirstOrDefault(r => r.RobotId == robotId);
+            if (robot == null) return false;
+
+            // Delete the file
+            string filePath = Path.Combine(_robotsDirectoryPath, $"{robot.RobotId}.json");
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+
+            // Remove from list
+            _availableRobots.Remove(robot);
+
+            // If the deleted robot was selected, select another one
+            if (_selectedRobot?.RobotId == robotId)
+            {
+                _selectedRobot = _availableRobots.FirstOrDefault();
+                if (_selectedRobot != null)
+                    UpdateLegacyPropertiesFromRobot(_selectedRobot);
+            }
+
+            OnRobotDeleted?.Invoke(robot);
+            Invalidate();
+            return true;
+        }
+
+        /// <summary>
+        /// Saves the currently selected robot
+        /// </summary>
+        public void SaveCurrentRobot()
+        {
+            if (_selectedRobot != null)
+                SaveRobot(_selectedRobot);
+        }
+
+        /// <summary>
+        /// Updates the legacy robot properties from a RobotDefinition
+        /// </summary>
+        /// <param name="robot">The robot definition to sync from</param>
+        private void UpdateLegacyPropertiesFromRobot(RobotDefinition robot)
+        {
+            if (robot?.Appearance != null)
+            {
+                _robotWidthCm = (int)robot.Appearance.Width;
+                _robotLengthCm = (int)robot.Appearance.Length;
+                _robotHeightCm = (int)robot.Appearance.Height;
+            }
+
+            if (robot?.Kinematics != null)
+            {
+                _robotSpeed = robot.Kinematics.MaxForwardSpeed * 10; // Convert to cm/s approximation
+            }
+        }
+
+        /// <summary>
+        /// Creates a new empty robot definition for user customization
+        /// </summary>
+        /// <returns>A new robot definition with default values</returns>
+        public RobotDefinition CreateNewRobotTemplate()
+        {
+            return new RobotDefinition
+            {
+                RobotId = Guid.NewGuid().ToString(),
+                RobotName = "New Robot",
+                RobotType = RobotType.Wheeled,
+                CreatedAt = DateTime.Now,
+                Description = string.Empty,
+                Appearance = new RobotAppearance
+                {
+                    ShapeType = RobotShapeType.RoundedRect,
+                    Width = _robotWidthCm,
+                    Height = _robotHeightCm,
+                    Length = _robotLengthCm,
+                    Color = "#3498db",
+                    Icon = "🤖",
+                    ShowWheels = true,
+                    ShowDirectionArrow = true,
+                    ShowSensorPoints = true
+                },
+                Kinematics = new RobotKinematics
+                {
+                    MaxForwardSpeed = 1.5,
+                    MaxReverseSpeed = 0.8,
+                    MaxLateralSpeed = 0.5,
+                    MaxTurnRate = 90,
+                    MinTurnRadius = 30,
+                    TurnAcceleration = 45,
+                    LinearAcceleration = 0.5,
+                    LinearDeceleration = 1.0,
+                    MaxSlopeAngle = 30,
+                    MaxStepHeight = 5,
+                    MaxGapWidth = 10,
+                    Wheelbase = 40,
+                    TrackWidth = 35
+                }
+            };
+        }
+        #endregion
+
+        #region Robot Management - Private Methods
+        /// <summary>
+        /// Loads all robots from the robots directory
+        /// </summary>
+        private void LoadAllRobots()
+        {
+            if (!Directory.Exists(_robotsDirectoryPath)) return;
+
+            var robotFiles = Directory.GetFiles(_robotsDirectoryPath, "*.json");
+            foreach (var filePath in robotFiles)
+            {
+                try
+                {
+                    var robot = LoadRobotFromFile(filePath);
+                    if (robot != null)
+                        _availableRobots.Add(robot);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to load robot from {filePath}: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Loads a single robot from a JSON file
+        /// </summary>
+        /// <param name="filePath">Path to the JSON file</param>
+        /// <returns>RobotDefinition or null if load fails</returns>
+        private RobotDefinition LoadRobotFromFile(string filePath)
+        {
+            try
+            {
+                string json = File.ReadAllText(filePath);
+
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var robot = new RobotDefinition
+                {
+                    RobotId = root.GetProperty("RobotId").GetString(),
+                    RobotName = root.GetProperty("RobotName").GetString(),
+                    CreatedAt = root.GetProperty("CreatedAt").GetDateTime(),
+                    Description = root.GetProperty("Description").GetString() ?? string.Empty
+                };
+
+                // Parse RobotType
+                if (root.TryGetProperty("RobotType", out var robotTypeElement))
+                {
+                    if (robotTypeElement.ValueKind == JsonValueKind.String)
+                        robot.RobotType = Enum.Parse<RobotType>(robotTypeElement.GetString());
+                    else if (robotTypeElement.ValueKind == JsonValueKind.Number)
+                        robot.RobotType = (RobotType)robotTypeElement.GetInt32();
+                }
+
+                // Parse Appearance
+                if (root.TryGetProperty("Appearance", out var appearance))
+                {
+                    if (appearance.TryGetProperty("ShapeType", out var shapeTypeElement))
+                    {
+                        if (shapeTypeElement.ValueKind == JsonValueKind.String)
+                            robot.Appearance.ShapeType = Enum.Parse<RobotShapeType>(shapeTypeElement.GetString());
+                        else if (shapeTypeElement.ValueKind == JsonValueKind.Number)
+                            robot.Appearance.ShapeType = (RobotShapeType)shapeTypeElement.GetInt32();
+                    }
+
+                    robot.Appearance.Width = appearance.GetProperty("Width").GetDouble();
+                    robot.Appearance.Height = appearance.GetProperty("Height").GetDouble();
+                    robot.Appearance.Length = appearance.GetProperty("Length").GetDouble();
+                    robot.Appearance.Color = appearance.GetProperty("Color").GetString();
+                    robot.Appearance.Icon = appearance.GetProperty("Icon").GetString();
+                    robot.Appearance.ShowWheels = appearance.GetProperty("ShowWheels").GetBoolean();
+                    robot.Appearance.ShowDirectionArrow = appearance.GetProperty("ShowDirectionArrow").GetBoolean();
+                    robot.Appearance.ShowSensorPoints = appearance.GetProperty("ShowSensorPoints").GetBoolean();
+                }
+
+                // Parse Kinematics
+                if (root.TryGetProperty("Kinematics", out var kinematics))
+                {
+                    robot.Kinematics.MaxForwardSpeed = kinematics.GetProperty("MaxForwardSpeed").GetDouble();
+                    robot.Kinematics.MaxReverseSpeed = kinematics.GetProperty("MaxReverseSpeed").GetDouble();
+                    robot.Kinematics.MaxLateralSpeed = kinematics.GetProperty("MaxLateralSpeed").GetDouble();
+                    robot.Kinematics.MaxTurnRate = kinematics.GetProperty("MaxTurnRate").GetDouble();
+                    robot.Kinematics.MinTurnRadius = kinematics.GetProperty("MinTurnRadius").GetDouble();
+                    robot.Kinematics.TurnAcceleration = kinematics.GetProperty("TurnAcceleration").GetDouble();
+                    robot.Kinematics.LinearAcceleration = kinematics.GetProperty("LinearAcceleration").GetDouble();
+                    robot.Kinematics.LinearDeceleration = kinematics.GetProperty("LinearDeceleration").GetDouble();
+                    robot.Kinematics.MaxSlopeAngle = kinematics.GetProperty("MaxSlopeAngle").GetDouble();
+                    robot.Kinematics.MaxStepHeight = kinematics.GetProperty("MaxStepHeight").GetDouble();
+                    robot.Kinematics.MaxGapWidth = kinematics.GetProperty("MaxGapWidth").GetDouble();
+                    robot.Kinematics.Wheelbase = kinematics.GetProperty("Wheelbase").GetDouble();
+                    robot.Kinematics.TrackWidth = kinematics.GetProperty("TrackWidth").GetDouble();
+                }
+
+                // Parse Sensors
+                if (root.TryGetProperty("Sensors", out var sensorsArray))
+                {
+                    foreach (var sensorElement in sensorsArray.EnumerateArray())
+                    {
+                        var sensor = new SimpleSensor
+                        {
+                            SensorId = sensorElement.GetProperty("SensorId").GetString(),
+                            SensorName = sensorElement.GetProperty("SensorName").GetString(),
+                            SensorType = sensorElement.GetProperty("SensorType").GetString(),
+                            PositionX = sensorElement.GetProperty("PositionX").GetInt32(),
+                            PositionY = sensorElement.GetProperty("PositionY").GetInt32(),
+                            MountAngle = sensorElement.GetProperty("MountAngle").GetDouble(),
+                            DisplayColor = sensorElement.GetProperty("DisplayColor").GetString()
+                        };
+                        robot.Sensors.Add(sensor);
+                    }
+                }
+
+                return robot;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading robot: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Saves a robot to a JSON file
+        /// </summary>
+        /// <param name="robot">The robot to save</param>
+        private void SaveRobot(RobotDefinition robot)
+        {
+            try
+            {
+                string filePath = Path.Combine(_robotsDirectoryPath, $"{robot.RobotId}.json");
+                robot.SaveToFile(filePath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving robot: {ex.Message}");
+            }
+        }
+        #endregion
+
+        #region Robot Drawing Methods
+        /// <summary>
+        /// Main robot drawing entry point - dispatches to custom or legacy drawing
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        private void DrawRobot(Graphics g)
+        {
+            if (!_showRobot || _mapGrid == null || !_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y)) return;
+
+            if (_useCustomRobot && _selectedRobot != null)
+                DrawCustomRobot(g);
+            else
+                DrawLegacyRobot(g);
+        }
+
+        /// <summary>
+        /// Draws the robot using the custom RobotDefinition
+        /// Supports multiple shapes: Rectangle, Square, Circle, RoundedRect, Triangle, Hexagon
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        private void DrawCustomRobot(Graphics g)
+        {
+            if (_selectedRobot == null) return;
+
+            Rectangle robotRect = GetCellRect(_robotPosition.X, _robotPosition.Y);
+            if (robotRect.Width <= 0 || robotRect.Height <= 0) return;
+
+            var state = g.Save();
+
+            int centerX = robotRect.X + robotRect.Width / 2;
+            int centerY = robotRect.Y + robotRect.Height / 2;
+            g.TranslateTransform(centerX, centerY);
+            g.RotateTransform(_robotAngle);
+
+            int cellSizePx = robotRect.Width;
+            double cellSizeCm = _scaleCmPerCell;
+            if (cellSizeCm <= 0) cellSizeCm = 10.0;
+
+            // Calculate dimensions based on robot definition
+            double widthRatio = Math.Max(0.3, Math.Min(0.9, _selectedRobot.Appearance.Width / cellSizeCm));
+            double lengthRatio = Math.Max(0.3, Math.Min(0.9, _selectedRobot.Appearance.Length / cellSizeCm));
+
+            int robotWidthPx = (int)(widthRatio * cellSizePx);
+            int robotLengthPx = (int)(lengthRatio * cellSizePx);
+
+            robotWidthPx = Math.Min(robotWidthPx, cellSizePx - 2);
+            robotLengthPx = Math.Min(robotLengthPx, cellSizePx - 2);
+
+            if (robotWidthPx < 4) robotWidthPx = 4;
+            if (robotLengthPx < 4) robotLengthPx = 4;
+
+            Color bodyColor = ColorTranslator.FromHtml(_selectedRobot.Appearance.Color);
+
+            // Draw robot body based on shape type
+            switch (_selectedRobot.Appearance.ShapeType)
+            {
+                case RobotShapeType.Circle:
+                    DrawRobotCircle(g, robotWidthPx, robotLengthPx, bodyColor);
+                    break;
+                case RobotShapeType.Triangle:
+                    DrawRobotTriangle(g, robotWidthPx, robotLengthPx, bodyColor);
+                    break;
+                case RobotShapeType.Hexagon:
+                    DrawRobotHexagon(g, robotWidthPx, robotLengthPx, bodyColor);
+                    break;
+                case RobotShapeType.Square:
+                    DrawRobotSquare(g, robotWidthPx, robotLengthPx, bodyColor);
+                    break;
+                case RobotShapeType.RoundedRect:
+                    DrawRobotRoundedRect(g, robotWidthPx, robotLengthPx, bodyColor);
+                    break;
+                case RobotShapeType.Rectangle:
+                default:
+                    DrawRobotRectangle(g, robotWidthPx, robotLengthPx, bodyColor);
+                    break;
+            }
+
+            // Draw direction arrow if enabled
+            if (_selectedRobot.Appearance.ShowDirectionArrow)
+            {
+                DrawDirectionArrowOnRobot(g, robotLengthPx);
+            }
+
+            // Draw sensors if enabled
+            if (_selectedRobot.Appearance.ShowSensorPoints && _selectedRobot.Sensors.Count > 0)
+            {
+                DrawRobotSensors(g, robotWidthPx, robotLengthPx);
+            }
+
+            g.Restore(state);
+        }
+
+        /// <summary>
+        /// Draws rectangular robot body
+        /// </summary>
+        private void DrawRobotRectangle(Graphics g, int width, int length, Color color)
+        {
+            RectangleF bodyRect = new RectangleF(-width / 2, -length / 2, width, length);
+
+            using (var bodyBrush = new SolidBrush(color))
+                g.FillRectangle(bodyBrush, bodyRect);
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+                g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
+        }
+
+        /// <summary>
+        /// Draws square robot body
+        /// </summary>
+        private void DrawRobotSquare(Graphics g, int width, int length, Color color)
+        {
+            int size = Math.Min(width, length);
+            RectangleF bodyRect = new RectangleF(-size / 2, -size / 2, size, size);
+
+            using (var bodyBrush = new SolidBrush(color))
+                g.FillRectangle(bodyBrush, bodyRect);
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+                g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
+        }
+
+        /// <summary>
+        /// Draws rounded rectangle robot body
+        /// </summary>
+        private void DrawRobotRoundedRect(Graphics g, int width, int length, Color color)
+        {
+            RectangleF bodyRect = new RectangleF(-width / 2, -length / 2, width, length);
+            int radius = Math.Min(width, length) / 4;
+
+            using (var bodyBrush = new SolidBrush(color))
+            using (var path = new GraphicsPath())
+            {
+                path.AddArc(bodyRect.X, bodyRect.Y, radius, radius, 180, 90);
+                path.AddArc(bodyRect.Right - radius, bodyRect.Y, radius, radius, 270, 90);
+                path.AddArc(bodyRect.Right - radius, bodyRect.Bottom - radius, radius, radius, 0, 90);
+                path.AddArc(bodyRect.X, bodyRect.Bottom - radius, radius, radius, 90, 90);
+                path.CloseFigure();
+
+                g.FillPath(bodyBrush, path);
+
+                using (var borderPen = new Pen(Color.White, 1.5f))
+                    g.DrawPath(borderPen, path);
+            }
+        }
+
+        /// <summary>
+        /// Draws circular robot body
+        /// </summary>
+        private void DrawRobotCircle(Graphics g, int width, int length, Color color)
+        {
+            int radius = Math.Min(width, length) / 2;
+
+            using (var bodyBrush = new SolidBrush(color))
+                g.FillEllipse(bodyBrush, -radius, -radius, radius * 2, radius * 2);
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+                g.DrawEllipse(borderPen, -radius, -radius, radius * 2, radius * 2);
+
+            // Add eyes for circular robot
+            int eyeSize = Math.Max(2, radius / 4);
+            using (var eyeBrush = new SolidBrush(Color.White))
+            {
+                g.FillEllipse(eyeBrush, -radius / 3, -radius / 4, eyeSize, eyeSize);
+                g.FillEllipse(eyeBrush, radius / 6, -radius / 4, eyeSize, eyeSize);
+            }
+        }
+
+        /// <summary>
+        /// Draws triangular robot body
+        /// </summary>
+        private void DrawRobotTriangle(Graphics g, int width, int length, Color color)
+        {
+            PointF[] triangle = new PointF[]
+            {
+                new PointF(0, -length / 2),
+                new PointF(-width / 2, length / 2),
+                new PointF(width / 2, length / 2)
+            };
+
+            using (var bodyBrush = new SolidBrush(color))
+                g.FillPolygon(bodyBrush, triangle);
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+                g.DrawPolygon(borderPen, triangle);
+        }
+
+        /// <summary>
+        /// Draws hexagonal robot body
+        /// </summary>
+        private void DrawRobotHexagon(Graphics g, int width, int length, Color color)
+        {
+            double angleStep = Math.PI * 2 / 6;
+            PointF[] hexagon = new PointF[6];
+
+            for (int i = 0; i < 6; i++)
+            {
+                double angle = i * angleStep - Math.PI / 2;
+                float x = (float)(Math.Cos(angle) * width / 2);
+                float y = (float)(Math.Sin(angle) * length / 2);
+                hexagon[i] = new PointF(x, y);
+            }
+
+            using (var bodyBrush = new SolidBrush(color))
+                g.FillPolygon(bodyBrush, hexagon);
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+                g.DrawPolygon(borderPen, hexagon);
+        }
+
+        /// <summary>
+        /// Draws direction arrow on the robot
+        /// </summary>
+        private void DrawDirectionArrowOnRobot(Graphics g, int robotLength)
+        {
+            using (var arrowBrush = new SolidBrush(Color.FromArgb(46, 204, 113)))
+            {
+                PointF[] arrowPoints = new PointF[]
+                {
+                    new PointF(0, -robotLength / 2 - 3),
+                    new PointF(-5, -robotLength / 2 + 8),
+                    new PointF(5, -robotLength / 2 + 8)
+                };
+                g.FillPolygon(arrowBrush, arrowPoints);
+            }
+        }
+
+        /// <summary>
+        /// Draws sensor points on the robot
+        /// </summary>
+        private void DrawRobotSensors(Graphics g, int robotWidth, int robotLength)
+        {
+            if (_selectedRobot?.Sensors == null) return;
+
+            foreach (var sensor in _selectedRobot.Sensors)
+            {
+                Color sensorColor = ColorTranslator.FromHtml(sensor.DisplayColor);
+                int sensorX = (int)(sensor.PositionX / 100.0 * robotWidth);
+                int sensorY = (int)(sensor.PositionY / 100.0 * robotLength);
+
+                using (var sensorBrush = new SolidBrush(sensorColor))
+                {
+                    g.FillEllipse(sensorBrush, sensorX - 3, sensorY - 3, 6, 6);
+                }
+
+                using (var sensorPen = new Pen(Color.White, 1))
+                {
+                    g.DrawEllipse(sensorPen, sensorX - 3, sensorY - 3, 6, 6);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draws the robot using legacy method for backward compatibility
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        private void DrawLegacyRobot(Graphics g)
+        {
+            Rectangle robotRect = GetCellRect(_robotPosition.X, _robotPosition.Y);
+            if (robotRect.Width <= 0 || robotRect.Height <= 0) return;
+
+            var state = g.Save();
+
+            int centerX = robotRect.X + robotRect.Width / 2;
+            int centerY = robotRect.Y + robotRect.Height / 2;
+            g.TranslateTransform(centerX, centerY);
+            g.RotateTransform(_robotAngle);
+
+            int cellSizePx = robotRect.Width;
+            double cellSizeCm = _scaleCmPerCell;
+            if (cellSizeCm <= 0) cellSizeCm = 10.0;
+
+            double widthRatio = Math.Max(0.3, Math.Min(0.9, _robotWidthCm / cellSizeCm));
+            double lengthRatio = Math.Max(0.3, Math.Min(0.9, _robotLengthCm / cellSizeCm));
+
+            int robotWidthPx = (int)(widthRatio * cellSizePx);
+            int robotLengthPx = (int)(lengthRatio * cellSizePx);
+
+            robotWidthPx = Math.Min(robotWidthPx, cellSizePx - 2);
+            robotLengthPx = Math.Min(robotLengthPx, cellSizePx - 2);
+
+            if (robotWidthPx < 4) robotWidthPx = 4;
+            if (robotLengthPx < 4) robotLengthPx = 4;
+
+            // Body
+            RectangleF bodyRect = new RectangleF(-robotWidthPx / 2, -robotLengthPx / 2, robotWidthPx, robotLengthPx);
+
+            using (var bodyBrush = new SolidBrush(Color.FromArgb(220, 41, 128, 185)))
+            {
+                g.FillRectangle(bodyBrush, bodyRect);
+            }
+
+            using (var borderPen = new Pen(Color.White, 1.5f))
+            {
+                g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
+            }
+
+            // Head triangle
+            int headSize = Math.Max(4, Math.Min(robotWidthPx, robotLengthPx) / 3);
+
+            PointF[] head = new PointF[]
+            {
+                new PointF(robotWidthPx / 2 + headSize / 3, 0),
+                new PointF(robotWidthPx / 2 - headSize / 2, -headSize / 2),
+                new PointF(robotWidthPx / 2 - headSize / 2, headSize / 2)
+            };
+
+            using (var headBrush = new SolidBrush(Color.FromArgb(220, 231, 76, 60)))
+            {
+                g.FillPolygon(headBrush, head);
+            }
+
+            // Wheels
+            if (cellSizePx >= 20)
+            {
+                int wheelRadius = Math.Max(2, Math.Min(robotWidthPx, robotLengthPx) / 5);
+
+                using (var wheelBrush = new SolidBrush(Color.FromArgb(220, 60, 60, 60)))
+                using (var wheelPen = new Pen(Color.FromArgb(200, 150, 150, 150), 1))
+                {
+                    float topWheelY = -robotLengthPx / 2 - wheelRadius + 2;
+                    float bottomWheelY = robotLengthPx / 2 - wheelRadius - 2;
+
+                    g.FillEllipse(wheelBrush, -wheelRadius, topWheelY, wheelRadius * 2, wheelRadius * 2);
+                    g.DrawEllipse(wheelPen, -wheelRadius, topWheelY, wheelRadius * 2, wheelRadius * 2);
+
+                    g.FillEllipse(wheelBrush, -wheelRadius, bottomWheelY, wheelRadius * 2, wheelRadius * 2);
+                    g.DrawEllipse(wheelPen, -wheelRadius, bottomWheelY, wheelRadius * 2, wheelRadius * 2);
+                }
+            }
+
+            // Eye
+            int eyeSize = Math.Max(2, headSize / 5);
+            using (var eyeBrush = new SolidBrush(Color.White))
+            {
+                g.FillEllipse(eyeBrush, robotWidthPx / 2 - headSize / 4, -eyeSize / 2, eyeSize, eyeSize);
+            }
+
+            g.Restore(state);
+        }
+        #endregion
+
         #region Public Properties - Core
         public bool ShowOrderNumbers
         {
             get => _showOrderNumbers;
             set { _showOrderNumbers = value; Invalidate(); }
         }
-        public double ScaleCmPerCell { get; set; }
+
+        public double ScaleCmPerCell
+        {
+            get => _scaleCmPerCell;
+            set
+            {
+                _scaleCmPerCell = Math.Max(1.0, value);
+                Invalidate();
+            }
+        }
 
         public MapGrid MapGrid
         {
@@ -264,9 +1057,6 @@ namespace SallamPathFinder4.WinForms.Controls
             set { _showRobot = value; Invalidate(); }
         }
 
-        /// <summary>
-        /// الحصول على أو تعيين سرعة الروبوت الحالية (سم/ثانية)
-        /// </summary>
         public double RobotSpeed
         {
             get => _robotSpeed;
@@ -333,10 +1123,6 @@ namespace SallamPathFinder4.WinForms.Controls
         #endregion
 
         #region Public Properties - Start Point
-
-        /// <summary>
-        /// Gets or sets the robot start point on the map
-        /// </summary>
         public Point RobotStartPoint
         {
             get => _robotStartPoint;
@@ -348,40 +1134,23 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        /// <summary>
-        /// Indicates whether a custom start point is set
-        /// </summary>
         public bool HasCustomStartPoint => _robotStartPoint != Point.Empty;
-
         #endregion
-      
+
         #region Public Properties - View
-        /// <summary>
-        /// الحصول على إزاحة العرض (للتحريك)
-        /// </summary>
         public PointF ViewOffset => _viewOffset;
         #endregion
 
         #region Public Methods - Start Points
-
-        /// <summary>
-        /// Sets the current start point (clears previous and adds new)
-        /// </summary>
         public void SetCurrentStartPoint(Point location)
         {
             ResetStartPoints();
             AddStartPoint(location);
             _robotStartPoint = location;
-
-            // Also update the actual robot position
             this.RobotPosition = location;
-
             System.Diagnostics.Debug.WriteLine($"[MapControl] Start point set to ({location.X},{location.Y})");
         }
 
-        /// <summary>
-        /// Resets start point counter for new experiment
-        /// </summary>
         public void ResetStartPoints()
         {
             _startPoints?.Clear();
@@ -389,15 +1158,10 @@ namespace SallamPathFinder4.WinForms.Controls
             _robotStartPoint = Point.Empty;
         }
 
-        /// <summary>
-        /// Adds a new start point with auto-incremented index
-        /// </summary>
         public void AddStartPoint(Point location)
         {
             if (_startPoints == null)
-            {
                 _startPoints = new Dictionary<(int, int), int>();
-            }
 
             if (!_startPoints.ContainsKey((location.X, location.Y)))
             {
@@ -406,7 +1170,6 @@ namespace SallamPathFinder4.WinForms.Controls
                 Invalidate();
             }
         }
-
         #endregion
 
         #region Public Methods - Path Drawing
@@ -441,8 +1204,7 @@ namespace SallamPathFinder4.WinForms.Controls
             {
                 System.Diagnostics.Debug.WriteLine("AddGoalAt: Invalid cell or null grid");
                 return;
-
-            } 
+            }
             int newNumber = _goals.Count + 1;
             var newGoal = new GoalPoint(newNumber, cell, color);
             _goals.Add(newGoal);
@@ -529,56 +1291,40 @@ namespace SallamPathFinder4.WinForms.Controls
             _robotSpeed = speed;
             _robotPosition = position;
             _robotAngle = angle;
-
-            // 🔴 Debug - تحقق من القيمة
             System.Diagnostics.Debug.WriteLine($"[MapControl] UpdateRobot: Speed={_robotSpeed} cm/s, Position=({position.X},{position.Y})");
-
             Invalidate();
         }
 
-        /// <summary>
-        /// التحكم اليدوي في الروبوت (WASD + Q/E/R)
-        /// </summary>
         public void MoveRobotManually(Keys key, double currentSpeed = 10.0)
         {
             if (_mapGrid == null || !_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y)) return;
 
             Point newPosition = _robotPosition;
             float newAngle = _robotAngle;
-
-            // حجم الخطوة الأساسي (خلية واحدة)
             int stepSize = 1;
-
-            // زوايا الدوران
-            float tankTurnAngle = 22.5f;   // دوران حول عجلة (Tank Turn)
-            float pivotTurnAngle = 45f;     // دوران حول المركز (Pivot Turn)
-
-            // سرعة الحركة تعتمد على السرعة الحالية
-            double moveDistance = currentSpeed / 50.0;  // 10 سم/ث = 0.2، 50 سم/ث = 1.0
+            float tankTurnAngle = 22.5f;
+            float pivotTurnAngle = 45f;
+            double moveDistance = currentSpeed / 50.0;
             moveDistance = Math.Max(0.2, Math.Min(1.5, moveDistance));
 
             switch (key)
             {
-                // ========== الحركة الأمامية والخلفية (باتجاه مقدمة الروبوت) ==========
-                case Keys.W:  // للأمام - باتجاه الزاوية الحالية
+                case Keys.W:
                     newPosition = new Point(
                         _robotPosition.X + (int)(stepSize * Math.Cos(_robotAngle * Math.PI / 180)),
                         _robotPosition.Y + (int)(stepSize * Math.Sin(_robotAngle * Math.PI / 180)));
                     System.Diagnostics.Debug.WriteLine($"[Robot] Moving FORWARD at angle {_robotAngle}°");
                     break;
 
-                case Keys.S:  // للخلف - عكس اتجاه الزاوية الحالية
+                case Keys.S:
                     newPosition = new Point(
                         _robotPosition.X - (int)(stepSize * Math.Cos(_robotAngle * Math.PI / 180)),
                         _robotPosition.Y - (int)(stepSize * Math.Sin(_robotAngle * Math.PI / 180)));
                     System.Diagnostics.Debug.WriteLine($"[Robot] Moving BACKWARD at angle {_robotAngle}°");
                     break;
 
-                // ========== نوع الدوران الأول: Tank Turn (دوران حول عجلة) ==========
-                // العجلة اليمنى تتحرك، العجلة اليسرى ثابتة → دوران يسار مع حركة
                 case Keys.A:
                     newAngle = _robotAngle - tankTurnAngle;
-                    // حركة طفيفة للأمام أثناء الدوران
                     newPosition = new Point(
                         _robotPosition.X + (int)(0.5 * Math.Cos((_robotAngle - 15) * Math.PI / 180)),
                         _robotPosition.Y + (int)(0.5 * Math.Sin((_robotAngle - 15) * Math.PI / 180)));
@@ -593,29 +1339,26 @@ namespace SallamPathFinder4.WinForms.Controls
                     System.Diagnostics.Debug.WriteLine($"[Robot] TANK TURN RIGHT: angle {_robotAngle}° -> {newAngle}°");
                     break;
 
-                // ========== نوع الدوران الثاني: Pivot Turn (دوران حول المركز) ==========
-                // العجلتان في اتجاهين متعاكسين → دوران في المكان
                 case Keys.Q:
                     newAngle = _robotAngle - pivotTurnAngle;
-                    newPosition = _robotPosition;  // بدون حركة
+                    newPosition = _robotPosition;
                     System.Diagnostics.Debug.WriteLine($"[Robot] PIVOT LEFT: angle {_robotAngle}° -> {newAngle}°");
                     break;
 
                 case Keys.E:
                     newAngle = _robotAngle + pivotTurnAngle;
-                    newPosition = _robotPosition;  // بدون حركة
+                    newPosition = _robotPosition;
                     System.Diagnostics.Debug.WriteLine($"[Robot] PIVOT RIGHT: angle {_robotAngle}° -> {newAngle}°");
                     break;
 
-                // ========== انزلاق جانبي (العجلة الأمامية توجه) ==========
-                case Keys.R:  // انزلاق لليمين
+                case Keys.R:
                     newPosition = new Point(
                         _robotPosition.X + (int)(moveDistance * Math.Cos((_robotAngle + 90) * Math.PI / 180)),
                         _robotPosition.Y + (int)(moveDistance * Math.Sin((_robotAngle + 90) * Math.PI / 180)));
                     System.Diagnostics.Debug.WriteLine($"[Robot] STRAFE RIGHT");
                     break;
 
-                case Keys.F:  // انزلاق لليسار
+                case Keys.F:
                     newPosition = new Point(
                         _robotPosition.X + (int)(moveDistance * Math.Cos((_robotAngle - 90) * Math.PI / 180)),
                         _robotPosition.Y + (int)(moveDistance * Math.Sin((_robotAngle - 90) * Math.PI / 180)));
@@ -623,7 +1366,6 @@ namespace SallamPathFinder4.WinForms.Controls
                     break;
             }
 
-            // التحقق من صحة الموقع الجديد
             if (_mapGrid.IsValidCoordinate(newPosition.X, newPosition.Y))
             {
                 var cell = _mapGrid[newPosition.X, newPosition.Y];
@@ -632,7 +1374,6 @@ namespace SallamPathFinder4.WinForms.Controls
                     _robotPosition = newPosition;
                     _robotAngle = newAngle;
 
-                    // تطبيع الزاوية إلى 0-360
                     if (_robotAngle < 0) _robotAngle += 360;
                     if (_robotAngle >= 360) _robotAngle -= 360;
 
@@ -642,55 +1383,23 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        
-        /// <summary>
-        /// تدوير الروبوت بزاوية محددة (اختبار)
-        /// </summary>
         public void RotateRobot(float deltaAngle)
         {
             _robotAngle += deltaAngle;
-
-            // تطبيع الزاوية إلى 0-360
             if (_robotAngle < 0) _robotAngle += 360;
             if (_robotAngle >= 360) _robotAngle -= 360;
-
             System.Diagnostics.Debug.WriteLine($"[RotateRobot] New Angle={_robotAngle}");
-
             OnRobotManuallyMoved?.Invoke(_robotPosition, _robotAngle, _robotSpeed);
             Invalidate();
         }
-        // حساب زاوية الدوران بناءً على السرعة
-        // السرعة 10 سم/ث → زاوية 30°
-        // السرعة 50 سم/ث → زاوية 15°
-        // السرعة 100 سم/ث → زاوية 5°
-        double GetRotationAngle(double speed)
-        {
-            if (speed <= 10) return 30f;
-            if (speed <= 30) return 20f;
-            if (speed <= 60) return 10f;
-            return 5f;
-        }
 
-        private void StartFrictionTimer()
+        public void SetRobotDimensions(int widthCm, int lengthCm, int heightCm)
         {
-            if (_frictionTimer == null)
-            {
-                _frictionTimer = new System.Windows.Forms. Timer();
-                _frictionTimer.Interval = 100;  // 100ms
-                _frictionTimer.Tick += (s, e) =>
-                {
-                    if (!_isMoving && _currentSpeed > 0)
-                    {
-                        _currentSpeed *= 0.9;  // تقليل السرعة بنسبة 10%
-                        if (_currentSpeed < 0.1) _currentSpeed = 0;
-                        OnRobotManuallyMoved?.Invoke(_robotPosition, _robotAngle, _currentSpeed);
-                        Invalidate();
-                    }
-                };
-                _frictionTimer.Start();
-            }
+            _robotWidthCm = Math.Max(10, Math.Min(200, widthCm));
+            _robotLengthCm = Math.Max(10, Math.Min(200, lengthCm));
+            _robotHeightCm = Math.Max(5, Math.Min(150, heightCm));
+            Invalidate();
         }
-
         #endregion
 
         #region Public Methods - Detection Zone
@@ -734,7 +1443,7 @@ namespace SallamPathFinder4.WinForms.Controls
                 (int)scaledCellSize);
         }
         #endregion
-       
+
         #region Public Methods - Recording
         public void StartRecording(GifRecorder recorder)
         {
@@ -749,10 +1458,71 @@ namespace SallamPathFinder4.WinForms.Controls
         }
         #endregion
 
+        #region Public Methods - Search Visualization
+        public void ClearSearchCells()
+        {
+            _openCells?.Clear();
+            _closedCells?.Clear();
+            _currentCell = null;
+            _pathCells?.Clear();
+            _cellParents?.Clear();
+            _currentOrder = 0;
+            Invalidate();
+        }
+
+        public void UpdateSearchCell(int fromX, int fromY, int x, int y, PathFinderNodeType type, int totalCost, int cost)
+        {
+            var cell = new Point(x, y);
+            var parentCell = new Point(fromX, fromY);
+            var rect = GetCellRect(cell.X, cell.Y);
+            rect.Inflate(2, 2);
+
+            switch (type)
+            {
+                case PathFinderNodeType.Open:
+                    _openCells.Add(cell);
+                    _cellParents[cell] = parentCell;
+                    break;
+                case PathFinderNodeType.Close:
+                    _openCells.Remove(cell);
+                    _closedCells.Add(cell);
+                    if (!_cellParents.ContainsKey(cell))
+                        _cellParents[cell] = parentCell;
+                    break;
+                case PathFinderNodeType.Current:
+                    if (_currentCell.HasValue)
+                    {
+                        var oldRect = GetCellRect(_currentCell.Value.X, _currentCell.Value.Y);
+                        oldRect.Inflate(2, 2);
+                        Invalidate(oldRect);
+                    }
+                    _currentCell = cell;
+                    if (!_cellParents.ContainsKey(cell))
+                        _cellParents[cell] = parentCell;
+                    break;
+                case PathFinderNodeType.Path:
+                    _pathCells.Add(cell);
+                    if (!_cellParents.ContainsKey(cell))
+                        _cellParents[cell] = parentCell;
+                    break;
+            }
+
+            _arrowDrawCounter++;
+            Invalidate(rect);
+
+            if (_isRecording && _gifRecorder != null)
+            {
+                _gifRecorder.CaptureFrame();
+            }
+        }
+        #endregion
 
         #region Events
         public event EventHandler ViewChanged;
         public event Action<Point, float, double> OnRobotManuallyMoved;
+        public event Action<RobotDefinition> OnRobotSelected;
+        public event Action<RobotDefinition> OnRobotAdded;
+        public event Action<RobotDefinition> OnRobotDeleted;
         #endregion
 
         #region Protected Methods - Paint
@@ -778,7 +1548,6 @@ namespace SallamPathFinder4.WinForms.Controls
             int endX = Math.Min(_mapGrid.Width - 1, (int)((visibleWidth - _viewOffset.X) / scaledCellSize) + 2);
             int endY = Math.Min(_mapGrid.Height - 1, (int)((visibleHeight - _viewOffset.Y) / scaledCellSize) + 2);
 
-            // ========== رسم الخلايا (الحلقة المزدوجة) ==========
             for (int y = startY; y <= endY; y++)
             {
                 for (int x = startX; x <= endX; x++)
@@ -798,8 +1567,6 @@ namespace SallamPathFinder4.WinForms.Controls
                     DrawSpecialCells(g, x, y, rect);
                     DrawPathArrows(g);
 
-                    // Add this line
-                    // Draw coordinates if enabled
                     if (_showCoordinates)
                     {
                         DrawCoordinates(g, rect, x, y);
@@ -807,16 +1574,13 @@ namespace SallamPathFinder4.WinForms.Controls
                 }
             }
 
-            // ========== رسم خطوط المسارات (مرة واحدة فقط) ==========
             DrawPathLines(g);
-
-            // Draw robot on top
             DrawRobot(g);
-
             DrawSearchCells(g);
 
             base.OnPaint(e);
         }
+
         private void DrawCoordinates(Graphics g, Rectangle rect, int x, int y)
         {
             if (!_showCoordinates) return;
@@ -831,6 +1595,7 @@ namespace SallamPathFinder4.WinForms.Controls
                 g.DrawString(text, font, brush, textX, textY);
             }
         }
+
         private void DrawCellBackground(Graphics g, Cell cell, Rectangle rect)
         {
             int intensity = 255 - (int)((cell.SurfaceWeight / 100.0) * 255);
@@ -878,20 +1643,9 @@ namespace SallamPathFinder4.WinForms.Controls
                     break;
 
                 case MapElementType.Door:
-
-                    //using (var brush = new SolidBrush(Color.FromArgb(150, 160, 100)))
-                    //{
-                    //    g.FillRectangle(brush, rect);
-                    //}
-                    //using (var pen = new Pen(cell.IsDoorOpen ? Color.DarkGreen : Color.Brown, 2))
-                    //{
-                    //    int midX = rect.X + rect.Width / 2;
-                    //    g.DrawLine(pen, midX, rect.Y, midX, rect.Y + rect.Height);
-                    //}
-                    // Different color based on door state
                     Color doorColor = cell.IsDoorOpen
-        ? Color.FromArgb(150, 160, 100)   // Open - light olive
-        : Color.FromArgb(180, 139, 69, 19); // Closed - brown
+                        ? Color.FromArgb(150, 160, 100)
+                        : Color.FromArgb(180, 139, 69, 19);
 
                     using (var brush = new SolidBrush(doorColor))
                     {
@@ -904,7 +1658,6 @@ namespace SallamPathFinder4.WinForms.Controls
                         g.DrawLine(pen, midX, rect.Y, midX, rect.Y + rect.Height);
                     }
 
-                    // Show lock icon for closed door
                     if (!cell.IsDoorOpen)
                     {
                         using (var font = new Font("Segoe UI", rect.Height / 3, FontStyle.Bold))
@@ -993,8 +1746,6 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        #region Private Methods - Drawing Paths
-
         private void DrawPaths(Graphics g, int x, int y, Rectangle rect)
         {
             if (_coloredPaths == null) return;
@@ -1003,13 +1754,11 @@ namespace SallamPathFinder4.WinForms.Controls
             {
                 if (coloredPath == null || coloredPath.Nodes == null) continue;
 
-                // مسار العودة والمسار الأزرق يتم رسمه كخطوط بين الخلايا
                 if (coloredPath.Type == PathType.Return || coloredPath.Type == PathType.Charging)
                 {
                     continue;
                 }
 
-                // المسار العادي (Normal) - تلوين الخلايا
                 foreach (var node in coloredPath.Nodes)
                 {
                     if (node.X == x && node.Y == y)
@@ -1032,7 +1781,6 @@ namespace SallamPathFinder4.WinForms.Controls
             {
                 if (coloredPath == null || coloredPath.Nodes == null || coloredPath.Nodes.Count < 2) continue;
 
-                // استخدام القلم مع الإعدادات المناسبة
                 using (var pen = new Pen(coloredPath.Color, coloredPath.Thickness))
                 {
                     if (coloredPath.IsDashed)
@@ -1053,36 +1801,6 @@ namespace SallamPathFinder4.WinForms.Controls
                 }
             }
         }
-
-        #endregion
-
-        //// دالة إضافية لرسم الخط المتقطع لمسار العودة
-        //private void DrawDashedReturnPath(Graphics g)
-        //{
-        //    if (_coloredPaths == null) return;
-
-        //    foreach (var coloredPath in _coloredPaths)
-        //    {
-        //        if (coloredPath == null || !coloredPath.IsReturnPath || coloredPath.Nodes == null || coloredPath.Nodes.Count < 2)
-        //            continue;
-
-        //        using (var pen = new Pen(coloredPath.Color, 4))
-        //        {
-        //            pen.DashStyle = DashStyle.Dash;
-
-        //            for (int i = 1; i < coloredPath.Nodes.Count; i++)
-        //            {
-        //                var from = coloredPath.Nodes[i - 1];
-        //                var to = coloredPath.Nodes[i];
-        //                var rectFrom = GetCellRect(from.X, from.Y);
-        //                var rectTo = GetCellRect(to.X, to.Y);
-        //                var fromCenter = new Point(rectFrom.X + rectFrom.Width / 2, rectFrom.Y + rectFrom.Height / 2);
-        //                var toCenter = new Point(rectTo.X + rectTo.Width / 2, rectTo.Y + rectTo.Height / 2);
-        //                g.DrawLine(pen, fromCenter, toCenter);
-        //            }
-        //        }
-        //    }
-        //}
 
         private void DrawDynamicObstacles(Graphics g, int x, int y, Rectangle rect)
         {
@@ -1179,157 +1897,8 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        #region Private Methods - Draw Robot
-
-        public void SetRobotDimensions(int widthCm, int lengthCm, int heightCm)
-        {
-            _robotWidthCm = Math.Max(20, Math.Min(200, widthCm));
-            _robotLengthCm = Math.Max(20, Math.Min(200, lengthCm));
-            _robotHeightCm = Math.Max(10, Math.Min(150, heightCm));  // يُحفظ فقط
-            Invalidate();
-        }
-        private void DrawRobot(Graphics g)
-        {
-            if (!_showRobot || _mapGrid == null || !_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y)) return;
-
-            Rectangle robotRect = GetCellRect(_robotPosition.X, _robotPosition.Y);
-            if (robotRect.Width <= 0 || robotRect.Height <= 0) return;
-
-            var state = g.Save();
-
-            int centerX = robotRect.X + robotRect.Width / 2;
-            int centerY = robotRect.Y + robotRect.Height / 2;
-            g.TranslateTransform(centerX, centerY);
-            g.RotateTransform(_robotAngle);
-
-            int cellSizePx = robotRect.Width;
-            double cellSizeCm = _scaleCmPerCell;
-            if (cellSizeCm <= 0) cellSizeCm = 10.0;
-
-            // 🔴 حساب الأبعاد بالنسبة إلى الخلية (بدون حد أقصى، مع حد أدنى 0.2)
-            double widthRatio = Math.Max(0.2, _robotWidthCm / cellSizeCm);
-            double lengthRatio = Math.Max(0.2, _robotLengthCm / cellSizeCm);
-
-            int robotWidthPx = (int)(widthRatio * cellSizePx);
-            int robotLengthPx = (int)(lengthRatio * cellSizePx);
-
-            // 🔴 الحد الأدنى: خلية واحدة (100%) أو 20 بكسل أيهما أكبر
-            int minSize = Math.Max(cellSizePx, 10);
-            if (robotWidthPx < minSize) robotWidthPx = minSize;
-            if (robotLengthPx < minSize) robotLengthPx = minSize; 
- 
-            // ========== الجسم (مستطيل بالأبعاد المستقلة) ==========
-            int bodyWidth = robotWidthPx;
-            int bodyHeight = robotLengthPx;
-
-            RectangleF bodyRect = new RectangleF(
-                -bodyWidth / 2,
-                -bodyHeight / 2,
-                bodyWidth,
-                bodyHeight
-            );
-
-            using (var bodyBrush = new SolidBrush(Color.FromArgb(220, 41, 128, 185)))
-            {
-                g.FillRectangle(bodyBrush, bodyRect);
-            }
-
-            using (var borderPen = new Pen(Color.White, 1.5f))
-            {
-                g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
-            }
-
-            // ========== الرأس (مثلث أحمر) ==========
-            int headSize = Math.Min(robotWidthPx, robotLengthPx) / 2;
-            if (headSize < 4) headSize = 4;
-
-            PointF[] head = new PointF[]
-            {
-        new PointF(bodyWidth / 2 + headSize / 2, 0),
-        new PointF(bodyWidth / 2 - headSize / 2, -headSize / 2),
-        new PointF(bodyWidth / 2 - headSize / 2, headSize / 2)
-            };
-
-            using (var headBrush = new SolidBrush(Color.FromArgb(220, 231, 76, 60)))
-            {
-                g.FillPolygon(headBrush, head);
-            }
-
-            using (var pen = new Pen(Color.White, 1))
-            {
-                g.DrawPolygon(pen, head);
-            }
-
-            // ========== العجلات ==========
-            int wheelRadius = Math.Min(robotWidthPx, robotLengthPx) / 6;
-            if (wheelRadius < 2) wheelRadius = 2;
-
-            using (var wheelBrush = new SolidBrush(Color.FromArgb(220, 60, 60, 60)))
-            using (var wheelPen = new Pen(Color.FromArgb(200, 150, 150, 150), 1))
-            {
-                float topWheelY = -bodyHeight / 2 - wheelRadius;
-                float bottomWheelY = bodyHeight / 2 - wheelRadius;
-
-                g.FillEllipse(wheelBrush, -wheelRadius, topWheelY, wheelRadius * 2, wheelRadius * 2);
-                g.DrawEllipse(wheelPen, -wheelRadius, topWheelY, wheelRadius * 2, wheelRadius * 2);
-
-                g.FillEllipse(wheelBrush, -wheelRadius, bottomWheelY, wheelRadius * 2, wheelRadius * 2);
-                g.DrawEllipse(wheelPen, -wheelRadius, bottomWheelY, wheelRadius * 2, wheelRadius * 2);
-            }
-
-            // ========== العين ==========
-            using (var eyeBrush = new SolidBrush(Color.White))
-            {
-                float eyeSize = Math.Max(2, headSize / 6);
-                g.FillEllipse(eyeBrush, bodyWidth / 2 - headSize / 4, -eyeSize / 2, eyeSize, eyeSize);
-            }
-
-            g.Restore(state);
-
-           // DrawRobotSpeed(g, robotRect);
-        }
-
-        /// <summary>
-        /// Draw robot speed above the robot cell
-        /// </summary>
-        private void DrawRobotSpeed(Graphics g, Rectangle robotRect)
-        {
-            System.Diagnostics.Debug.WriteLine($"[MapControl] DrawRobotSpeed: Speed={_robotSpeed}");
-
-            if (_robotSpeed <= 0) return;
-
-            using (var font = new Font("Segoe UI", 8, FontStyle.Bold))
-            using (var backBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
-            using (var textBrush = new SolidBrush(Color.FromArgb(52, 73, 94)))
-            using (var pen = new Pen(Color.FromArgb(150, 150, 150), 1))
-            {
-                string speedText = $"{_robotSpeed:F1} cm/s";
-                SizeF textSize = g.MeasureString(speedText, font);
-
-                // موقع النص فوق الخلية
-                float textX = robotRect.X + (robotRect.Width - textSize.Width) / 2;
-                float textY = robotRect.Y - textSize.Height - 2;
-
-                // التحقق من أن النص داخل المنطقة المرئية
-                if (textY < 0) textY = robotRect.Y + robotRect.Height + 2;
-
-                // رسم خلفية بيضاء
-                g.FillRectangle(backBrush, textX - 2, textY - 1, textSize.Width + 4, textSize.Height + 2);
-                g.DrawRectangle(pen, textX - 2, textY - 1, textSize.Width + 4, textSize.Height + 2);
-
-                // رسم النص
-                g.DrawString(speedText, font, textBrush, textX, textY);
-            }
-        }
-        #endregion
-        #endregion
-
-        /// <summary>
-        /// Draws special cells (Start Point S, Collision C, Potential Collision PC, Invalid Path X)
-        /// </summary>
         private void DrawSpecialCells(Graphics g, int x, int y, Rectangle rect)
         {
-            // Draw Start Point (S0, S1, S2, etc.)
             if (_startPoints != null && _startPoints.ContainsKey((x, y)))
             {
                 int startIndex = _startPoints[(x, y)];
@@ -1343,50 +1912,40 @@ namespace SallamPathFinder4.WinForms.Controls
                 {
                     g.DrawRectangle(pen, rect);
                 }
-                // Use Yellow for better visibility
                 DrawCellText(g, rect, startText, Color.Yellow);
                 return;
             }
 
-            // Draw Collision Cell (C) - Red
             if (_collisionCells != null && _collisionCells.Contains(new Point(x, y)))
             {
                 using (var brush = new SolidBrush(Color.FromArgb(200, 231, 76, 60)))
                 {
                     g.FillRectangle(brush, rect);
                 }
-                // Use White for contrast on red
                 DrawCellText(g, rect, "C", Color.White);
                 return;
             }
 
-            // Draw Invalid Path Cell (X) - Dark Red with Yellow text
             if (_invalidPathCells != null && _invalidPathCells.Contains(new Point(x, y)))
             {
-                using (var brush = new SolidBrush(Color.FromArgb(200, 139, 0, 0)))  // Darker red for contrast
+                using (var brush = new SolidBrush(Color.FromArgb(200, 139, 0, 0)))
                 {
                     g.FillRectangle(brush, rect);
                 }
-                // Use Yellow for visibility on dark background
                 DrawCellText(g, rect, "X", Color.Yellow);
                 return;
             }
 
-            // Draw Scanned Cell (PC) - Orange
             if (_scannedCells != null && _scannedCells.Contains(new Point(x, y)))
             {
                 using (var brush = new SolidBrush(Color.FromArgb(200, 241, 196, 15)))
                 {
                     g.FillRectangle(brush, rect);
                 }
-                // Use White or Dark text depending on background
                 DrawCellText(g, rect, "PC", Color.Black);
             }
         }
 
-        /// <summary>
-        /// Draws text centered in a cell
-        /// </summary>
         private void DrawCellText(Graphics g, Rectangle rect, string text, Color textColor)
         {
             using (var font = new Font("Segoe UI", Math.Max(8, rect.Height / 3), FontStyle.Bold))
@@ -1407,6 +1966,221 @@ namespace SallamPathFinder4.WinForms.Controls
                 }
             }
         }
+
+        private void DrawSearchCells(Graphics g)
+        {
+            if (_mapGrid == null) return;
+
+            float scaledCellSize = _cellSize * _zoomLevel;
+
+            foreach (var cell in _openCells)
+            {
+                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
+                if (IsImportantCell(cell)) continue;
+
+                var rect = GetCellRect(cell.X, cell.Y);
+
+                using (var brush = new SolidBrush(Color.FromArgb(200, 100, 255, 100)))
+                {
+                    g.FillRectangle(brush, rect);
+                }
+
+                if (_cellParents.ContainsKey(cell))
+                {
+                    DrawDirectionArrow(g, rect, _cellParents[cell], cell);
+                }
+            }
+
+            foreach (var cell in _closedCells)
+            {
+                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
+                if (IsImportantCell(cell)) continue;
+
+                var rect = GetCellRect(cell.X, cell.Y);
+
+                using (var brush = new SolidBrush(Color.FromArgb(200, 255, 100, 100)))
+                {
+                    g.FillRectangle(brush, rect);
+                }
+
+                if (_cellParents.ContainsKey(cell))
+                {
+                    DrawDirectionArrow(g, rect, _cellParents[cell], cell);
+                }
+            }
+
+            if (_currentCell.HasValue && _mapGrid.IsValidCoordinate(_currentCell.Value.X, _currentCell.Value.Y))
+            {
+                var rect = GetCellRect(_currentCell.Value.X, _currentCell.Value.Y);
+
+                if (IsImportantCell(_currentCell.Value))
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(150, 100, 100, 255)))
+                    {
+                        g.FillRectangle(brush, rect);
+                    }
+                }
+                else
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(220, 100, 100, 255)))
+                    {
+                        g.FillRectangle(brush, rect);
+                    }
+                }
+
+                if (_cellParents.ContainsKey(_currentCell.Value))
+                {
+                    DrawDirectionArrow(g, rect, _cellParents[_currentCell.Value], _currentCell.Value);
+                }
+            }
+
+            foreach (var cell in _pathCells)
+            {
+                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
+                if (IsImportantCell(cell)) continue;
+
+                var rect = GetCellRect(cell.X, cell.Y);
+
+                using (var brush = new SolidBrush(Color.FromArgb(200, 255, 215, 0)))
+                {
+                    g.FillRectangle(brush, rect);
+                }
+            }
+        }
+
+        private bool IsImportantCell(Point cell)
+        {
+            return IsGoalCell(cell) || IsParkingCell(cell) || IsStartPointCell(cell);
+        }
+
+        private bool IsStartPointCell(Point cell)
+        {
+            return _startPoint.X == cell.X && _startPoint.Y == cell.Y;
+        }
+
+        private bool IsParkingCell(Point cell)
+        {
+            if (_parkingPoints == null) return false;
+            return _parkingPoints.Any(p => p.Location.X == cell.X && p.Location.Y == cell.Y);
+        }
+
+        private bool IsGoalCell(Point cell)
+        {
+            if (_goals == null) return false;
+            return _goals.Any(g => g.Location.X == cell.X && g.Location.Y == cell.Y);
+        }
+
+        private void DrawDirectionArrow(Graphics g, Rectangle rect, Point from, Point to)
+        {
+            if (from.X == to.X && from.Y == to.Y) return;
+
+            int centerX = rect.X + rect.Width / 2;
+            int centerY = rect.Y + rect.Height / 2;
+
+            int dx = to.X - from.X;
+            int dy = to.Y - from.Y;
+
+            if (dx > 0) dx = 1;
+            if (dx < 0) dx = -1;
+            if (dy > 0) dy = 1;
+            if (dy < 0) dy = -1;
+
+            int arrowSize = Math.Min(rect.Width, rect.Height) / 6;
+            int arrowHeadSize = arrowSize / 2;
+
+            if (arrowSize < 3) arrowSize = 3;
+            if (arrowHeadSize < 2) arrowHeadSize = 2;
+
+            Point start = new Point(centerX, centerY);
+            Point end = new Point(centerX + dx * arrowSize, centerY + dy * arrowSize);
+
+            using (var pen = new Pen(Color.Black, 1.5f))
+            {
+                g.DrawLine(pen, start, end);
+
+                if (dx == 1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dx == -1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dy == 1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                }
+                else if (dy == -1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+            }
+        }
+
+        private void DrawPathArrows(Graphics g)
+        {
+            if (_pathCells == null || _pathCells.Count < 2) return;
+
+            for (int i = 0; i < _pathCells.Count - 1; i++)
+            {
+                var current = _pathCells[i];
+                var next = _pathCells[i + 1];
+
+                if (!_mapGrid.IsValidCoordinate(current.X, current.Y)) continue;
+                if (!_mapGrid.IsValidCoordinate(next.X, next.Y)) continue;
+
+                var rect = GetCellRect(current.X, current.Y);
+                DrawPathArrow(g, rect, current, next);
+            }
+        }
+
+        private void DrawPathArrow(Graphics g, Rectangle rect, Point current, Point next)
+        {
+            if (current.X == next.X && current.Y == next.Y) return;
+
+            int centerX = rect.X + rect.Width / 2;
+            int centerY = rect.Y + rect.Height / 2;
+
+            int dx = next.X - current.X;
+            int dy = next.Y - current.Y;
+
+            int arrowSize = Math.Min(rect.Width, rect.Height) / 3;
+            int arrowHeadSize = arrowSize / 2;
+
+            Point start = new Point(centerX, centerY);
+            Point end = new Point(centerX + dx * arrowSize, centerY + dy * arrowSize);
+
+            using (var pen = new Pen(Color.DarkOrange, 2))
+            {
+                g.DrawLine(pen, start, end);
+
+                if (dx == 1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dx == -1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+                else if (dy == 1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
+                }
+                else if (dy == -1)
+                {
+                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
+                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
+                }
+            }
+        }
+        #endregion
 
         #region Protected Methods - Mouse Events
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1533,377 +2307,29 @@ namespace SallamPathFinder4.WinForms.Controls
                     _viewOffset.X - (mousePos.X - _viewOffset.X) * (delta / oldZoom),
                     _viewOffset.Y - (mousePos.Y - _viewOffset.Y) * (delta / oldZoom));
                 Invalidate();
-                ViewChanged?.Invoke(this, EventArgs.Empty); 
-            }
-        }
-
-        #endregion
-
-        #region Private Fields - Search Visualization
-        private HashSet<Point> _openCells = new HashSet<Point>();
-        private HashSet<Point> _closedCells = new HashSet<Point>();
-        private Point? _currentCell = null;
-        private List<Point> _pathCells = new List<Point>();
-        private Dictionary<Point, Point> _cellParents = new Dictionary<Point, Point>();
-        private Dictionary<Point, int> _cellOrder = new Dictionary<Point, int>();
-        private int _currentOrder = 0;
-
-        #endregion
-
-        #region Public Methods - Search Visualization
-        public void ClearSearchCells()
-        {
-            _openCells?.Clear();
-            _closedCells?.Clear();
-            _currentCell = null;
-            _pathCells?.Clear();
-            _cellParents?.Clear();
-            _currentOrder = 0; 
-            Invalidate(); ;
-        }
-        private int _arrowDrawCounter = 0;
-        private const int ARROW_DRAW_INTERVAL = 10;
-        public void UpdateSearchCell(int fromX, int fromY, int x, int y, PathFinderNodeType type, int totalCost, int cost)
-        {
-            var cell = new Point(x, y);
-            var parentCell = new Point(fromX, fromY);
-
-            // 🔴 احسب المنطقة المتغيرة فقط
-            var rect = GetCellRect(cell.X, cell.Y);
-            rect.Inflate(2, 2);  // أضف هامش بسيط
-
-            switch (type)
-            {
-                case PathFinderNodeType.Open:
-                    _openCells.Add(cell);
-                    _cellParents[cell] = parentCell;
-                    break;
-                case PathFinderNodeType.Close:
-                    _openCells.Remove(cell);
-                    _closedCells.Add(cell);
-                    if (!_cellParents.ContainsKey(cell))
-                        _cellParents[cell] = parentCell;
-                    break;
-                case PathFinderNodeType.Current:
-                    // Clear previous current cell if exists
-                    if (_currentCell.HasValue)
-                    {
-                        var oldRect = GetCellRect(_currentCell.Value.X, _currentCell.Value.Y);
-                        oldRect.Inflate(2, 2);
-                        Invalidate(oldRect);
-                    }
-                    _currentCell = cell;
-                    if (!_cellParents.ContainsKey(cell))
-                        _cellParents[cell] = parentCell;
-                    break;
-                case PathFinderNodeType.Path:
-                    _pathCells.Add(cell);
-                    if (!_cellParents.ContainsKey(cell))
-                        _cellParents[cell] = parentCell;
-                    break;
-            }
-
-             _arrowDrawCounter++;
-            if (_arrowDrawCounter % ARROW_DRAW_INTERVAL == 0)
-            {
-                Invalidate(rect);   
-            }
-            else
-            {
-                // Drow without Arrow
-                Invalidate(rect);
-            }
-
-            // Recorde Gif Search
-            if (_isRecording && _gifRecorder != null)
-            {
-                _gifRecorder.CaptureFrame();
+                ViewChanged?.Invoke(this, EventArgs.Empty);
             }
         }
         #endregion
 
-        #region Private Methods - Draw Search Cells
-        private void DrawSearchCells(Graphics g)
-        {
-            if (_mapGrid == null) return;
-
-            float scaledCellSize = _cellSize * _zoomLevel;
-
-            // ========== 1. Open Cells - Green ==========
-            foreach (var cell in _openCells)
-            {
-                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
-                if (IsImportantCell(cell)) continue;
-
-                var rect = GetCellRect(cell.X, cell.Y);
-
-                // Draw background
-                using (var brush = new SolidBrush(Color.FromArgb(200, 100, 255, 100)))
-                {
-                    g.FillRectangle(brush, rect);
-                }
-
-                // Draw direction arrow
-                if (_cellParents.ContainsKey(cell))
-                {
-                    DrawDirectionArrow(g, rect, _cellParents[cell], cell);
-                }
-            }
-
-            // ========== 2. Closed Cells - Red ==========
-            foreach (var cell in _closedCells)
-            {
-                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
-                if (IsImportantCell(cell)) continue;
-
-                var rect = GetCellRect(cell.X, cell.Y);
-
-                // Draw background
-                using (var brush = new SolidBrush(Color.FromArgb(200, 255, 100, 100)))
-                {
-                    g.FillRectangle(brush, rect);
-                }
-
-                // Draw direction arrow
-                if (_cellParents.ContainsKey(cell))
-                {
-                    DrawDirectionArrow(g, rect, _cellParents[cell], cell);
-                }
-            }
-
-            // ========== 3. Current Cell - Blue ==========
-            if (_currentCell.HasValue && _mapGrid.IsValidCoordinate(_currentCell.Value.X, _currentCell.Value.Y))
-            {
-                var rect = GetCellRect(_currentCell.Value.X, _currentCell.Value.Y);
-
-                // Draw background (lighter if important cell)
-                if (IsImportantCell(_currentCell.Value))
-                {
-                    using (var brush = new SolidBrush(Color.FromArgb(150, 100, 100, 255)))
-                    {
-                        g.FillRectangle(brush, rect);
-                    }
-                }
-                else
-                {
-                    using (var brush = new SolidBrush(Color.FromArgb(220, 100, 100, 255)))
-                    {
-                        g.FillRectangle(brush, rect);
-                    }
-                }
-
-                // Draw direction arrow
-                if (_cellParents.ContainsKey(_currentCell.Value))
-                {
-                    DrawDirectionArrow(g, rect, _cellParents[_currentCell.Value], _currentCell.Value);
-                }
-            }
-
-            // ========== 4. Path Cells - Yellow (no arrows) ==========
-            foreach (var cell in _pathCells)
-            {
-                if (!_mapGrid.IsValidCoordinate(cell.X, cell.Y)) continue;
-                if (IsImportantCell(cell)) continue;
-
-                var rect = GetCellRect(cell.X, cell.Y);
-
-                // Draw background
-                using (var brush = new SolidBrush(Color.FromArgb(200, 255, 215, 0)))
-                {
-                    g.FillRectangle(brush, rect);
-                }
-
-                // No arrows on path cells (they will be drawn separately by DrawPathArrows)
-            }
-        }
+        #region Public Properties - Robot Definition
         /// <summary>
-               /// Check if a cell contains an important point (Goal, Parking, or Start Point)
-               /// </summary>
-        private bool IsImportantCell(Point cell)
-        {
-            return IsGoalCell(cell) || IsParkingCell(cell) || IsStartPointCell(cell);
-        }
-        /// <summary>
-        /// Check if a cell contains the start point
+        /// Gets or sets the current robot definition for drawing
         /// </summary>
-        private bool IsStartPointCell(Point cell)
+        public RobotDefinition CurrentRobot
         {
-            return _startPoint.X == cell.X && _startPoint.Y == cell.Y;
+            get => _selectedRobot;
+            set
+            {
+                _selectedRobot = value;
+                if (_selectedRobot != null)
+                {
+                    // Update legacy properties for backward compatibility
+                    UpdateLegacyPropertiesFromRobot(_selectedRobot);
+                }
+                Invalidate();
+            }
         }
-        /// <summary>
-        /// Check if a cell contains a parking point
-        /// </summary>
-        private bool IsParkingCell(Point cell)
-        {
-            if (_parkingPoints == null) return false;
-            return _parkingPoints.Any(p => p.Location.X == cell.X && p.Location.Y == cell.Y);
-        }
-        /// <summary>
-        /// Check if a cell contains a goal point
-        /// </summary>
-        private bool IsGoalCell(Point cell)
-        {
-            if (_goals == null) return false;
-            return _goals.Any(g => g.Location.X == cell.X && g.Location.Y == cell.Y);
-        }
-
         #endregion
-        /// <summary>
-        /// Draw an arrow inside a cell indicating direction
-        /// </summary>
-        private void DrawDirectionArrow(Graphics g, Rectangle rect, Point from, Point to)
-        {
-            if (from.X == to.X && from.Y == to.Y) return;
-
-            int centerX = rect.X + rect.Width / 2;
-            int centerY = rect.Y + rect.Height / 2;
-
-            // Calculate direction
-            int dx = to.X - from.X;
-            int dy = to.Y - from.Y;
-
-            // Normalize
-            if (dx > 0) dx = 1;
-            if (dx < 0) dx = -1;
-            if (dy > 0) dy = 1;
-            if (dy < 0) dy = -1;
-
-            // 🔴 أصغر حجماً: 1/6 حجم الخلية (بدلاً من 1/4)
-            int arrowSize = Math.Min(rect.Width, rect.Height) / 6;
-            int arrowHeadSize = arrowSize / 2;
-
-            // 🔴 تأكد من أن السهم ليس صغيراً جداً
-            if (arrowSize < 3) arrowSize = 3;
-            if (arrowHeadSize < 2) arrowHeadSize = 2;
-
-            Point start = new Point(centerX, centerY);
-            Point end = new Point(centerX + dx * arrowSize, centerY + dy * arrowSize);
-
-            using (var pen = new Pen(Color.Black, 1.5f))  // 🔴 سمك أقل
-            {
-                g.DrawLine(pen, start, end);
-
-                // Draw arrow head
-                if (dx == 1) // Right
-                {
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
-                }
-                else if (dx == -1) // Left
-                {
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
-                }
-                else if (dy == 1) // Down
-                {
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
-                }
-                else if (dy == -1) // Up
-                {
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
-                }
-            }
-        }
-        /// <summary>
-        /// Draw search order number inside a cell
-        /// </summary>
-        private void DrawOrderNumber(Graphics g, Rectangle rect, Point cell)
-        {
-            if (!_cellOrder.ContainsKey(cell)) return;
-
-            int order = _cellOrder[cell];
-
-            using (var font = new Font("Arial", 8, FontStyle.Bold))
-            using (var brush = new SolidBrush(Color.Black))
-            using (var backBrush = new SolidBrush(Color.White))
-            {
-                string text = order.ToString();
-                SizeF textSize = g.MeasureString(text, font);
-
-                // Position in top-right corner of the cell
-                float textX = rect.X + rect.Width - textSize.Width - 2;
-                float textY = rect.Y + 2;
-
-                // Draw background
-                g.FillRectangle(backBrush, textX - 1, textY - 1, textSize.Width + 2, textSize.Height + 2);
-
-                // Draw border
-                using (var borderPen = new Pen(Color.Gray, 1))
-                {
-                    g.DrawRectangle(borderPen, textX - 1, textY - 1, textSize.Width + 2, textSize.Height + 2);
-                }
-
-                // Draw text
-                g.DrawString(text, font, brush, textX, textY);
-            }
-        }
-
-        /// <summary>
-        /// Draw arrow on final path to show movement direction
-        /// </summary>
-        private void DrawPathArrow(Graphics g, Rectangle rect, Point current, Point next)
-        {
-            if (current.X == next.X && current.Y == next.Y) return;
-
-            int centerX = rect.X + rect.Width / 2;
-            int centerY = rect.Y + rect.Height / 2;
-
-            // Calculate direction
-            int dx = next.X - current.X;
-            int dy = next.Y - current.Y;
-
-            // Arrow size
-            int arrowSize = Math.Min(rect.Width, rect.Height) / 3;
-            int arrowHeadSize = arrowSize / 2;
-
-            Point start = new Point(centerX, centerY);
-            Point end = new Point(centerX + dx * arrowSize, centerY + dy * arrowSize);
-
-            using (var pen = new Pen(Color.DarkOrange, 2))
-            {
-                g.DrawLine(pen, start, end);
-
-                // Draw arrow head
-                if (dx == 1) // Right
-                {
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
-                }
-                else if (dx == -1) // Left
-                {
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
-                }
-                else if (dy == 1) // Down
-                {
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y - arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y - arrowHeadSize));
-                }
-                else if (dy == -1) // Up
-                {
-                    g.DrawLine(pen, end, new Point(end.X - arrowHeadSize, end.Y + arrowHeadSize));
-                    g.DrawLine(pen, end, new Point(end.X + arrowHeadSize, end.Y + arrowHeadSize));
-                }
-            }
-        }
-        private void DrawPathArrows(Graphics g)
-        {
-            if (_pathCells == null || _pathCells.Count < 2) return;
-
-            for (int i = 0; i < _pathCells.Count - 1; i++)
-            {
-                var current = _pathCells[i];
-                var next = _pathCells[i + 1];
-
-                if (!_mapGrid.IsValidCoordinate(current.X, current.Y)) continue;
-                if (!_mapGrid.IsValidCoordinate(next.X, next.Y)) continue;
-
-                var rect = GetCellRect(current.X, current.Y);
-                DrawPathArrow(g, rect, current, next);
-            }
-        }
-
     }
 }

@@ -73,6 +73,8 @@ namespace SallamPathFinder4.WinForms.ViewModels
         private DateTime _chargingStartTime;
         private bool _isWaitingForCharging;
         #endregion
+        private RobotDefinition _currentRobot;
+        public RobotDefinition CurrentRobot => _currentRobot;
         #endregion
         private IPathFinder _currentFinder;
         #region Private Fields - Visualization Settings
@@ -2426,6 +2428,19 @@ namespace SallamPathFinder4.WinForms.ViewModels
             _currentFinder?.Stop();
             _searchCts?.Cancel();
             IsSearching = false;
+        }
+        public void SetCurrentRobot(RobotDefinition robot)
+        {
+            _currentRobot = robot;
+            OnPropertyChanged(nameof(CurrentRobot));
+
+            // تحديث سرعة الروبوت في RobotState
+            if (RobotState != null && robot != null)
+            {
+                // سرعة الروبوت في ViewModel مقاسة بـ cm/s
+                RobotState.Speed = robot.Kinematics.MaxForwardSpeed * 100;
+                OnPropertyChanged(nameof(RobotState));
+            }
         }
     }
 
