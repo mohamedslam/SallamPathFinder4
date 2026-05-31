@@ -77,6 +77,10 @@ namespace SallamPathFinder4.Services.Simulation
         private List<Point> _parkingPoints;
         private double _lastBatteryCheckTime; 
         private CancellationTokenSource _cts;
+        private double _robotWidthCm = 50;      // عرض الروبوت بالسنتيمتر
+        private double _robotLengthCm = 50;     // طول الروبوت بالسنتيمتر
+        private double _cellSizeCm = 10.0;  // Default cell size in cm
+
         #endregion
 
         #region Constructor
@@ -160,21 +164,22 @@ namespace SallamPathFinder4.Services.Simulation
         #region Public Methods - Control
 
         /// <summary>
-        /// تعيين سرعة الروبوت من الإعدادات
+        /// Sets the robot speed from settings
         /// </summary>
+        /// <param name="speedCmPerSec">Speed in centimeters per second</param>
         public void SetRobotSpeedFromSettings(double speedCmPerSec)
         {
             _currentSpeed = Math.Max(0.1, Math.Min(100, speedCmPerSec));
 
-            // حساب زمن الخطوة بناءً على السرعة
-            // المسافة لكل خطوة = 10 سم (حجم الخلية الافتراضي)
-            double cellSizeCm = 10.0;  // يجب أن تأخذ القيمة من ScaleCmPerCell
+            // Calculate step time based on speed
+            double cellSizeCm = 10.0;  // Default cell size
             double stepTimeSeconds = cellSizeCm / _currentSpeed;
 
             _stepDelaySeconds = Math.Max(0.05, Math.Min(2.0, stepTimeSeconds));
 
-            System.Diagnostics.Debug.WriteLine($"[SimulationService] Speed={_currentSpeed} cm/s, StepDelay={_stepDelaySeconds:F3}s");
+            System.Diagnostics.Debug.WriteLine($"[SimulationService] Speed={_currentSpeed:F1} cm/s, StepDelay={_stepDelaySeconds:F3}s");
         }
+
         public void Start(IReadOnlyList<PathNode> path)
         {
             if (path == null || path.Count == 0)
@@ -361,6 +366,19 @@ namespace SallamPathFinder4.Services.Simulation
             }
         }
 
+
+        /// <summary>
+        /// Sets the robot dimensions for collision detection
+        /// </summary>
+        /// <param name="widthCm">Robot width in centimeters</param>
+        /// <param name="lengthCm">Robot length in centimeters</param>
+        public void SetRobotDimensions(double widthCm, double lengthCm)
+        {
+            _robotWidthCm = Math.Max(10, Math.Min(200, widthCm));
+            _robotLengthCm = Math.Max(10, Math.Min(200, lengthCm));
+
+            System.Diagnostics.Debug.WriteLine($"[SimulationService] Robot dimensions updated: W={_robotWidthCm:F1}cm, L={_robotLengthCm:F1}cm");
+        }
         public void ClearSpecialCells()
         {
             _collisionCells.Clear();
@@ -371,13 +389,20 @@ namespace SallamPathFinder4.Services.Simulation
         #endregion
 
         #region Public Methods - Detection
+        /// <summary>
+        /// Sets the detection parameters for obstacle sensing
+        /// </summary>
+        /// <param name="viewAngleDegrees">Field of view in degrees (45-360)</param>
+        /// <param name="rangeCells">Detection range in cells (1-10)</param>
+        /// <param name="enabled">Enable or disable detection</param>
         public void SetDetectionParameters(double viewAngleDegrees, int rangeCells, bool enabled)
         {
             _robotViewAngle = Math.Max(45, Math.Min(360, viewAngleDegrees));
             _detectionRangeCells = Math.Max(1, Math.Min(10, rangeCells));
             _enableDetection = enabled;
-        }
 
+            System.Diagnostics.Debug.WriteLine($"[SimulationService] Detection params: Angle={_robotViewAngle:F0}°, Range={_detectionRangeCells} cells, Enabled={enabled}");
+        }
         public List<Point> GetDetectionZoneCells(Point robotPos, float robotAngle)
         {
             var cells = new List<Point>();
@@ -519,32 +544,77 @@ namespace SallamPathFinder4.Services.Simulation
             }
         }
 
+        /// <summary>
+        /// Checks for collision with obstacles using robot dimensions
+        /// </summary>
         private void CheckForCollision(Point robotPos)
         {
-            DynamicObstacle obstacle = null;
-            lock (_obstacleLock)
-            {
-                obstacle = _dynamicObstacles.FirstOrDefault(o => o.Location.X == robotPos.X && o.Location.Y == robotPos.Y);
-            }
+            // Calculate how many cells the robot occupies based on its dimensions
+            int cellSizeCm = 10; // Default cell size in cm
+            int widthCells = Math.Max(1, (int)Math.Ceiling(_robotWidthCm / cellSizeCm));
+            int lengthCells = Math.Max(1, (int)Math.Ceiling(_robotLengthCm / cellSizeCm));
 
-            if (obstacle != null)
-            {
-                _collisionCells.Add(robotPos);
-                _collisionCount++;
+            int radiusX = (widthCells - 1) / 2;
+            int radiusY = (lengthCells - 1) / 2;
 
-                var obstacleData = new ObstacleData
+            // Check all cells that the robot occupies
+            for (int dx = -radiusX; dx <= radiusX; dx++)
+            {
+                for (int dy = -radiusY; dy <= radiusY; dy++)
                 {
-                    Type = obstacle.Type,
-                    Location = obstacle.Location,
-                    Timestamp = DateTime.UtcNow,
-                    Distance = 0
-                };
+                    int checkX = robotPos.X + dx;
+                    int checkY = robotPos.Y + dy;
 
-                ObstacleCollision?.Invoke(obstacleData, robotPos);
-                ObstacleDetected?.Invoke(obstacle.Location, obstacle.Type, 0);
+                    if (!_mapGrid.IsValidCoordinate(checkX, checkY))
+                        continue;
+
+                    // Check for static obstacles (walls, windows, closed doors)
+                    var cell = _mapGrid[checkX, checkY];
+                    if (!cell.IsWalkable)
+                    {
+                        _collisionCells.Add(new Point(checkX, checkY));
+                        _collisionCount++;
+
+                        var obstacleData = new ObstacleData
+                        {
+                            Type = ObstacleType.Equipment, // Default type for static obstacles
+                            Location = new Point(checkX, checkY),
+                            Timestamp = DateTime.UtcNow,
+                            Distance = 0
+                        };
+
+                        ObstacleCollision?.Invoke(obstacleData, robotPos);
+                        ObstacleDetected?.Invoke(new Point(checkX, checkY), ObstacleType.Equipment, 0);
+                        return; // Collision detected, stop checking
+                    }
+
+                    // Check for dynamic obstacles
+                    DynamicObstacle obstacle = null;
+                    lock (_obstacleLock)
+                    {
+                        obstacle = _dynamicObstacles.FirstOrDefault(o => o.Location.X == checkX && o.Location.Y == checkY);
+                    }
+
+                    if (obstacle != null)
+                    {
+                        _collisionCells.Add(new Point(checkX, checkY));
+                        _collisionCount++;
+
+                        var obstacleData = new ObstacleData
+                        {
+                            Type = obstacle.Type,
+                            Location = obstacle.Location,
+                            Timestamp = DateTime.UtcNow,
+                            Distance = 0
+                        };
+
+                        ObstacleCollision?.Invoke(obstacleData, robotPos);
+                        ObstacleDetected?.Invoke(obstacle.Location, obstacle.Type, 0);
+                        return; // Collision detected, stop checking
+                    }
+                }
             }
         }
-
         private bool IsWithinFieldOfView(Point robotPos, float robotAngle, Point targetPos)
         {
             int dx = targetPos.X - robotPos.X;
@@ -555,6 +625,16 @@ namespace SallamPathFinder4.Services.Simulation
             angleDiff = Math.Min(360 - angleDiff, angleDiff);
 
             return angleDiff <= (_robotViewAngle / 2);
+        }
+
+        /// <summary>
+        /// Sets the cell size in centimeters for accurate collision detection
+        /// </summary>
+        /// <param name="cellSizeCm">Cell size in centimeters</param>
+        public void SetCellSizeCm(double cellSizeCm)
+        {
+            _cellSizeCm = Math.Max(1.0, Math.Min(50.0, cellSizeCm));
+            System.Diagnostics.Debug.WriteLine($"[SimulationService] Cell size set to {_cellSizeCm:F1} cm");
         }
         #endregion
 

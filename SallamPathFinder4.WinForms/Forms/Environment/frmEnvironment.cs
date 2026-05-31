@@ -1558,20 +1558,23 @@ namespace SallamPathFinder4.WinForms.Forms
             {
                 System.Diagnostics.Debug.WriteLine("OpenRobotSelector START");
 
-                // تأكد من وجود المجلدات
                 string robotsDir = Path.Combine(Application.StartupPath, "Robots");
                 if (!Directory.Exists(robotsDir))
                 {
                     Directory.CreateDirectory(robotsDir);
                 }
 
-                // إنشاء Selector جديد
                 var selector = new frmRobotSelector();
 
                 if (selector.ShowDialog() == DialogResult.OK && selector.SelectedRobot != null)
                 {
                     _currentRobot = selector.SelectedRobot;
                     ApplySelectedRobot();
+
+                    if (lblStatus != null)
+                    {
+                        lblStatus.Text = $"Robot '{_currentRobot.RobotName}' loaded - Custom drawing enabled";
+                    }
 
                     MessageBox.Show($"Robot '{_currentRobot.RobotName}' selected successfully.",
                         "Robot Selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1649,96 +1652,168 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         private void ApplySelectedRobot()
         {
+            // Validate robot exists
             if (_currentRobot == null)
-            {
-                System.Diagnostics.Debug.WriteLine("ApplySelectedRobot: _currentRobot is null");
                 return;
-            }
 
+            System.Diagnostics.Debug.WriteLine($"=== ApplySelectedRobot START: {_currentRobot.RobotName} ===");
+
+            // ========== STEP 1: Apply robot to MapControl for drawing ==========
             try
             {
-                System.Diagnostics.Debug.WriteLine($"ApplySelectedRobot: {_currentRobot.RobotName}");
+                // Set the robot definition for custom drawing
+                mapControl.CurrentRobot = _currentRobot;
+                // Enable custom robot drawing (shapes, sensors, etc.)
+                mapControl.SetUseCustomRobot(true);
+                // Enable sensor FOV visualization
+                mapControl.ShowSensorFOV = true;
+                // Force robot visibility
+                mapControl.ShowRobot = true;
+                // Force immediate redraw
+                mapControl.Invalidate();
 
-                // تحديث MapControl (تأكد من وجود الخاصية)
-                try
-                {
-                    if (mapControl != null)
-                    {
-                         
-                            mapControl.CurrentRobot = _currentRobot;
-                        
-                        // استخدام Reflection للتحقق من وجود الخاصية
-                        var prop = mapControl.GetType().GetProperty("CurrentRobot");
-                        if (prop != null && prop.CanWrite)
-                        {
-                            prop.SetValue(mapControl, _currentRobot);
-                        } 
-                        mapControl.Invalidate();  
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error setting MapControl.CurrentRobot: {ex.Message}");
-                }
-
-                // تحديث RobotPanel
-                try
-                {
-                    if (robotPanel != null)
-                    {
-                        var nudSpeed = robotPanel.Controls.Find("_nudSpeed", true).FirstOrDefault() as NumericUpDown;
-                        if (nudSpeed != null)
-                        {
-                            nudSpeed.Value = (decimal)(_currentRobot.Kinematics.MaxForwardSpeed * 100);
-                        }
-
-                        var nudWidth = robotPanel.Controls.Find("_nudWidth", true).FirstOrDefault() as NumericUpDown;
-                        if (nudWidth != null)
-                        {
-                            nudWidth.Value = (decimal)_currentRobot.Appearance.Width;
-                        }
-
-                        var nudLength = robotPanel.Controls.Find("_nudLength", true).FirstOrDefault() as NumericUpDown;
-                        if (nudLength != null)
-                        {
-                            nudLength.Value = (decimal)_currentRobot.Appearance.Length;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error updating RobotPanel: {ex.Message}");
-                }
-
-                // تحديث ViewModel
-                try
-                {
-                    if (_viewModel != null)
-                    {
-                        var method = _viewModel.GetType().GetMethod("SetCurrentRobot");
-                        if (method != null)
-                        {
-                            method.Invoke(_viewModel, new object[] { _currentRobot });
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error updating ViewModel: {ex.Message}");
-                }
-
-                // تحديث شريط الحالة
-                if (lblStatus != null)
-                {
-                    lblStatus.Text = $"Robot: {_currentRobot.RobotName} | Type: {_currentRobot.RobotType}";
-                }
-
-                System.Diagnostics.Debug.WriteLine("ApplySelectedRobot END");
+                System.Diagnostics.Debug.WriteLine($"  - MapControl updated: {_currentRobot.RobotName}");
+                System.Diagnostics.Debug.WriteLine($"  - Robot position: ({mapControl.RobotPosition.X}, {mapControl.RobotPosition.Y})");
+                System.Diagnostics.Debug.WriteLine($"  - MapGrid bounds: 0-{mapControl.MapGrid?.Width}, 0-{mapControl.MapGrid?.Height}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"ERROR in ApplySelectedRobot: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"  - ERROR in MapControl update: {ex.Message}");
             }
+
+            // ========== STEP 2: Apply robot speed to simulation service ==========
+            try
+            {
+                // Convert speed from m/s to cm/s (simulation uses cm/s)
+                double speedCmPerSec = _currentRobot.Kinematics.MaxForwardSpeed * 100;
+
+                // Update simulation service
+                _simulationService?.SetRobotSpeedFromSettings(speedCmPerSec);
+
+                // Update ViewModel robot state
+                if (_viewModel?.RobotState != null)
+                {
+                    _viewModel.RobotState.Speed = speedCmPerSec;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"  - Robot speed applied: {speedCmPerSec:F1} cm/s");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - ERROR applying robot speed: {ex.Message}");
+            }
+
+            // ========== STEP 3: Apply robot dimensions to MapControl ==========
+            try
+            {
+                double widthCm = _currentRobot.Appearance.Width;
+                double lengthCm = _currentRobot.Appearance.Length;
+                double heightCm = _currentRobot.Appearance.Height;
+
+                mapControl.SetRobotDimensions((int)widthCm, (int)lengthCm, (int)heightCm);
+
+                System.Diagnostics.Debug.WriteLine($"  - Robot dimensions applied: W={widthCm:F1}cm, L={lengthCm:F1}cm, H={heightCm:F1}cm");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - ERROR applying robot dimensions: {ex.Message}");
+            }
+
+            // ========== STEP 4: Apply robot dimensions to SimulationService for collision detection ==========
+            try
+            {
+                double widthCm = _currentRobot.Appearance.Width;
+                double lengthCm = _currentRobot.Appearance.Length;
+
+                _simulationService?.SetRobotDimensions(widthCm, lengthCm);
+
+                System.Diagnostics.Debug.WriteLine($"  - Robot dimensions sent to SimulationService: W={widthCm:F1}cm, L={lengthCm:F1}cm");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - ERROR setting robot dimensions in SimulationService: {ex.Message}");
+            }
+
+            // ========== STEP 5: Apply detection parameters from robot sensors ==========
+            try
+            {
+                // Get the first enabled sensor's FOV and range, or use defaults
+                double viewAngle = 180.0;
+                int detectionRange = 3;
+
+                var firstSensor = _currentRobot.Sensors.FirstOrDefault(s => s.IsEnabled);
+                if (firstSensor != null)
+                {
+                    viewAngle = firstSensor.FieldOfView;
+                    // Rough conversion from cm to cells (assuming 10cm per cell)
+                    detectionRange = (int)(firstSensor.MaxRange / 10.0);
+                    detectionRange = Math.Max(1, Math.Min(10, detectionRange));
+                }
+
+                _simulationService?.SetDetectionParameters(viewAngle, detectionRange, true);
+
+                System.Diagnostics.Debug.WriteLine($"  - Detection params applied: Angle={viewAngle:F0}°, Range={detectionRange} cells");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - ERROR applying detection parameters: {ex.Message}");
+            }
+
+            // ========== STEP 6: Update RobotPanel UI controls ==========
+            try
+            {
+                if (robotPanel != null)
+                {
+                    // Update speed control
+                    var nudSpeed = robotPanel.Controls.Find("_nudSpeed", true).FirstOrDefault() as NumericUpDown;
+                    if (nudSpeed != null)
+                    {
+                        nudSpeed.Value = (decimal)(_currentRobot.Kinematics.MaxForwardSpeed * 100);
+                    }
+
+                    // Update width control
+                    var nudWidth = robotPanel.Controls.Find("_nudWidth", true).FirstOrDefault() as NumericUpDown;
+                    if (nudWidth != null)
+                    {
+                        nudWidth.Value = (decimal)_currentRobot.Appearance.Width;
+                    }
+
+                    // Update length control
+                    var nudLength = robotPanel.Controls.Find("_nudLength", true).FirstOrDefault() as NumericUpDown;
+                    if (nudLength != null)
+                    {
+                        nudLength.Value = (decimal)_currentRobot.Appearance.Length;
+                    }
+
+                    // Trigger external dimensions update
+                    robotPanel.UpdateDimensionsExternally(
+                        (int)_currentRobot.Appearance.Width,
+                        (int)_currentRobot.Appearance.Length,
+                        (int)_currentRobot.Appearance.Height);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - ERROR updating RobotPanel: {ex.Message}");
+            }
+
+            // ========== STEP 7: Update ViewModel with current robot ==========
+            try
+            {
+                _viewModel?.SetCurrentRobot(_currentRobot);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - ERROR updating ViewModel: {ex.Message}");
+            }
+
+            // ========== STEP 8: Update status bar ==========
+            if (lblStatus != null)
+            {
+                lblStatus.Text = $"Robot: {_currentRobot.RobotName} | Type: {_currentRobot.RobotType} | Speed: {_currentRobot.Kinematics.MaxForwardSpeed:F1} m/s | Sensors: {_currentRobot.Sensors.Count} | Custom drawing: ON";
+            }
+
+            System.Diagnostics.Debug.WriteLine("=== ApplySelectedRobot completed successfully ===");
         }
         #endregion
     }

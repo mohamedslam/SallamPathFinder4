@@ -78,6 +78,8 @@ namespace SallamPathFinder4.Core.Interfaces.Services
 
         /// <summary>Gets cells within detection zone for visualization</summary>
         List<Point> GetDetectionZoneCells(Point robotPos, float robotAngle);
+        void SetRobotSpeedFromSettings(double speedCmPerSec);
+        void SetRobotDimensions(double widthCm, double lengthCm); 
         #endregion
 
         #region Events

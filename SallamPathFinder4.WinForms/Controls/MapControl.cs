@@ -90,8 +90,10 @@ namespace SallamPathFinder4.WinForms.Controls
         #region Private Fields - Robot Management
         private List<RobotDefinition> _availableRobots;
         private RobotDefinition _selectedRobot;
+        private RobotDefinition _currentRobot;
         private string _robotsDirectoryPath;
         private bool _useCustomRobot = false;
+        private bool _showSensorFOV = true;
         #endregion
 
         #region Private Fields - Obstacles
@@ -626,6 +628,26 @@ namespace SallamPathFinder4.WinForms.Controls
         /// <param name="g">Graphics object</param>
         private void DrawRobot(Graphics g)
         {
+            System.Diagnostics.Debug.WriteLine($"DrawRobot: _showRobot={_showRobot}, _useCustomRobot={_useCustomRobot}, _selectedRobot={(_selectedRobot != null)}, _robotPosition=({_robotPosition.X},{_robotPosition.Y})");
+
+            if (!_showRobot)
+            {
+                System.Diagnostics.Debug.WriteLine("  - EXIT: _showRobot is false");
+                return;
+            }
+
+            if (_mapGrid == null)
+            {
+                System.Diagnostics.Debug.WriteLine("  - EXIT: _mapGrid is null");
+                return;
+            }
+
+            if (!_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y))
+            {
+                System.Diagnostics.Debug.WriteLine($"  - EXIT: invalid robot position ({_robotPosition.X},{_robotPosition.Y})");
+                return;
+            }
+
             if (!_showRobot || _mapGrid == null || !_mapGrid.IsValidCoordinate(_robotPosition.X, _robotPosition.Y)) return;
 
             if (_useCustomRobot && _selectedRobot != null)
@@ -637,6 +659,7 @@ namespace SallamPathFinder4.WinForms.Controls
         /// <summary>
         /// Draws the robot using the custom RobotDefinition
         /// Supports multiple shapes: Rectangle, Square, Circle, RoundedRect, Triangle, Hexagon
+        /// The robot body is rotated to face the movement direction
         /// </summary>
         /// <param name="g">Graphics object</param>
         private void DrawCustomRobot(Graphics g)
@@ -646,33 +669,56 @@ namespace SallamPathFinder4.WinForms.Controls
             Rectangle robotRect = GetCellRect(_robotPosition.X, _robotPosition.Y);
             if (robotRect.Width <= 0 || robotRect.Height <= 0) return;
 
+            // Save current graphics state before transformations
             var state = g.Save();
 
+            // Move origin to robot center
             int centerX = robotRect.X + robotRect.Width / 2;
             int centerY = robotRect.Y + robotRect.Height / 2;
             g.TranslateTransform(centerX, centerY);
-            g.RotateTransform(_robotAngle);
 
+            // Apply rotation to face movement direction
+            g.RotateTransform(_robotAngle+90f);
+
+            // Calculate dimensions based on robot definition
             int cellSizePx = robotRect.Width;
             double cellSizeCm = _scaleCmPerCell;
             if (cellSizeCm <= 0) cellSizeCm = 10.0;
 
-            // Calculate dimensions based on robot definition
             double widthRatio = Math.Max(0.3, Math.Min(0.9, _selectedRobot.Appearance.Width / cellSizeCm));
             double lengthRatio = Math.Max(0.3, Math.Min(0.9, _selectedRobot.Appearance.Length / cellSizeCm));
 
-            int robotWidthPx = (int)(widthRatio * cellSizePx);
-            int robotLengthPx = (int)(lengthRatio * cellSizePx);
-
-            robotWidthPx = Math.Min(robotWidthPx, cellSizePx - 2);
-            robotLengthPx = Math.Min(robotLengthPx, cellSizePx - 2);
+            //int robotWidthPx = (int)(widthRatio * cellSizePx);
+            //int robotLengthPx = (int)(lengthRatio * cellSizePx);
+            //robotWidthPx = Math.Min(robotWidthPx, cellSizePx - 2);
+            //robotLengthPx = Math.Min(robotLengthPx, cellSizePx - 2);
+            double robotWidthCm = _selectedRobot.Appearance.Width;
+            double robotLengthCm = _selectedRobot.Appearance.Length;
+            double robotHeightCm = _selectedRobot.Appearance.Height;
+            // Convert cm to pixels using the current scale (cm per cell)
+            
+            double scaleFactor = 1.0;  // Optional fine-tuning scale factor (default = 1.0 for exact size) Change to 0.95 or 1.05 as needed 
+            int robotWidthPx = (int)(robotWidthCm / cellSizeCm * cellSizePx * scaleFactor);
+            int robotLengthPx = (int)(robotLengthCm / cellSizeCm * cellSizePx * scaleFactor);
+            // Clamp to reasonable bounds (minimum 4px, maximum cell size * 2)
+            robotWidthPx = Math.Max(4, Math.Min(robotWidthPx, cellSizePx * 2));
+            robotLengthPx = Math.Max(4, Math.Min(robotLengthPx, cellSizePx * 2));
 
             if (robotWidthPx < 4) robotWidthPx = 4;
             if (robotLengthPx < 4) robotLengthPx = 4;
 
-            Color bodyColor = ColorTranslator.FromHtml(_selectedRobot.Appearance.Color);
+            // Get body color from robot definition
+            Color bodyColor;
+            try
+            {
+                bodyColor = ColorTranslator.FromHtml(_selectedRobot.Appearance.Color);
+            }
+            catch
+            {
+                bodyColor = Color.FromArgb(52, 152, 219);
+            }
 
-            // Draw robot body based on shape type
+            // 1. Draw robot body based on shape type
             switch (_selectedRobot.Appearance.ShapeType)
             {
                 case RobotShapeType.Circle:
@@ -696,53 +742,302 @@ namespace SallamPathFinder4.WinForms.Controls
                     break;
             }
 
-            // Draw direction arrow if enabled
+            // 2. Draw robot-specific components (wheels, tracks, propellers)
+            switch (_selectedRobot.RobotType)
+            {
+                case RobotType.Flying:
+                    DrawDroneComponents(g, robotWidthPx, robotLengthPx);
+                    break;
+                case RobotType.Tracked:
+                    DrawTrackComponents(g, robotWidthPx, robotLengthPx);
+                    break;
+                case RobotType.Wheeled:
+                    DrawWheelComponents(g, robotWidthPx, robotLengthPx);
+                    break;
+                case RobotType.Omnidirectional:
+                    DrawOmniComponents(g, robotWidthPx, robotLengthPx);
+                    break;
+            }
+
+            // 3. Draw direction arrow if enabled (shows robot's front)
             if (_selectedRobot.Appearance.ShowDirectionArrow)
             {
                 DrawDirectionArrowOnRobot(g, robotLengthPx);
             }
 
-            // Draw sensors if enabled
+            // 4. Draw sensors as points if enabled
             if (_selectedRobot.Appearance.ShowSensorPoints && _selectedRobot.Sensors.Count > 0)
             {
                 DrawRobotSensors(g, robotWidthPx, robotLengthPx);
             }
 
+            // 5. Draw sensor field of view (FOV) if enabled
+            if (_showSensorFOV && _selectedRobot.Sensors.Count > 0)
+            {
+                DrawAllSensorsFOV(g, robotWidthPx, robotLengthPx);
+            }
+
+            // Restore original graphics state (undo translation and rotation)
             g.Restore(state);
+        }
+        #region Robot Components Drawing
+
+        /// <summary>
+        /// Draws propellers and arms for flying robot (Drone)
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Robot width in pixels</param>
+        /// <param name="length">Robot length in pixels</param>
+        private void DrawDroneComponents(Graphics g, int width, int length)
+        {
+            int armLength = width / 2;
+            int motorSize = Math.Max(4, width / 6);
+            int propellerLength = motorSize * 2;
+
+            using (var armPen = new Pen(Color.FromArgb(100, 100, 100), 2))
+            using (var motorBrush = new SolidBrush(Color.FromArgb(80, 80, 80)))
+            using (var propellerBrush = new SolidBrush(Color.FromArgb(200, 200, 200)))
+            {
+                // Cross arms
+                g.DrawLine(armPen, -armLength, -armLength, armLength, armLength);
+                g.DrawLine(armPen, -armLength, armLength, armLength, -armLength);
+
+                // Four propeller positions
+                Point[] motorPositions = new Point[]
+                {
+            new Point(-armLength, -armLength),  // Top-left
+            new Point(armLength, -armLength),   // Top-right
+            new Point(-armLength, armLength),   // Bottom-left
+            new Point(armLength, armLength)     // Bottom-right
+                };
+
+                foreach (var pos in motorPositions)
+                {
+                    // Motor
+                    g.FillEllipse(motorBrush, pos.X - motorSize / 2, pos.Y - motorSize / 2, motorSize, motorSize);
+                    g.DrawEllipse(Pens.Black, pos.X - motorSize / 2, pos.Y - motorSize / 2, motorSize, motorSize);
+
+                    // Propeller (rotates with robot)
+                    var state = g.Save();
+                    g.TranslateTransform(pos.X, pos.Y);
+                    g.RotateTransform(_robotAngle);
+                    g.FillRectangle(propellerBrush, -propellerLength / 2, -motorSize / 3, propellerLength, motorSize / 2);
+                    g.Restore(state);
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// Draws tracks for tracked robot
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Robot width in pixels</param>
+        /// <param name="length">Robot length in pixels</param>
+        private void DrawTrackComponents(Graphics g, int width, int length)
+        {
+            int trackWidth = Math.Max(3, width / 8);
+            int trackHeight = length;
+
+            using (var trackBrush = new SolidBrush(Color.FromArgb(60, 60, 60)))
+            using (var wheelBrush = new SolidBrush(Color.FromArgb(100, 100, 100)))
+            {
+                // Left track
+                g.FillRectangle(trackBrush, -width / 2 - trackWidth, -trackHeight / 2, trackWidth, trackHeight);
+                // Right track
+                g.FillRectangle(trackBrush, width / 2, -trackHeight / 2, trackWidth, trackHeight);
+
+                // Track wheels (rollers)
+                for (int i = -trackHeight / 2 + 5; i < trackHeight / 2 - 5; i += 8)
+                {
+                    g.FillEllipse(wheelBrush, -width / 2 - trackWidth / 2, i - 2, trackWidth, 4);
+                    g.FillEllipse(wheelBrush, width / 2 - trackWidth / 2, i - 2, trackWidth, 4);
+                }
+            }
         }
 
         /// <summary>
-        /// Draws rectangular robot body
+        /// Draws wheels for wheeled robot
+        /// Wheels are placed at the rear of the robot
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Robot width in pixels</param>
+        /// <param name="length">Robot length in pixels</param>
+        private void DrawWheelComponents(Graphics g, int width, int length)
+        {
+            int wheelWidth = Math.Max(4, width / 6);
+            int wheelHeight = Math.Max(6, length / 5);
+            int wheelOffset = width / 3;
+
+            using (var wheelBrush = new SolidBrush(Color.FromArgb(44, 62, 80)))
+            using (var axleBrush = new SolidBrush(Color.FromArgb(150, 150, 150)))
+            {
+                // Rear wheels
+                g.FillEllipse(wheelBrush, -wheelOffset - wheelWidth / 2, length / 2 - wheelHeight / 2, wheelWidth, wheelHeight);
+                g.FillEllipse(wheelBrush, wheelOffset - wheelWidth / 2, length / 2 - wheelHeight / 2, wheelWidth, wheelHeight);
+
+                // Wheel axles
+                g.FillEllipse(axleBrush, -wheelOffset - wheelWidth / 4, length / 2 - wheelHeight / 4, wheelWidth / 2, wheelHeight / 2);
+                g.FillEllipse(axleBrush, wheelOffset - wheelWidth / 4, length / 2 - wheelHeight / 4, wheelWidth / 2, wheelHeight / 2);
+
+                // Front wheels for longer robots
+                if (length > width)
+                {
+                    g.FillEllipse(wheelBrush, -wheelOffset - wheelWidth / 2, -length / 2 + wheelHeight / 2, wheelWidth, wheelHeight);
+                    g.FillEllipse(wheelBrush, wheelOffset - wheelWidth / 2, -length / 2 + wheelHeight / 2, wheelWidth, wheelHeight);
+
+                    g.FillEllipse(axleBrush, -wheelOffset - wheelWidth / 4, -length / 2 + wheelHeight / 4, wheelWidth / 2, wheelHeight / 2);
+                    g.FillEllipse(axleBrush, wheelOffset - wheelWidth / 4, -length / 2 + wheelHeight / 4, wheelWidth / 2, wheelHeight / 2);
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// Draws mecanum wheels for omnidirectional robot
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Robot width in pixels</param>
+        /// <param name="length">Robot length in pixels</param>
+        private void DrawOmniComponents(Graphics g, int width, int length)
+        {
+            int wheelSize = Math.Max(4, width / 5);
+            int offset = width / 3;
+
+            using (var wheelBrush = new SolidBrush(Color.FromArgb(44, 62, 80)))
+            using (var rollerBrush = new SolidBrush(Color.FromArgb(100, 100, 100)))
+            {
+                // Four mecanum wheels
+                Point[] wheelPositions = new Point[]
+                {
+            new Point(-offset, -offset),  // Front-left
+            new Point(offset, -offset),   // Front-right
+            new Point(-offset, offset),   // Rear-left
+            new Point(offset, offset)     // Rear-right
+                };
+
+                foreach (var pos in wheelPositions)
+                {
+                    g.FillEllipse(wheelBrush, pos.X - wheelSize / 2, pos.Y - wheelSize / 2, wheelSize, wheelSize);
+
+                    // Rollers at 45 degrees
+                    var state = g.Save();
+                    g.TranslateTransform(pos.X, pos.Y);
+                    g.RotateTransform(45);
+                    g.FillRectangle(rollerBrush, -wheelSize / 2, -wheelSize / 6, wheelSize, wheelSize / 3);
+                    g.Restore(state);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Sensor FOV Drawing
+
+        /// <summary>
+        /// Draws field of view for all enabled sensors
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="robotWidthPx">Robot width in pixels</param>
+        /// <param name="robotHeightPx">Robot height in pixels</param>
+        private void DrawAllSensorsFOV(Graphics g, int robotWidthPx, int robotHeightPx)
+        {
+            if (_selectedRobot?.Sensors == null) return;
+
+            foreach (var sensor in _selectedRobot.Sensors)
+            {
+                if (!sensor.IsEnabled) continue;
+                DrawSingleSensorFOV(g, sensor, robotWidthPx, robotHeightPx);
+            }
+        }
+
+        /// <summary>
+        /// Draws field of view for a single sensor
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="sensor">The sensor to draw</param>
+        /// <param name="robotWidthPx">Robot width in pixels</param>
+        /// <param name="robotHeightPx">Robot height in pixels</param>
+        private void DrawSingleSensorFOV(Graphics g, SimpleSensor sensor, int robotWidthPx, int robotHeightPx)
+        {
+            // Calculate sensor position relative to robot center
+            double posXPercent = (sensor.PositionX + 50) / 100.0;
+            double posYPercent = (sensor.PositionY + 50) / 100.0;
+
+            int sensorX = (int)((posXPercent - 0.5) * robotWidthPx);
+            int sensorY = (int)((posYPercent - 0.5) * robotHeightPx);
+
+            double sensorAngle = sensor.MountAngle;
+            double halfFOV = sensor.FieldOfView / 2.0;
+
+            // Range in pixels (scaled for visualization)
+            int rangePx = (int)(sensor.MaxRange / 5.0);
+            rangePx = Math.Max(20, Math.Min(150, rangePx));
+
+            double startAngle = sensorAngle - halfFOV;
+            double endAngle = sensorAngle + halfFOV;
+
+            double startRad = startAngle * Math.PI / 180.0;
+            double endRad = endAngle * Math.PI / 180.0;
+
+            PointF[] conePoints = new PointF[3];
+            conePoints[0] = new PointF(sensorX, sensorY);
+            conePoints[1] = new PointF(
+                sensorX + (float)(rangePx * Math.Cos(startRad)),
+                sensorY + (float)(rangePx * Math.Sin(startRad)));
+            conePoints[2] = new PointF(
+                sensorX + (float)(rangePx * Math.Cos(endRad)),
+                sensorY + (float)(rangePx * Math.Sin(endRad)));
+
+            using (var fillBrush = new SolidBrush(Color.FromArgb(60, 52, 152, 219)))
+            using (var borderPen = new Pen(Color.FromArgb(150, 52, 152, 219), 1.5f))
+            {
+                g.FillPolygon(fillBrush, conePoints);
+                g.DrawPolygon(borderPen, conePoints);
+            }
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Draws a rectangular robot body centered at origin
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Body width in pixels</param>
+        /// <param name="length">Body length in pixels</param>
+        /// <param name="color">Body color</param>
         private void DrawRobotRectangle(Graphics g, int width, int length, Color color)
         {
             RectangleF bodyRect = new RectangleF(-width / 2, -length / 2, width, length);
-
             using (var bodyBrush = new SolidBrush(color))
                 g.FillRectangle(bodyBrush, bodyRect);
-
             using (var borderPen = new Pen(Color.White, 1.5f))
                 g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
         }
-
         /// <summary>
-        /// Draws square robot body
+        /// Draws a square robot body centered at origin
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Body width in pixels</param>
+        /// <param name="length">Body length in pixels</param>
+        /// <param name="color">Body color</param>
         private void DrawRobotSquare(Graphics g, int width, int length, Color color)
         {
             int size = Math.Min(width, length);
             RectangleF bodyRect = new RectangleF(-size / 2, -size / 2, size, size);
-
             using (var bodyBrush = new SolidBrush(color))
                 g.FillRectangle(bodyBrush, bodyRect);
-
             using (var borderPen = new Pen(Color.White, 1.5f))
                 g.DrawRectangle(borderPen, bodyRect.X, bodyRect.Y, bodyRect.Width, bodyRect.Height);
         }
 
         /// <summary>
-        /// Draws rounded rectangle robot body
+        /// Draws a rounded rectangle robot body centered at origin
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Body width in pixels</param>
+        /// <param name="length">Body length in pixels</param>
+        /// <param name="color">Body color</param>
         private void DrawRobotRoundedRect(Graphics g, int width, int length, Color color)
         {
             RectangleF bodyRect = new RectangleF(-width / 2, -length / 2, width, length);
@@ -751,10 +1046,10 @@ namespace SallamPathFinder4.WinForms.Controls
             using (var bodyBrush = new SolidBrush(color))
             using (var path = new GraphicsPath())
             {
-                path.AddArc(bodyRect.X, bodyRect.Y, radius, radius, 180, 90);
-                path.AddArc(bodyRect.Right - radius, bodyRect.Y, radius, radius, 270, 90);
-                path.AddArc(bodyRect.Right - radius, bodyRect.Bottom - radius, radius, radius, 0, 90);
-                path.AddArc(bodyRect.X, bodyRect.Bottom - radius, radius, radius, 90, 90);
+                path.AddArc(bodyRect.X, bodyRect.Y, radius * 2, radius * 2, 180, 90);
+                path.AddArc(bodyRect.Right - radius * 2, bodyRect.Y, radius * 2, radius * 2, 270, 90);
+                path.AddArc(bodyRect.Right - radius * 2, bodyRect.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
+                path.AddArc(bodyRect.X, bodyRect.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
                 path.CloseFigure();
 
                 g.FillPath(bodyBrush, path);
@@ -764,50 +1059,53 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
+
         /// <summary>
-        /// Draws circular robot body
+        /// Draws a circular robot body centered at origin
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Body width in pixels</param>
+        /// <param name="length">Body length in pixels</param>
+        /// <param name="color">Body color</param>
         private void DrawRobotCircle(Graphics g, int width, int length, Color color)
         {
             int radius = Math.Min(width, length) / 2;
-
             using (var bodyBrush = new SolidBrush(color))
                 g.FillEllipse(bodyBrush, -radius, -radius, radius * 2, radius * 2);
-
             using (var borderPen = new Pen(Color.White, 1.5f))
                 g.DrawEllipse(borderPen, -radius, -radius, radius * 2, radius * 2);
-
-            // Add eyes for circular robot
-            int eyeSize = Math.Max(2, radius / 4);
-            using (var eyeBrush = new SolidBrush(Color.White))
-            {
-                g.FillEllipse(eyeBrush, -radius / 3, -radius / 4, eyeSize, eyeSize);
-                g.FillEllipse(eyeBrush, radius / 6, -radius / 4, eyeSize, eyeSize);
-            }
         }
 
         /// <summary>
-        /// Draws triangular robot body
+        /// Draws a triangular robot body centered at origin
+        /// The triangle points upward (front of robot)
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Base width in pixels</param>
+        /// <param name="length">Height from base to tip in pixels</param>
+        /// <param name="color">Body color</param>
         private void DrawRobotTriangle(Graphics g, int width, int length, Color color)
         {
             PointF[] triangle = new PointF[]
             {
-                new PointF(0, -length / 2),
-                new PointF(-width / 2, length / 2),
-                new PointF(width / 2, length / 2)
+        new PointF(0, -length / 2),           // Tip (front)
+        new PointF(-width / 2, length / 2),   // Bottom-left
+        new PointF(width / 2, length / 2)     // Bottom-right
             };
 
             using (var bodyBrush = new SolidBrush(color))
                 g.FillPolygon(bodyBrush, triangle);
-
             using (var borderPen = new Pen(Color.White, 1.5f))
                 g.DrawPolygon(borderPen, triangle);
         }
 
         /// <summary>
-        /// Draws hexagonal robot body
+        /// Draws a hexagonal robot body centered at origin
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="width">Body width in pixels</param>
+        /// <param name="length">Body length in pixels</param>
+        /// <param name="color">Body color</param>
         private void DrawRobotHexagon(Graphics g, int width, int length, Color color)
         {
             double angleStep = Math.PI * 2 / 6;
@@ -823,48 +1121,55 @@ namespace SallamPathFinder4.WinForms.Controls
 
             using (var bodyBrush = new SolidBrush(color))
                 g.FillPolygon(bodyBrush, hexagon);
-
             using (var borderPen = new Pen(Color.White, 1.5f))
                 g.DrawPolygon(borderPen, hexagon);
         }
-
         /// <summary>
-        /// Draws direction arrow on the robot
+        /// Draws direction arrow showing robot's front direction
+        /// The arrow is drawn at the front tip of the robot
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="robotLength">Robot length in pixels</param>
         private void DrawDirectionArrowOnRobot(Graphics g, int robotLength)
         {
             using (var arrowBrush = new SolidBrush(Color.FromArgb(46, 204, 113)))
             {
                 PointF[] arrowPoints = new PointF[]
                 {
-                    new PointF(0, -robotLength / 2 - 3),
-                    new PointF(-5, -robotLength / 2 + 8),
-                    new PointF(5, -robotLength / 2 + 8)
+            new PointF(0, -robotLength / 2 - 3),      // Arrow tip (front)
+            new PointF(-5, -robotLength / 2 + 8),     // Arrow left base
+            new PointF(5, -robotLength / 2 + 8)       // Arrow right base
                 };
                 g.FillPolygon(arrowBrush, arrowPoints);
             }
         }
 
         /// <summary>
-        /// Draws sensor points on the robot
+        /// Draws sensor points on the robot body
         /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="robotWidth">Robot width in pixels</param>
+        /// <param name="robotLength">Robot length in pixels</param>
         private void DrawRobotSensors(Graphics g, int robotWidth, int robotLength)
         {
             if (_selectedRobot?.Sensors == null) return;
 
             foreach (var sensor in _selectedRobot.Sensors)
             {
-                Color sensorColor = ColorTranslator.FromHtml(sensor.DisplayColor);
-                int sensorX = (int)(sensor.PositionX / 100.0 * robotWidth);
-                int sensorY = (int)(sensor.PositionY / 100.0 * robotLength);
+                if (!sensor.IsEnabled) continue;
+
+                Color sensorColor;
+                try { sensorColor = ColorTranslator.FromHtml(sensor.DisplayColor); }
+                catch { sensorColor = Color.FromArgb(52, 152, 219); }
+
+                // Convert percentage position to pixel coordinates
+                int sensorX = (int)((sensor.PositionX + 50) / 100.0 * robotWidth) - robotWidth / 2;
+                int sensorY = (int)((sensor.PositionY + 50) / 100.0 * robotLength) - robotLength / 2;
 
                 using (var sensorBrush = new SolidBrush(sensorColor))
-                {
-                    g.FillEllipse(sensorBrush, sensorX - 3, sensorY - 3, 6, 6);
-                }
-
                 using (var sensorPen = new Pen(Color.White, 1))
                 {
+                    g.FillEllipse(sensorBrush, sensorX - 3, sensorY - 3, 6, 6);
                     g.DrawEllipse(sensorPen, sensorX - 3, sensorY - 3, 6, 6);
                 }
             }
@@ -1037,6 +1342,7 @@ namespace SallamPathFinder4.WinForms.Controls
             set { _showCoordinates = value; Invalidate(); }
         }
         #endregion
+         
 
         #region Public Properties - Robot
         public Point RobotPosition
@@ -1063,6 +1369,15 @@ namespace SallamPathFinder4.WinForms.Controls
             set
             {
                 _robotSpeed = value;
+                Invalidate();
+            }
+        }
+        public bool ShowSensorFOV
+        {
+            get => _showSensorFOV;
+            set
+            {
+                _showSensorFOV = value;
                 Invalidate();
             }
         }
