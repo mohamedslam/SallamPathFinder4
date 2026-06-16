@@ -8,7 +8,9 @@
 #endregion
 
 #region Namespace Imports
+using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Services.Battery;
+using SallamPathFinder4.Services.Simulation;
 using System;
 using System.Drawing;
 using System.Windows.Forms;
@@ -44,6 +46,21 @@ namespace SallamPathFinder4.WinForms.Panels
         private Button _btnSimulate;
         private Button _btnPause;
         private Button _btnStop;
+        #endregion
+
+        #region Private Fields - Obstacle Detection Settings
+        private GroupBox _grpObstacleSettings;
+        private CheckBox _chkEnableLearning;
+        private CheckBox _chkEnableObstacleAvoidance;
+        private Button _btnExportObstacleLog;
+        private Button _btnClearObstacleMemory;
+        private Label _lblObstacleStats;
+        private NumericUpDown _nudSafeDistance;
+        private NumericUpDown _nudCriticalDistance;
+        private ComboBox _cboObstacleType;
+        private NumericUpDown _nudWaitTime;
+        private NumericUpDown _nudMaxWaitTime;
+        private Button _btnApplyWaitTime;
         #endregion
 
         #region Private Fields - Dynamic Charging
@@ -330,6 +347,10 @@ namespace SallamPathFinder4.WinForms.Panels
             this.Controls.Add(_btnStop);
             _nudWidth.ValueChanged += (s, e) => UpdateDimensions();
             _nudLength.ValueChanged += (s, e) => UpdateDimensions();
+
+            // Create obstacle detection UI
+            CreateObstacleSettingsPanel();
+            CreateWaitTimeConfigPanel();
         }
         private void UpdateDimensions()
         {
@@ -350,7 +371,6 @@ namespace SallamPathFinder4.WinForms.Panels
             double actualSpeed =(double ) speed;    
             SpeedChanged?.Invoke(actualSpeed); 
         }
-
         private void SetDefaultValues()
         {
             _chkDynamicCharging.Checked = false;
@@ -358,6 +378,239 @@ namespace SallamPathFinder4.WinForms.Panels
             _nudChargingSeconds.Value = 10;
             _nudSafetyMargin.Value = 10;
         }
+        #region Obstacle Detection UI
+
+        /// <summary>
+        /// Creates the obstacle detection settings panel
+        /// </summary>
+        private void CreateObstacleSettingsPanel()
+        {
+            int y = _btnStop.Bottom + 15;
+
+            _grpObstacleSettings = new GroupBox
+            {
+                Text = "🚧 Obstacle Detection & Learning",
+                Location = new Point(5, y),
+                Size = new Size(310, 180),
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+
+            int gy = 20;
+
+            // Enable Learning
+            _chkEnableLearning = new CheckBox
+            {
+                Text = "Enable Learning Memory (SPPA-DL)",
+                Location = new Point(10, gy),
+                AutoSize = true,
+                Checked = true
+            };
+            _grpObstacleSettings.Controls.Add(_chkEnableLearning);
+            gy += 25;
+
+            // Enable Obstacle Avoidance
+            _chkEnableObstacleAvoidance = new CheckBox
+            {
+                Text = "Enable Obstacle Avoidance",
+                Location = new Point(10, gy),
+                AutoSize = true,
+                Checked = true
+            };
+            _grpObstacleSettings.Controls.Add(_chkEnableObstacleAvoidance);
+            gy += 25;
+
+            // Safe Distance
+            Label lblSafeDist = new Label
+            {
+                Text = "Safe Distance (cm):",
+                Location = new Point(10, gy),
+                Size = new Size(110, 23)
+            };
+            _nudSafeDistance = new NumericUpDown
+            {
+                Location = new Point(130, gy - 3),
+                Size = new Size(60, 23),
+                Minimum = 10,
+                Maximum = 200,
+                Value = 30,
+                Increment = 5
+            };
+            _grpObstacleSettings.Controls.Add(lblSafeDist);
+            _grpObstacleSettings.Controls.Add(_nudSafeDistance);
+            gy += 28;
+
+            // Critical Distance
+            Label lblCriticalDist = new Label
+            {
+                Text = "Critical Distance (cm):",
+                Location = new Point(10, gy),
+                Size = new Size(110, 23)
+            };
+            _nudCriticalDistance = new NumericUpDown
+            {
+                Location = new Point(130, gy - 3),
+                Size = new Size(60, 23),
+                Minimum = 1,
+                Maximum = 50,
+                Value = 10,
+                Increment = 2
+            };
+            _grpObstacleSettings.Controls.Add(lblCriticalDist);
+            _grpObstacleSettings.Controls.Add(_nudCriticalDistance);
+            gy += 28;
+
+            // Export Button
+            _btnExportObstacleLog = new Button
+            {
+                Text = "📊 Export Obstacle Log",
+                Location = new Point(10, gy),
+                Size = new Size(140, 28),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            _grpObstacleSettings.Controls.Add(_btnExportObstacleLog);
+
+            // Clear Memory Button
+            _btnClearObstacleMemory = new Button
+            {
+                Text = "🗑 Clear Learning Memory",
+                Location = new Point(160, gy),
+                Size = new Size(140, 28),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(231, 76, 60),
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            _grpObstacleSettings.Controls.Add(_btnClearObstacleMemory);
+            gy += 35;
+
+            // Statistics Label
+            _lblObstacleStats = new Label
+            {
+                Text = "📈 Stats: Loading...",
+                Location = new Point(10, gy),
+                Size = new Size(290, 20),
+                Font = new Font("Segoe UI", 8, FontStyle.Italic),
+                ForeColor = Color.Gray
+            };
+            _grpObstacleSettings.Controls.Add(_lblObstacleStats);
+
+            this.Controls.Add(_grpObstacleSettings);
+        }
+
+        /// <summary>
+        /// Creates wait time configuration panel for obstacle types
+        /// </summary>
+        private void CreateWaitTimeConfigPanel()
+        {
+            int y = _grpObstacleSettings.Bottom + 5;
+
+            var grpWaitTimes = new GroupBox
+            {
+                Text = "⏱️ Wait Times by Obstacle Type",
+                Location = new Point(5, y),
+                Size = new Size(310, 100),
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+
+            int gy = 20;
+
+            // Obstacle Type Combo
+            Label lblType = new Label
+            {
+                Text = "Obstacle Type:",
+                Location = new Point(10, gy),
+                Size = new Size(90, 23)
+            };
+            _cboObstacleType = new ComboBox
+            {
+                Location = new Point(110, gy - 3),
+                Size = new Size(120, 23),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            _cboObstacleType.Items.AddRange(new string[] { "Child", "Adult", "Animal", "OtherRobot", "Equipment" });
+            _cboObstacleType.SelectedIndex = 0;
+            grpWaitTimes.Controls.Add(lblType);
+            grpWaitTimes.Controls.Add(_cboObstacleType);
+            gy += 28;
+
+            // Wait Time
+            Label lblWait = new Label
+            {
+                Text = "Wait Time (sec):",
+                Location = new Point(10, gy),
+                Size = new Size(90, 23)
+            };
+            _nudWaitTime = new NumericUpDown
+            {
+                Location = new Point(110, gy - 3),
+                Size = new Size(60, 23),
+                Minimum = 0,
+                Maximum = 30,
+                Value = 3,
+                DecimalPlaces = 1,
+                Increment = 0.5M
+            };
+            grpWaitTimes.Controls.Add(lblWait);
+            grpWaitTimes.Controls.Add(_nudWaitTime);
+
+            // Max Wait Time
+            Label lblMaxWait = new Label
+            {
+                Text = "Max Wait (sec):",
+                Location = new Point(180, gy),
+                Size = new Size(90, 23)
+            };
+            _nudMaxWaitTime = new NumericUpDown
+            {
+                Location = new Point(260, gy - 3),
+                Size = new Size(40, 23),
+                Minimum = 0,
+                Maximum = 60,
+                Value = 8,
+                DecimalPlaces = 1,
+                Increment = 0.5M
+            };
+            grpWaitTimes.Controls.Add(lblMaxWait);
+            grpWaitTimes.Controls.Add(_nudMaxWaitTime);
+            gy += 28;
+
+            // Apply Button
+            _btnApplyWaitTime = new Button
+            {
+                Text = "Apply Wait Time",
+                Location = new Point(110, gy),
+                Size = new Size(100, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(46, 204, 113),
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            grpWaitTimes.Controls.Add(_btnApplyWaitTime);
+
+            this.Controls.Add(grpWaitTimes);
+        }
+
+        /// <summary>
+        /// Updates obstacle statistics display
+        /// </summary>
+        public void UpdateObstacleStats(string stats)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateObstacleStats(stats)));
+                return;
+            }
+
+            if (_lblObstacleStats != null)
+            {
+                _lblObstacleStats.Text = stats;
+            }
+        }
+
+        #endregion
         #endregion
 
         #region Public Properties - Basic
@@ -585,5 +838,64 @@ namespace SallamPathFinder4.WinForms.Panels
                 HeightCm = heightCm;
             }
         }
+
+        #region Obstacle Wait State Display
+
+        /// <summary>
+        /// Updates the wait state display when robot is waiting for an obstacle
+        /// </summary>
+        /// <param name="waitState">Current wait state</param>
+        public void UpdateWaitStateDisplay(ObstacleWaitState waitState)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateWaitStateDisplay(waitState)));
+                return;
+            }
+
+            if (waitState != null && waitState.IsWaiting)
+            {
+                // Update status display
+                string waitText = $"⏱️ Waiting for {waitState.Type} - {waitState.RemainingWaitTime:F1}s remaining";
+
+                // Find or create wait label
+                Label lblWait = this.Controls.Find("_lblWaitStatus", true).FirstOrDefault() as Label;
+                if (lblWait == null)
+                {
+                    lblWait = new Label
+                    {
+                        Name = "_lblWaitStatus",
+                        Location = new Point(5, _btnStop.Bottom + 5),
+                        Size = new Size(300, 25),
+                        Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                        ForeColor = Color.FromArgb(241, 196, 15),
+                        BackColor = Color.FromArgb(50, 0, 0, 0),
+                        TextAlign = ContentAlignment.MiddleCenter
+                    };
+                    this.Controls.Add(lblWait);
+                }
+
+                lblWait.Text = waitText;
+                lblWait.Visible = true;
+
+                // Update battery display with wait info
+                var batteryLabel = this.Controls.Find("_lblBatteryValue", true).FirstOrDefault() as Label;
+                if (batteryLabel != null)
+                {
+                    batteryLabel.Text = $"⏱️ Wait: {waitState.RemainingWaitTime:F1}s";
+                }
+            }
+            else
+            {
+                // Hide wait label when not waiting
+                var lblWait = this.Controls.Find("_lblWaitStatus", true).FirstOrDefault() as Label;
+                if (lblWait != null)
+                {
+                    lblWait.Visible = false;
+                }
+            }
+        }
+
+        #endregion
     }
 }

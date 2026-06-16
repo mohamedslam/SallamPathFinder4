@@ -8,6 +8,7 @@
 #endregion
 
 using SallamPathFinder4.Core.Models.Map;
+using SallamPathFinder4.Core.Models.Obstacles;
 using System.Drawing;
 
 namespace SallamPathFinder4.Core.Models.Sensors
@@ -38,13 +39,35 @@ namespace SallamPathFinder4.Core.Models.Sensors
         /// <summary>Timestamp of detection</summary>
         public DateTime Timestamp { get; set; } = DateTime.Now;
 
+        // NEW: Sensor information
+        /// <summary>ID of the sensor that detected this obstacle</summary>
+        public string SensorId { get; set; }
+
+        /// <summary>Type of sensor (Ultrasonic, Infrared, etc.)</summary>
+        public string SensorType { get; set; }
+
+        /// <summary>Original distance before noise (cm)</summary>
+        public double OriginalDistanceCm { get; set; }
+
+        /// <summary>Amount of noise applied (cm)</summary>
+        public double NoiseAppliedCm { get; set; }
+
+        /// <summary>Whether this reading was a dropout</summary>
+        public bool IsDropout { get; set; }
+
+        /// <summary>Detected obstacle object (if any)</summary>
+        public DetectedObstacle DetectedObstacle { get; set; }
+
+        /// <summary>Whether camera should be triggered</summary>
+        public bool TriggerCamera { get; set; }
+
         public override string ToString()
         {
             return $"Detected: {ObstacleDetected}, Distance: {Distance:F1}cm, Confidence: {Confidence:P0}";
         }
     }
 
- 
+
 
     /// <summary>
     /// Proximity data for objects around the robot

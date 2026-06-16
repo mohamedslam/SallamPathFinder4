@@ -160,21 +160,19 @@ namespace SallamPathFinder4.ML.Training
         /// <summary>
         /// Gets historical data as obstacle memory records
         /// </summary>
-        public List<ObstacleMemoryRecord> GetHistoricalData()
+        public List<LearningRecord> GetHistoricalData()
         {
             lock (_lockObject)
             {
-                var historicalData = new List<ObstacleMemoryRecord>();
+                var historicalData = new List<LearningRecord>();
                 var grouped = _movementRecords.GroupBy(r => (r.CurrentX, r.CurrentY));
-
                 foreach (var group in grouped)
                 {
                     var first = group.First();
-                    historicalData.Add(new ObstacleMemoryRecord(first.CurrentX, first.CurrentY, first.ObstacleType)
-                    {
-                        Frequency = group.Count(),
-                        LastSeen = group.Max(r => r.RecordedAt)
-                    });
+                    var record = new LearningRecord(first.CurrentX, first.CurrentY, first.ObstacleType);
+                    record.Frequency = group.Count();
+                    record.LastSeen = group.Max(r => r.RecordedAt);
+                    historicalData.Add(record);
                 }
 
                 return historicalData;

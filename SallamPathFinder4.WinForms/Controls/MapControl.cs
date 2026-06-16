@@ -8,6 +8,7 @@
 #endregion
 
 #region Namespace Imports
+using Newtonsoft.Json.Linq;
 using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Goals;
 using SallamPathFinder4.Core.Models.Map;
@@ -55,6 +56,9 @@ namespace SallamPathFinder4.WinForms.Controls
         private HashSet<Point> _invalidPathCells;
         private Dictionary<(int, int), int> _startPoints;
         private int _nextStartIndex;
+        // Active obstacles from simulation
+        private List<DetectedObstacle> _activeObstacles;
+        private Dictionary<Point, double> _hotspotRiskLevels;
         #endregion
 
         #region Private Fields - Core
@@ -72,6 +76,18 @@ namespace SallamPathFinder4.WinForms.Controls
         private PointF _viewOffset;
         private Point? _highlightedCell;
         private bool _showOrderNumbers = false;
+        // Legend visibility and position
+        private bool _showLegend = true;
+        private Point _legendPosition = new Point(10, 10);  // Top-left corner
+                                                            // Wait countdown display
+        private bool _isWaiting = false;
+        private double _remainingWaitSeconds = 0;
+        private Point _waitLocation;
+        private ObstacleType _waitingForObstacle;
+        private System.Windows.Forms.Timer _countdownTimer;
+        // Legend dragging
+        private bool _isDraggingLegend = false;
+        private Point _legendDragStart;
         #endregion
 
         #region Private Fields - Robot (Legacy - For backward compatibility)
@@ -94,6 +110,7 @@ namespace SallamPathFinder4.WinForms.Controls
         private string _robotsDirectoryPath;
         private bool _useCustomRobot = false;
         private bool _showSensorFOV = true;
+        private bool _showSensorLabels = true;
         #endregion
 
         #region Private Fields - Obstacles
@@ -101,12 +118,12 @@ namespace SallamPathFinder4.WinForms.Controls
         private ObstacleType _currentObstacleType;
         #endregion
 
-        #region Private Fields - Detection Zone
-        private bool _showDetectionZone;
-        private Color _detectionZoneColor;
-        private List<Point> _detectionZoneCells;
-        private int _detectionRangeCells;
-        #endregion
+        //#region Private Fields - Detection Zone
+        //private bool _showDetectionZone;
+        //private Color _detectionZoneColor;
+        //private List<Point> _detectionZoneCells;
+        //private int _detectionRangeCells;
+        //#endregion
 
         #region Private Fields - Interaction
         private bool _isPanning;
@@ -160,7 +177,7 @@ namespace SallamPathFinder4.WinForms.Controls
             _parkingPoints = new List<ParkingPoint>();
             _coloredPaths = new List<ColoredPath>();
             _dynamicObstacles = new List<DynamicObstacle>();
-            _detectionZoneCells = new List<Point>();
+            //_detectionZoneCells = new List<Point>();
             _random = new Random();
 
             _cellSize = DEFAULT_CELL_SIZE;
@@ -175,9 +192,9 @@ namespace SallamPathFinder4.WinForms.Controls
             _currentWeight = 1;
             _currentElement = MapElementType.Wall;
             _currentObstacleType = ObstacleType.Adult;
-            _showDetectionZone = true;
-            _detectionZoneColor = Color.FromArgb(80, 52, 152, 219);
-            _detectionRangeCells = 2;
+            //_showDetectionZone = true;
+            //_detectionZoneColor = Color.FromArgb(80, 52, 152, 219);
+            //_detectionRangeCells = 2;
 
             this.MouseWheel += MapControl_MouseWheel;
 
@@ -187,6 +204,9 @@ namespace SallamPathFinder4.WinForms.Controls
             _startPoint = new Point(10, 10);
             _startPoints = new Dictionary<(int, int), int>();
             _nextStartIndex = 0;
+            //  Initialize obstacle lists
+            _activeObstacles = new List<DetectedObstacle>();
+            _hotspotRiskLevels = new Dictionary<Point, double>();
         }
 
         private void InitializeComponent()
@@ -770,6 +790,11 @@ namespace SallamPathFinder4.WinForms.Controls
             {
                 DrawRobotSensors(g, robotWidthPx, robotLengthPx);
             }
+            // ✅ Draw sensor FOV cones (drawn AFTER sensors so they appear on top)
+            if (_showSensorFOV && _selectedRobot.Sensors.Count > 0)
+            {
+                DrawAllSensorsFOV(g, robotWidthPx, robotLengthPx);
+            }
 
             // 5. Draw sensor field of view (FOV) if enabled
             if (_showSensorFOV && _selectedRobot.Sensors.Count > 0)
@@ -935,7 +960,7 @@ namespace SallamPathFinder4.WinForms.Controls
         #region Sensor FOV Drawing
 
         /// <summary>
-        /// Draws field of view for all enabled sensors
+        /// Draws field of view for all sensors exactly as designed in Robot Designer
         /// </summary>
         /// <param name="g">Graphics object</param>
         /// <param name="robotWidthPx">Robot width in pixels</param>
@@ -947,54 +972,160 @@ namespace SallamPathFinder4.WinForms.Controls
             foreach (var sensor in _selectedRobot.Sensors)
             {
                 if (!sensor.IsEnabled) continue;
-                DrawSingleSensorFOV(g, sensor, robotWidthPx, robotHeightPx);
+
+                // Calculate sensor position on robot (relative to center)
+                int sensorX = (int)(sensor.PositionX / 100.0 * robotWidthPx);
+                int sensorY = (int)(sensor.PositionY / 100.0 * robotHeightPx);
+
+                // Draw FOV for this specific sensor
+                DrawSingleSensorFOV(g, sensor, sensorX, sensorY);
             }
         }
 
         /// <summary>
-        /// Draws field of view for a single sensor
+        /// Draws field of view for a single sensor with color based on sensor type
         /// </summary>
         /// <param name="g">Graphics object</param>
         /// <param name="sensor">The sensor to draw</param>
         /// <param name="robotWidthPx">Robot width in pixels</param>
         /// <param name="robotHeightPx">Robot height in pixels</param>
-        private void DrawSingleSensorFOV(Graphics g, SimpleSensor sensor, int robotWidthPx, int robotHeightPx)
+        private void DrawSingleSensorFOV(Graphics g, SimpleSensor sensor, int sensorX, int sensorY)
         {
-            // Calculate sensor position relative to robot center
-            double posXPercent = (sensor.PositionX + 50) / 100.0;
-            double posYPercent = (sensor.PositionY + 50) / 100.0;
+            // Calculate range in pixels based on MaxRange (cm to pixels conversion)
+            // Assuming 10cm per cell, and cell size in pixels
+            double rangeCm = sensor.MaxRange;
+            double rangePx = (rangeCm / 10.0) * _cellSize * _zoomLevel;
+            rangePx = Math.Max(15, Math.Min(200, rangePx));  // Limit for visualization
 
-            int sensorX = (int)((posXPercent - 0.5) * robotWidthPx);
-            int sensorY = (int)((posYPercent - 0.5) * robotHeightPx);
+            // Calculate FOV cone
+            double halfFOVRad = (sensor.FieldOfView / 2.0) * Math.PI / 180.0;
+            double directionRad = (sensor.MountAngle) * Math.PI / 180.0;
 
-            double sensorAngle = sensor.MountAngle;
-            double halfFOV = sensor.FieldOfView / 2.0;
-
-            // Range in pixels (scaled for visualization)
-            int rangePx = (int)(sensor.MaxRange / 5.0);
-            rangePx = Math.Max(20, Math.Min(150, rangePx));
-
-            double startAngle = sensorAngle - halfFOV;
-            double endAngle = sensorAngle + halfFOV;
-
-            double startRad = startAngle * Math.PI / 180.0;
-            double endRad = endAngle * Math.PI / 180.0;
-
+            // Calculate cone points
             PointF[] conePoints = new PointF[3];
-            conePoints[0] = new PointF(sensorX, sensorY);
-            conePoints[1] = new PointF(
-                sensorX + (float)(rangePx * Math.Cos(startRad)),
-                sensorY + (float)(rangePx * Math.Sin(startRad)));
-            conePoints[2] = new PointF(
-                sensorX + (float)(rangePx * Math.Cos(endRad)),
-                sensorY + (float)(rangePx * Math.Sin(endRad)));
+            conePoints[0] = new PointF(sensorX, sensorY);  // Sensor position
 
-            using (var fillBrush = new SolidBrush(Color.FromArgb(60, 52, 152, 219)))
-            using (var borderPen = new Pen(Color.FromArgb(150, 52, 152, 219), 1.5f))
+            // Left edge of FOV
+            conePoints[1] = new PointF(
+                sensorX + (float)(rangePx * Math.Cos(directionRad - halfFOVRad)),
+                sensorY + (float)(rangePx * Math.Sin(directionRad - halfFOVRad))
+            );
+
+            // Right edge of FOV
+            conePoints[2] = new PointF(
+                sensorX + (float)(rangePx * Math.Cos(directionRad + halfFOVRad)),
+                sensorY + (float)(rangePx * Math.Sin(directionRad + halfFOVRad))
+            );
+
+            // Get colors based on sensor type
+            Color fillColor = GetSensorFOVColor(sensor.SensorType, 60);
+            Color borderColor = GetSensorFOVColor(sensor.SensorType, 180);
+
+            // Draw FOV cone
+            using (var fillBrush = new SolidBrush(fillColor))
+            using (var borderPen = new Pen(borderColor, 1.5f))
             {
                 g.FillPolygon(fillBrush, conePoints);
                 g.DrawPolygon(borderPen, conePoints);
             }
+
+            // Draw range arc for better visualization
+            float startAngle = (float)((sensor.MountAngle - sensor.FieldOfView / 2) * 180 / Math.PI);
+            float sweepAngle = (float)sensor.FieldOfView;
+
+            using (var arcPen = new Pen(borderColor, 1))
+            {
+                g.DrawArc(arcPen,
+                    sensorX - (float)rangePx, sensorY - (float)rangePx,
+                    (float)rangePx * 2, (float)rangePx * 2,
+                    startAngle, sweepAngle);
+            }
+        }
+
+        /// <summary>
+        /// Gets FOV color for a sensor type with specified alpha
+        /// </summary>
+        private Color GetSensorFOVColor(string sensorType, int alpha)
+        {
+            return sensorType switch
+            {
+                "Ultrasonic" => Color.FromArgb(alpha, 46, 204, 113),   // Green
+                "Infrared" => Color.FromArgb(alpha, 231, 76, 60),      // Red
+                "Lidar" => Color.FromArgb(alpha, 44, 62, 80),          // Dark Gray
+                "Camera" => Color.FromArgb(alpha, 155, 89, 182),       // Purple
+                "Proximity" => Color.FromArgb(alpha, 241, 196, 15),    // Yellow
+                "GPS" => Color.FromArgb(alpha, 22, 160, 133),          // Turquoise
+                "IMU" => Color.FromArgb(alpha, 52, 152, 219),          // Blue
+                "Temperature" => Color.FromArgb(alpha, 230, 126, 34),  // Orange
+                "Pressure" => Color.FromArgb(alpha, 52, 73, 94),       // Dark Blue
+                "Humidity" => Color.FromArgb(alpha, 26, 188, 156),     // Teal
+                _ => Color.FromArgb(alpha, 52, 152, 219)               // Default Blue
+            };
+        }
+
+        /// <summary>
+        /// Gets short name for sensor type for display on map
+        /// </summary>
+        private string GetSensorShortName(string sensorType)
+        {
+            return sensorType switch
+            {
+                "Ultrasonic" => "US",
+                "Infrared" => "IR",
+                "Lidar" => "LD",
+                "Camera" => "CAM",
+                "Proximity" => "PRX",
+                "GPS" => "GPS",
+                "IMU" => "IMU",
+                "Temperature" => "TMP",
+                "Pressure" => "PRS",
+                "Humidity" => "HMD",
+                _ => "SNR"
+            };
+        }
+
+        /// <summary>
+        /// Gets the display color for a sensor based on its type
+        /// </summary>
+        /// <param name="sensorType">Type of sensor (Ultrasonic, Infrared, etc.)</param>
+        /// <returns>Color for the sensor's FOV visualization</returns>
+        private Color GetSensorColor(string sensorType)
+        {
+            return sensorType switch
+            {
+                "Ultrasonic" => Color.FromArgb(60, 46, 204, 113),   // Green
+                "Infrared" => Color.FromArgb(60, 231, 76, 60),      // Red
+                "Lidar" => Color.FromArgb(60, 44, 62, 80),          // Dark Gray
+                "Camera" => Color.FromArgb(60, 155, 89, 182),       // Purple
+                "Proximity" => Color.FromArgb(60, 241, 196, 15),    // Yellow
+                "GPS" => Color.FromArgb(60, 22, 160, 133),          // Turquoise
+                "IMU" => Color.FromArgb(60, 52, 152, 219),          // Blue
+                "Temperature" => Color.FromArgb(60, 230, 126, 34),  // Orange
+                "Pressure" => Color.FromArgb(60, 52, 73, 94),       // Dark Blue
+                "Humidity" => Color.FromArgb(60, 26, 188, 156),     // Teal
+                _ => Color.FromArgb(60, 52, 152, 219)               // Default Blue
+            };
+        }
+
+        /// <summary>
+        /// Gets the border color for a sensor based on its type
+        /// </summary>
+        private Color GetSensorBorderColor(string sensorType)
+        {
+            return sensorType switch
+            {
+                "Ultrasonic" => Color.FromArgb(150, 46, 204, 113),
+                "Infrared" => Color.FromArgb(150, 231, 76, 60),
+                "Lidar" => Color.FromArgb(150, 44, 62, 80),
+                "Camera" => Color.FromArgb(150, 155, 89, 182),
+                "Proximity" => Color.FromArgb(150, 241, 196, 15),
+                "GPS" => Color.FromArgb(150, 22, 160, 133),
+                "IMU" => Color.FromArgb(150, 52, 152, 219),
+                "Temperature" => Color.FromArgb(150, 230, 126, 34),
+                "Pressure" => Color.FromArgb(150, 52, 73, 94),
+                "Humidity" => Color.FromArgb(150, 26, 188, 156),
+                _ => Color.FromArgb(150, 52, 152, 219)
+            };
         }
 
         #endregion
@@ -1162,15 +1293,15 @@ namespace SallamPathFinder4.WinForms.Controls
                 try { sensorColor = ColorTranslator.FromHtml(sensor.DisplayColor); }
                 catch { sensorColor = Color.FromArgb(52, 152, 219); }
 
-                // Convert percentage position to pixel coordinates
-                int sensorX = (int)((sensor.PositionX + 50) / 100.0 * robotWidth) - robotWidth / 2;
-                int sensorY = (int)((sensor.PositionY + 50) / 100.0 * robotLength) - robotLength / 2;
+                // ✅ Convert position from -50..50 to -width/2 .. width/2
+                int sensorX = (int)(sensor.PositionX / 100.0 * robotWidth);
+                int sensorY = (int)(sensor.PositionY / 100.0 * robotLength);
 
                 using (var sensorBrush = new SolidBrush(sensorColor))
                 using (var sensorPen = new Pen(Color.White, 1))
                 {
-                    g.FillEllipse(sensorBrush, sensorX - 3, sensorY - 3, 6, 6);
-                    g.DrawEllipse(sensorPen, sensorX - 3, sensorY - 3, 6, 6);
+                    g.FillEllipse(sensorBrush, sensorX - 4, sensorY - 4, 8, 8);
+                    g.DrawEllipse(sensorPen, sensorX - 4, sensorY - 4, 8, 8);
                 }
             }
         }
@@ -1329,20 +1460,44 @@ namespace SallamPathFinder4.WinForms.Controls
             get => _currentElement;
             set => _currentElement = value;
         }
-
         public bool ShowGrid
         {
             get => _showGrid;
             set { _showGrid = value; Invalidate(); }
         }
-
         public bool ShowCoordinates
         {
             get => _showCoordinates;
             set { _showCoordinates = value; Invalidate(); }
         }
+
+        /// <summary>
+        /// Gets or sets whether to show the obstacle legend on the map
+        /// </summary>
+        public bool ShowLegend
+        {
+            get => _showLegend;
+            set
+            {
+                _showLegend = value;
+                Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the legend position on the map
+        /// </summary>
+        public Point LegendPosition
+        {
+            get => _legendPosition;
+            set
+            {
+                _legendPosition = value;
+                Invalidate();
+            }
+        }
         #endregion
-         
+
 
         #region Public Properties - Robot
         public Point RobotPosition
@@ -1398,16 +1553,26 @@ namespace SallamPathFinder4.WinForms.Controls
         #endregion
 
         #region Public Properties - Detection Zone
-        public bool ShowDetectionZone
-        {
-            get => _showDetectionZone;
-            set { _showDetectionZone = value; Invalidate(); }
-        }
+        //public bool ShowDetectionZone
+        //{
+        //    get => _showDetectionZone;
+        //    set { _showDetectionZone = value; Invalidate(); }
+        //}
 
-        public Color DetectionZoneColor
+        //public Color DetectionZoneColor
+        //{
+        //    get => _detectionZoneColor;
+        //    set { _detectionZoneColor = value; Invalidate(); }
+        //}
+
+        public bool ShowSensorLabels
         {
-            get => _detectionZoneColor;
-            set { _detectionZoneColor = value; Invalidate(); }
+            get => _showSensorLabels;
+            set
+            {
+                _showSensorLabels = value;
+                Invalidate();
+            }
         }
         #endregion
 
@@ -1434,6 +1599,24 @@ namespace SallamPathFinder4.WinForms.Controls
         {
             get => _invalidPathCells;
             set { _invalidPathCells = value ?? new HashSet<Point>(); Invalidate(); }
+        }
+
+        /// <summary>
+        /// Updates the list of active obstacles from simulation
+        /// </summary>
+        public void UpdateActiveObstacles(List<DetectedObstacle> obstacles)
+        {
+            _activeObstacles = obstacles ?? new List<DetectedObstacle>();
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Updates hotspot risk levels for display
+        /// </summary>
+        public void UpdateHotspotRiskLevels(Dictionary<Point, double> riskLevels)
+        {
+            _hotspotRiskLevels = riskLevels ?? new Dictionary<Point, double>();
+            Invalidate();
         }
         #endregion
 
@@ -1718,23 +1901,23 @@ namespace SallamPathFinder4.WinForms.Controls
         #endregion
 
         #region Public Methods - Detection Zone
-        public void UpdateDetectionZone(List<Point> cells)
-        {
-            _detectionZoneCells = cells ?? new List<Point>();
-            Invalidate();
-        }
+        //public void UpdateDetectionZone(List<Point> cells)
+        //{
+        //    _detectionZoneCells = cells ?? new List<Point>();
+        //    Invalidate();
+        //}
 
-        public void ClearDetectionZone()
-        {
-            _detectionZoneCells.Clear();
-            Invalidate();
-        }
+        //public void ClearDetectionZone()
+        //{
+        //    _detectionZoneCells.Clear();
+        //    Invalidate();
+        //}
 
-        public void SetDetectionRange(int range)
-        {
-            _detectionRangeCells = Math.Max(1, Math.Min(10, range));
-            Invalidate();
-        }
+        //public void SetDetectionRange(int range)
+        //{
+        //    _detectionRangeCells = Math.Max(1, Math.Min(10, range));
+        //    Invalidate();
+        //}
         #endregion
 
         #region Public Methods - Coordinate Conversion
@@ -1877,7 +2060,7 @@ namespace SallamPathFinder4.WinForms.Controls
                     DrawGoalOrParking(g, x, y, rect);
                     DrawPaths(g, x, y, rect);
                     DrawDynamicObstacles(g, x, y, rect);
-                    DrawDetectionZone(g, x, y, rect);
+                   // DrawDetectionZone(g, x, y, rect);
                     DrawGridLines(g, rect);
                     DrawSpecialCells(g, x, y, rect);
                     DrawPathArrows(g);
@@ -1892,7 +2075,10 @@ namespace SallamPathFinder4.WinForms.Controls
             DrawPathLines(g);
             DrawRobot(g);
             DrawSearchCells(g);
-
+            //Draw legend on top of everything
+            DrawLegend(g);
+            //Draw wait countdown
+            DrawWaitCountdown(g);
             base.OnPaint(e);
         }
 
@@ -2184,23 +2370,23 @@ namespace SallamPathFinder4.WinForms.Controls
             }
         }
 
-        private void DrawDetectionZone(Graphics g, int x, int y, Rectangle rect)
-        {
-            if (_showDetectionZone && _detectionZoneCells != null)
-            {
-                foreach (var cellPos in _detectionZoneCells)
-                {
-                    if (cellPos.X == x && cellPos.Y == y)
-                    {
-                        using (var brush = new SolidBrush(_detectionZoneColor))
-                        {
-                            g.FillRectangle(brush, rect);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+        //private void DrawDetectionZone(Graphics g, int x, int y, Rectangle rect)
+        //{
+        //    if (_showDetectionZone && _detectionZoneCells != null)
+        //    {
+        //        foreach (var cellPos in _detectionZoneCells)
+        //        {
+        //            if (cellPos.X == x && cellPos.Y == y)
+        //            {
+        //                using (var brush = new SolidBrush(_detectionZoneColor))
+        //                {
+        //                    g.FillRectangle(brush, rect);
+        //                }
+        //                break;
+        //            }
+        //        }
+        //    }
+        //}
 
         private void DrawGridLines(Graphics g, Rectangle rect)
         {
@@ -2214,6 +2400,9 @@ namespace SallamPathFinder4.WinForms.Controls
 
         private void DrawSpecialCells(Graphics g, int x, int y, Rectangle rect)
         {
+            Point cell = new Point(x, y);
+
+            // Draw start points
             if (_startPoints != null && _startPoints.ContainsKey((x, y)))
             {
                 int startIndex = _startPoints[(x, y)];
@@ -2231,7 +2420,8 @@ namespace SallamPathFinder4.WinForms.Controls
                 return;
             }
 
-            if (_collisionCells != null && _collisionCells.Contains(new Point(x, y)))
+            // Draw collision cells
+            if (_collisionCells != null && _collisionCells.Contains(cell))
             {
                 using (var brush = new SolidBrush(Color.FromArgb(200, 231, 76, 60)))
                 {
@@ -2241,7 +2431,8 @@ namespace SallamPathFinder4.WinForms.Controls
                 return;
             }
 
-            if (_invalidPathCells != null && _invalidPathCells.Contains(new Point(x, y)))
+            // Draw invalid path cells
+            if (_invalidPathCells != null && _invalidPathCells.Contains(cell))
             {
                 using (var brush = new SolidBrush(Color.FromArgb(200, 139, 0, 0)))
                 {
@@ -2251,13 +2442,32 @@ namespace SallamPathFinder4.WinForms.Controls
                 return;
             }
 
-            if (_scannedCells != null && _scannedCells.Contains(new Point(x, y)))
+            // Draw scanned cells
+            if (_scannedCells != null && _scannedCells.Contains(cell))
             {
                 using (var brush = new SolidBrush(Color.FromArgb(200, 241, 196, 15)))
                 {
                     g.FillRectangle(brush, rect);
                 }
                 DrawCellText(g, rect, "PC", Color.Black);
+                return;
+            }
+
+            // ========== NEW: Draw detected obstacles ==========
+            if (_activeObstacles != null)
+            {
+                var obstacle = _activeObstacles.FirstOrDefault(o => o.Location.X == x && o.Location.Y == y);
+                if (obstacle != null)
+                {
+                    DrawDetectedObstacle(g, x, y, rect, obstacle);
+                    return;
+                }
+            }
+
+            // ========== NEW: Draw hotspot indicators ==========
+            if (_hotspotRiskLevels != null && _hotspotRiskLevels.TryGetValue(cell, out double riskLevel))
+            {
+                DrawHotspotIndicator(g, rect, riskLevel);
             }
         }
 
@@ -2500,6 +2710,14 @@ namespace SallamPathFinder4.WinForms.Controls
         #region Protected Methods - Mouse Events
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            // Check if clicking on legend
+            Rectangle legendRect = new Rectangle(_legendPosition.X, _legendPosition.Y, 180, 220);
+            if (_showLegend && legendRect.Contains(e.Location))
+            {
+                StartDragLegend(e.Location);
+                return;
+            }
+
             if (e.Button == MouseButtons.Middle)
             {
                 _isPanning = true;
@@ -2515,6 +2733,11 @@ namespace SallamPathFinder4.WinForms.Controls
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            if (_isDraggingLegend)
+            {
+                StopDragLegend();
+                return;
+            }
             if (e.Button == MouseButtons.Middle)
             {
                 _isPanning = false;
@@ -2525,6 +2748,11 @@ namespace SallamPathFinder4.WinForms.Controls
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (_isDraggingLegend)
+            {
+                DragLegend(e.Location);
+                return;
+            }
             if (_isPanning)
             {
                 int dx = e.X - _lastMousePosition.X;
@@ -2624,7 +2852,8 @@ namespace SallamPathFinder4.WinForms.Controls
                 Invalidate();
                 ViewChanged?.Invoke(this, EventArgs.Empty);
             }
-        }
+        } 
+  
         #endregion
 
         #region Public Properties - Robot Definition
@@ -2645,6 +2874,516 @@ namespace SallamPathFinder4.WinForms.Controls
                 Invalidate();
             }
         }
+        #endregion
+
+        #region Obstacle Drawing Helpers
+
+        /// <summary>
+        /// Gets the display color for an obstacle based on its type and priority
+        /// </summary>
+        /// <param name="obstacleType">Type of obstacle</param>
+        /// <returns>Color for the obstacle</returns>
+        private Color GetObstacleColor(ObstacleType obstacleType)
+        {
+            return obstacleType switch
+            {
+                ObstacleType.Child => Color.FromArgb(220, 231, 76, 60),      // Red
+                ObstacleType.Adult => Color.FromArgb(220, 230, 126, 34),     // Orange
+                ObstacleType.Animal => Color.FromArgb(220, 241, 196, 15),    // Yellow
+                ObstacleType.OtherRobot => Color.FromArgb(220, 52, 152, 219), // Blue
+                ObstacleType.Equipment => Color.FromArgb(220, 127, 140, 141), // Gray
+                _ => Color.FromArgb(220, 149, 165, 166)                      // Light Gray
+            };
+        }
+
+        /// <summary>
+        /// Gets the icon for an obstacle type
+        /// </summary>
+        /// <param name="obstacleType">Type of obstacle</param>
+        /// <returns>Icon character</returns>
+        private string GetObstacleIcon(ObstacleType obstacleType)
+        {
+            return obstacleType switch
+            {
+                ObstacleType.Child => "🧒",
+                ObstacleType.Adult => "👤",
+                ObstacleType.Animal => "🐕",
+                ObstacleType.OtherRobot => "🤖",
+                ObstacleType.Equipment => "🔧",
+                _ => "⚠️"
+            };
+        }
+
+        /// <summary>
+        /// Gets the priority level text for an obstacle
+        /// </summary>
+        /// <param name="obstacleType">Type of obstacle</param>
+        /// <returns>Priority text</returns>
+        private string GetPriorityText(ObstacleType obstacleType)
+        {
+            return obstacleType switch
+            {
+                ObstacleType.Child => "HIGH",
+                ObstacleType.Adult => "MEDIUM-HIGH",
+                ObstacleType.Animal => "MEDIUM",
+                ObstacleType.OtherRobot => "MEDIUM-LOW",
+                ObstacleType.Equipment => "LOW",
+                _ => "UNKNOWN"
+            };
+        }
+
+        /// <summary>
+        /// Gets the border color for hotspot cells
+        /// </summary>
+        private Color GetHotspotBorderColor(double riskLevel)
+        {
+            if (riskLevel >= 80)
+                return Color.FromArgb(255, 231, 76, 60);  // Red - high risk
+            if (riskLevel >= 60)
+                return Color.FromArgb(255, 230, 126, 34); // Orange - medium risk
+            if (riskLevel >= 40)
+                return Color.FromArgb(255, 241, 196, 15); // Yellow - low risk
+            return Color.FromArgb(255, 52, 152, 219);     // Blue - very low risk
+        }
+
+        /// <summary>
+        /// Draws detected obstacles on the map with priority-based colors
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="x">Cell X coordinate</param>
+        /// <param name="y">Cell Y coordinate</param>
+        /// <param name="rect">Cell rectangle</param>
+        /// <param name="obstacle">The detected obstacle</param>
+        private void DrawDetectedObstacle(Graphics g, int x, int y, Rectangle rect, DetectedObstacle obstacle)
+        {
+            if (obstacle == null) return;
+
+            Color backColor = GetObstacleColor(obstacle.ObstacleType);
+
+            // Fill cell with obstacle color
+            using (var brush = new SolidBrush(backColor))
+            {
+                g.FillRectangle(brush, rect);
+            }
+
+            // Draw priority indicator bar on the left side
+            int barWidth = Math.Max(3, rect.Width / 8);
+            using (var priorityBrush = new SolidBrush(GetPriorityBarColor(obstacle.ObstacleType)))
+            {
+                g.FillRectangle(priorityBrush, rect.X, rect.Y, barWidth, rect.Height);
+            }
+
+            // Draw obstacle icon
+            string icon = GetObstacleIcon(obstacle.ObstacleType);
+            using (var font = new Font("Segoe UI Emoji", rect.Height / 2, FontStyle.Regular))
+            using (var textBrush = new SolidBrush(Color.White))
+            {
+                SizeF iconSize = g.MeasureString(icon, font);
+                float ix = rect.X + (rect.Width - iconSize.Width) / 2;
+                float iy = rect.Y + (rect.Height - iconSize.Height) / 2;
+                g.DrawString(icon, font, textBrush, ix, iy);
+            }
+
+            // Draw confidence indicator (small circle)
+            int confidenceRadius = Math.Max(2, rect.Width / 10);
+            int confidenceX = rect.Right - confidenceRadius - 2;
+            int confidenceY = rect.Y + 2;
+
+            Color confidenceColor = GetConfidenceColor(obstacle.Confidence);
+            using (var confidenceBrush = new SolidBrush(confidenceColor))
+            {
+                g.FillEllipse(confidenceBrush, confidenceX - confidenceRadius, confidenceY, confidenceRadius * 2, confidenceRadius * 2);
+            }
+
+            // Draw border
+            using (var borderPen = new Pen(Color.White, 1))
+            {
+                g.DrawRectangle(borderPen, rect);
+            }
+        }
+
+        /// <summary>
+        /// Gets the priority bar color for an obstacle type
+        /// </summary>
+        private Color GetPriorityBarColor(ObstacleType obstacleType)
+        {
+            return obstacleType switch
+            {
+                ObstacleType.Child => Color.FromArgb(255, 200, 0, 0),      // Dark red
+                ObstacleType.Adult => Color.FromArgb(255, 200, 100, 0),    // Dark orange
+                ObstacleType.Animal => Color.FromArgb(255, 200, 150, 0),   // Dark yellow
+                ObstacleType.OtherRobot => Color.FromArgb(255, 0, 100, 200), // Dark blue
+                ObstacleType.Equipment => Color.FromArgb(255, 80, 80, 80),  // Dark gray
+                _ => Color.FromArgb(255, 100, 100, 100)
+            };
+        }
+
+        /// <summary>
+        /// Gets confidence indicator color
+        /// </summary>
+        private Color GetConfidenceColor(double confidence)
+        {
+            if (confidence >= 0.8)
+                return Color.FromArgb(46, 204, 113);  // Green - high confidence
+            if (confidence >= 0.5)
+                return Color.FromArgb(241, 196, 15);   // Yellow - medium confidence
+            return Color.FromArgb(231, 76, 60);        // Red - low confidence
+        }
+
+        /// <summary>
+        /// Draws hotspot indicators for frequently dangerous cells
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        /// <param name="x">Cell X coordinate</param>
+        /// <param name="y">Cell Y coordinate</param>
+        /// <param name="rect">Cell rectangle</param>
+        /// <param name="riskLevel">Risk level (0-100)</param>
+        private void DrawHotspotIndicator(Graphics g, Rectangle rect, double riskLevel)
+        {
+            if (riskLevel <= 0) return;
+
+            // Draw pulsing border effect
+            Color borderColor = GetHotspotBorderColor(riskLevel);
+            int borderWidth = riskLevel >= 80 ? 3 : (riskLevel >= 60 ? 2 : 1);
+
+            using (var borderPen = new Pen(borderColor, borderWidth))
+            {
+                g.DrawRectangle(borderPen, rect);
+            }
+
+            // Draw diagonal warning lines for high risk
+            if (riskLevel >= 70)
+            {
+                using (var linePen = new Pen(Color.FromArgb(100, 231, 76, 60), 1))
+                {
+                    g.DrawLine(linePen, rect.X, rect.Y, rect.Right, rect.Bottom);
+                    g.DrawLine(linePen, rect.Right, rect.Y, rect.X, rect.Bottom);
+                }
+            }
+
+            // Draw risk level text for zoomed-in view
+            if (rect.Width >= 40 && riskLevel >= 50)
+            {
+                string riskText = $"{riskLevel:F0}%";
+                using (var font = new Font("Segoe UI", 7, FontStyle.Bold))
+                using (var textBrush = new SolidBrush(Color.White))
+                using (var backBrush = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
+                {
+                    SizeF textSize = g.MeasureString(riskText, font);
+                    float textX = rect.Right - textSize.Width - 2;
+                    float textY = rect.Y + 2;
+                    g.FillRectangle(backBrush, textX - 1, textY - 1, textSize.Width + 2, textSize.Height + 2);
+                    g.DrawString(riskText, font, textBrush, textX, textY);
+                }
+            }
+        }
+        #endregion
+
+        #region Legend Drawing
+
+        /// <summary>
+        /// Draws the obstacle legend on the map
+        /// </summary>
+        /// <param name="g">Graphics object</param>
+        private void DrawLegend(Graphics g)
+        {
+            if (!_showLegend) return;
+
+            // Calculate legend size
+            int legendWidth = 180;
+            int legendHeight = 200;
+            int padding = 8;
+            int itemHeight = 28;
+
+            // Legend background
+            Rectangle legendRect = new Rectangle(_legendPosition.X, _legendPosition.Y, legendWidth, legendHeight);
+       
+            using (var backBrush = new SolidBrush(Color.FromArgb(240, 30, 35, 45)))
+            using (var borderPen = new Pen(Color.FromArgb(100, 255, 255, 255), 1))
+            {
+                g.FillRectangle(backBrush, legendRect);
+                g.DrawRectangle(borderPen, legendRect);
+            }
+
+            int y = _legendPosition.Y + padding;
+            int x = _legendPosition.X + padding;
+
+            // Title
+            using (var titleFont = new Font("Segoe UI", 10, FontStyle.Bold))
+            using (var titleBrush = new SolidBrush(Color.White))
+            {
+                g.DrawString("⚠️ OBSTACLE LEGEND", titleFont, titleBrush, x, y);
+            }
+            y += 25;
+
+            // Separator line
+            using (var linePen = new Pen(Color.FromArgb(100, 255, 255, 255), 1))
+            {
+                g.DrawLine(linePen, x, y, x + legendWidth - padding * 2, y);
+            }
+            y += 10;
+
+            // Draw each obstacle type
+            var obstacleTypes = new (ObstacleType type, string name, string icon, Color color)[]
+            {
+        (ObstacleType.Child, "Child", "🧒", Color.FromArgb(231, 76, 60)),
+        (ObstacleType.Adult, "Adult", "👤", Color.FromArgb(230, 126, 34)),
+        (ObstacleType.Animal, "Animal", "🐕", Color.FromArgb(241, 196, 15)),
+        (ObstacleType.OtherRobot, "Other Robot", "🤖", Color.FromArgb(52, 152, 219)),
+        (ObstacleType.Equipment, "Equipment", "🔧", Color.FromArgb(127, 140, 141))
+            };
+
+            foreach (var item in obstacleTypes)
+            {
+                // Color box
+                using (var colorBrush = new SolidBrush(item.color))
+                {
+                    g.FillRectangle(colorBrush, x, y, 20, 16);
+                }
+
+                // Icon
+                using (var iconFont = new Font("Segoe UI Emoji", 10))
+                using (var iconBrush = new SolidBrush(Color.White))
+                {
+                    g.DrawString(item.icon, iconFont, iconBrush, x + 25, y - 2);
+                }
+
+                // Text
+                using (var textFont = new Font("Segoe UI", 9))
+                using (var textBrush = new SolidBrush(Color.FromArgb(255, 255, 255, 255)))  
+                {
+                    g.DrawString(item.name, textFont, textBrush, x + 45, y);
+                }
+                 // Priority indicator
+                string priority = GetPriorityText(item.type);
+                using (var priorityFont = new Font("Segoe UI", 7, FontStyle.Italic))
+                using (var priorityBrush = new SolidBrush(Color.FromArgb(150, 255, 255, 255)))
+                {
+                    SizeF prioritySize = g.MeasureString(priority, priorityFont);
+                    g.DrawString(priority, priorityFont, priorityBrush, x + legendWidth - padding * 2 - prioritySize.Width, y + 2);
+                }
+
+                y += itemHeight;
+            }
+
+            // Separator
+            using (var linePen = new Pen(Color.FromArgb(100, 255, 255, 255), 1))
+            {
+                g.DrawLine(linePen, x, y, x + legendWidth - padding * 2, y);
+            }
+            y += 10;
+
+        
+
+            // إحصائيات حية
+            using (var statsFont = new Font("Segoe UI", 8))
+            using (var statsBrush = new SolidBrush(Color.FromArgb(200, 200, 200)))
+            {
+                int totalObstacles = _activeObstacles?.Count ?? 0;
+                g.DrawString($"📊 Active: {totalObstacles}", statsFont, statsBrush, x, y);
+                y += 18;
+
+                if (_activeObstacles != null)
+                {
+                    var nearest = _activeObstacles.OrderBy(o => o.DistanceCm).FirstOrDefault();
+                    if (nearest != null)
+                    {
+                        g.DrawString($"🎯 Nearest: {nearest.DistanceCm:F0}cm", statsFont, statsBrush, x, y);
+                        y += 18;
+                    }
+                }
+            }
+            y += 10;
+            // Hotspot indicator
+            using (var hotspotBrush = new SolidBrush(Color.FromArgb(60, 231, 76, 60)))
+            using (var hotspotPen = new Pen(Color.FromArgb(231, 76, 60), 2))
+            {
+                g.FillRectangle(hotspotBrush, x, y, 20, 16);
+                g.DrawRectangle(hotspotPen, x, y, 20, 16);
+            }
+
+            using (var textFont = new Font("Segoe UI", 9))
+            using (var textBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
+            {
+                g.DrawString("Hotspot (High Risk)", textFont, textBrush, x + 25, y);
+            }
+            y += 25;
+
+            // Confidence indicator
+            using (var greenBrush = new SolidBrush(Color.FromArgb(46, 204, 113)))
+            using (var yellowBrush = new SolidBrush(Color.FromArgb(241, 196, 15)))
+            using (var redBrush = new SolidBrush(Color.FromArgb(231, 76, 60)))
+            {
+                g.FillEllipse(greenBrush, x, y, 12, 12);
+                g.FillEllipse(yellowBrush, x + 20, y, 12, 12);
+                g.FillEllipse(redBrush, x + 40, y, 12, 12);
+            }
+
+            using (var textFont = new Font("Segoe UI", 8))
+            using (var textBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
+            {
+                g.DrawString("High", textFont, textBrush, x + 58, y);
+                g.DrawString("Medium", textFont, textBrush, x + 100, y);
+                g.DrawString("Low", textFont, textBrush, x + 158, y);
+            }
+            y += 20;
+
+            // Wait time indicator
+            using (var waitBrush = new SolidBrush(Color.FromArgb(241, 196, 15)))
+            {
+                g.FillRectangle(waitBrush, x, y, 20, 16);
+            }
+            using (var textFont = new Font("Segoe UI", 9))
+            using (var textBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
+            {
+                g.DrawString("Robot Waiting", textFont, textBrush, x + 25, y);
+            }
+        }
+
+        #endregion
+
+        #region Wait Countdown Display
+
+        /// <summary>
+        /// Starts the wait countdown display
+        /// </summary>
+        /// <param name="seconds">Total wait time in seconds</param>
+        /// <param name="location">Location where robot is waiting</param>
+        /// <param name="obstacleType">Type of obstacle causing the wait</param>
+        public void StartWaitCountdown(double seconds, Point location, ObstacleType obstacleType)
+        {
+            _isWaiting = true;
+            _remainingWaitSeconds = seconds;
+            _waitLocation = location;
+            _waitingForObstacle = obstacleType;
+
+            if (_countdownTimer == null)
+            {
+                _countdownTimer = new System.Windows.Forms.Timer();
+                _countdownTimer.Interval = 100;  // Update every 100ms for smooth display
+                _countdownTimer.Tick += OnCountdownTick;
+            }
+            _countdownTimer.Start();
+
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Stops the wait countdown display
+        /// </summary>
+        public void StopWaitCountdown()
+        {
+            _isWaiting = false;
+            _countdownTimer?.Stop();
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Updates the remaining wait time
+        /// </summary>
+        public void UpdateWaitTime(double remainingSeconds)
+        {
+            _remainingWaitSeconds = remainingSeconds;
+            Invalidate();
+        }
+
+        private void OnCountdownTick(object sender, EventArgs e)
+        {
+            if (_isWaiting)
+            {
+                _remainingWaitSeconds -= 0.1;
+                if (_remainingWaitSeconds <= 0)
+                {
+                    StopWaitCountdown();
+                }
+                Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Draws the wait countdown indicator on the map
+        /// </summary>
+        private void DrawWaitCountdown(Graphics g)
+        {
+            if (!_isWaiting) return;
+
+            // Calculate screen position for the wait indicator
+            Rectangle robotRect = GetCellRect(_robotPosition.X, _robotPosition.Y);
+            if (robotRect.Width <= 0) return;
+
+            int indicatorX = robotRect.X + robotRect.Width / 2;
+            int indicatorY = robotRect.Y - 25;
+
+            // Draw background circle
+            int radius = 30;
+            using (var backBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0)))
+            using (var borderPen = new Pen(Color.FromArgb(241, 196, 15), 2))
+            {
+                g.FillEllipse(backBrush, indicatorX - radius, indicatorY - radius, radius * 2, radius * 2);
+                g.DrawEllipse(borderPen, indicatorX - radius, indicatorY - radius, radius * 2, radius * 2);
+            }
+
+            // Draw countdown text
+            string waitText = $"{_remainingWaitSeconds:F1}s";
+            string obstacleIcon = GetObstacleIcon(_waitingForObstacle);
+            string fullText = $"{obstacleIcon} {waitText}";
+
+            using (var font = new Font("Segoe UI", 12, FontStyle.Bold))
+            using (var textBrush = new SolidBrush(Color.White))
+            {
+                SizeF textSize = g.MeasureString(fullText, font);
+                float textX = indicatorX - textSize.Width / 2;
+                float textY = indicatorY - textSize.Height / 2;
+                g.DrawString(fullText, font, textBrush, textX, textY);
+            }
+
+            // Draw progress arc (circular progress bar)
+            float progress = (float)(_remainingWaitSeconds / 5.0);  // Assuming max 5 seconds
+            progress = Math.Min(1, Math.Max(0, progress));
+
+            using (var progressPen = new Pen(Color.FromArgb(46, 204, 113), 3))
+            {
+                float startAngle = -90;
+                float sweepAngle = 360 * progress;
+                g.DrawArc(progressPen, indicatorX - radius + 5, indicatorY - radius + 5,
+                          (radius - 5) * 2, (radius - 5) * 2, startAngle, sweepAngle);
+            }
+        }
+
+        #endregion
+
+        #region Legend Dragging
+
+        /// <summary>
+        /// Starts dragging the legend
+        /// </summary>
+        public void StartDragLegend(Point mousePosition)
+        {
+            _isDraggingLegend = true;
+            _legendDragStart = mousePosition;
+        }
+
+        /// <summary>
+        /// Updates legend position while dragging
+        /// </summary>
+        public void DragLegend(Point mousePosition)
+        {
+            if (!_isDraggingLegend) return;
+            int dx = mousePosition.X - _legendDragStart.X;
+            int dy = mousePosition.Y - _legendDragStart.Y;
+            _legendPosition = new Point(_legendPosition.X + dx, _legendPosition.Y + dy);
+            _legendDragStart = mousePosition;
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Stops dragging the legend
+        /// </summary>
+        public void StopDragLegend()
+        {
+            _isDraggingLegend = false;
+        }
+
         #endregion
     }
 }

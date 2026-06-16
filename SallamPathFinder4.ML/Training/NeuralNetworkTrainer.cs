@@ -74,7 +74,7 @@ namespace SallamPathFinder4.ML.Training
         /// <summary>
         /// Trains the model using collected obstacle movement data
         /// </summary>
-        public async Task<ITransformer> TrainAsync(List<ObstacleMemoryRecord> historicalData,
+        public async Task<ITransformer> TrainAsync(List<LearningRecord> historicalData,
             int iterations = DEFAULT_TRAINING_ITERATIONS,
             IProgress<TrainingProgressEventArgs> progress = null)
         {
@@ -207,7 +207,7 @@ namespace SallamPathFinder4.ML.Training
         #endregion
 
         #region Private Methods
-        private void ConvertToTrainingData(List<ObstacleMemoryRecord> records)
+        private void ConvertToTrainingData(List<LearningRecord> records)
         {
             _trainingData.Clear();
 

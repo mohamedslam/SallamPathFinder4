@@ -45,8 +45,7 @@ namespace SallamPathFinder4.WinForms.Forms
         private System.Windows.Forms.MenuStrip mainMenuStrip;
         private System.Windows.Forms.ToolStrip toolStrip;
         private System.Windows.Forms.StatusStrip statusStrip;
-        private System.Windows.Forms.ToolStripDropDownButton experimentsMenu;
-        private System.Windows.Forms.ToolStripDropDownButton testMenu;
+        private System.Windows.Forms.ToolStripDropDownButton experimentsMenu; 
         private System.Windows.Forms.ToolStripDropDownButton obstacleMenu;
         #endregion
 
@@ -154,6 +153,16 @@ namespace SallamPathFinder4.WinForms.Forms
             orderGoalsItem.Click += (s, e) => ToggleOrderGoalsByDistance();
             viewMenuItem.DropDownItems.Add(orderGoalsItem);
 
+            // In View menu, add:
+            var showLegendItem = new ToolStripMenuItem("Show Obstacle Legend");
+            showLegendItem.Checked = true;
+            showLegendItem.Click += (s, e) =>
+            {
+                mapControl.ShowLegend = showLegendItem.Checked;
+                showLegendItem.Checked = mapControl.ShowLegend;
+            };
+            viewMenuItem.DropDownItems.Add(showLegendItem);
+
             // ========== ADD MENUS TO MENUSTRIP ==========
             mainMenuStrip.Items.Add(fileMenuItem);
             mainMenuStrip.Items.Add(viewMenuItem);
@@ -168,16 +177,7 @@ namespace SallamPathFinder4.WinForms.Forms
             experimentsMenu.DropDownItems.Add("Browse Experiments...", null, (s, e) => ShowExperimentBrowser());
             experimentsMenu.DropDownItems.Add("View Results...", null, (s, e) => _viewModel.ShowExperimentViewer());
 
-            var testMenu = new ToolStripDropDownButton("🧪 Test");
-            testMenu.DropDownItems.Add("Test All Algorithms", null, async (s, e) => await TestAllAlgorithms());
-            testMenu.DropDownItems.Add(new ToolStripSeparator());
-            testMenu.DropDownItems.Add("Test A* Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.AStar));
-            testMenu.DropDownItems.Add("Test SPPA Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.SPPA));
-            testMenu.DropDownItems.Add("Test SPPA-DL Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.SPPA_DL));
-            testMenu.DropDownItems.Add(new ToolStripSeparator());
-            testMenu.DropDownItems.Add("Clear Test Results", null, (s, e) => ClearTestResults());
-           
-            
+          
 
             // Add Dynamic Obstacles submenu
             var obstacleMenu = new ToolStripDropDownButton("🚧 Obstacles");
@@ -232,7 +232,6 @@ namespace SallamPathFinder4.WinForms.Forms
 
             toolStrip.Items.Add(btnFindPath);
             toolStrip.Items.Add(experimentsMenu);
-            toolStrip.Items.Add(testMenu);
             toolStrip.Items.Add(obstacleMenu);
             this.Controls.Add(toolStrip);
             this.Controls.Add(mainMenuStrip);
@@ -305,7 +304,7 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.CurrentElement = MapElementType.Wall;
             mapControl.CurrentObstacleType = ObstacleType.Adult;
             mapControl.CurrentWeight = 1;
-            mapControl.DetectionZoneColor = Color.FromArgb(80, 52, 152, 219);
+           // mapControl.DetectionZoneColor = Color.FromArgb(80, 52, 152, 219);
             mapControl.Dock = DockStyle.Fill;
             mapControl.Location = new Point(899, 761);
             mapControl.MapGrid = null;
@@ -314,7 +313,7 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.RobotPosition = new Point(10, 10);
             mapControl.ScaleCmPerCell = 0D;
             mapControl.ShowCoordinates = false;
-            mapControl.ShowDetectionZone = true;
+          //  mapControl.ShowDetectionZone = true;
             mapControl.ShowGrid = true;
             mapControl.ShowRobot = true;
             mapControl.Size = new Size(14, 14);

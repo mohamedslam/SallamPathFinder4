@@ -10,6 +10,7 @@
 #region Namespace Imports
 using SallamPathFinder4.Core.Models.Obstacles;
 using System.Drawing;
+using SallamPathFinder4.Core.Models.Obstacles;
 #endregion
 
 namespace SallamPathFinder4.Core.Interfaces.Services
@@ -102,7 +103,7 @@ namespace SallamPathFinder4.Core.Interfaces.Services
         /// <summary>
         /// Updates the prediction model with new obstacle movement data
         /// </summary>
-        Task UpdateModelAsync(List<ObstacleMemoryRecord> newMovementData);
+        Task UpdateModelAsync(List<LearningRecord> newMovementData);
 
         /// <summary>
         /// Gets the probability that a specific cell will be occupied at a future time

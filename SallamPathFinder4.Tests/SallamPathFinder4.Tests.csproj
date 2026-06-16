@@ -18,4 +18,8 @@
     <ProjectReference Include="..\SallamPathFinder4.Services\SallamPathFinder4.Services.csproj" />
     <ProjectReference Include="..\SallamPathFinder4.ML\SallamPathFinder4.ML.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Models\" />
+  </ItemGroup>
 </Project>

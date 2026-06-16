@@ -229,7 +229,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
 
         #region Private Fields - Optimized Storage
         // Core components
-        private ObstacleMemory _obstacleMemory;
+        private LearningMemory _learningMemory;
         private NeuralNetworkPredictor _predictor;
         private List<DynamicObstacle> _dynamicObstacles;
         private bool _useNeuralNetwork;
@@ -260,7 +260,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         {
             SearchLimit = DEFAULT_SEARCH_LIMIT;
             HeuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
-            _obstacleMemory = new ObstacleMemory(DEFAULT_MEMORY_FILE);
+            _learningMemory = new LearningMemory(DEFAULT_MEMORY_FILE);
             _useNeuralNetwork = false;
             _collectTrainingData = false;
             _dynamicObstacles = new List<DynamicObstacle>();
@@ -291,7 +291,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             SearchLimit = DEFAULT_SEARCH_LIMIT;
             HeuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
             _dynamicObstacles = obstacles ?? new List<DynamicObstacle>();
-            _obstacleMemory = new ObstacleMemory(DEFAULT_MEMORY_FILE);
+            _learningMemory = new LearningMemory(DEFAULT_MEMORY_FILE);
             _learningRate = learningRate;
             _predictionWeight = predictionWeight;
             _useNeuralNetwork = useNeuralNetwork;
@@ -318,7 +318,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         /// <summary>
         /// Total number of simulations completed (for learning memory)
         /// </summary>
-        public int TotalSimulations => _obstacleMemory?.TotalSimulations ?? 0;
+        public int TotalSimulations => _learningMemory?.TotalSimulations ?? 0;
 
         /// <summary>
         /// Data collector for training the neural network
@@ -335,29 +335,29 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         /// <summary>
         /// Loads obstacle memory from disk (persistent learning across sessions)
         /// </summary>
-        public async Task LoadMemoryAsync() => await _obstacleMemory.LoadAsync();
+        public async Task LoadMemoryAsync() => await _learningMemory.LoadAsync();
 
         /// <summary>
         /// Saves obstacle memory to disk (persistent learning across sessions)
         /// </summary>
-        public async Task SaveMemoryAsync() => await _obstacleMemory.SaveAsync();
+        public async Task SaveMemoryAsync() => await _learningMemory.SaveAsync();
 
         /// <summary>
         /// Records an obstacle detection for learning memory
         /// </summary>
         public void RecordObstacleDetection(Point location, ObstacleType type)
-            => _obstacleMemory.RecordDetection(location.X, location.Y, type);
+            => _learningMemory.RecordDetection(location.X, location.Y, type);
 
         /// <summary>
         /// Increments the simulation counter for learning memory
         /// Call at end of each complete simulation
         /// </summary>
-        public void IncrementSimulationCount() => _obstacleMemory.IncrementSimulation();
+        public void IncrementSimulationCount() => _learningMemory.IncrementSimulation();
 
         /// <summary>
         /// Clears all obstacle memory (restarts learning)
         /// </summary>
-        public void ClearMemory() => _obstacleMemory.Clear();
+        public void ClearMemory() => _learningMemory.Clear();
 
         /// <summary>
         /// Updates the list of dynamic obstacles
@@ -430,7 +430,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
         /// </summary>
         private void PrecomputeLearningMemory()
         {
-            if (_obstacleMemory == null) return;
+            if (_learningMemory == null) return;
 
             // Reallocate if grid size changed
             if (_precomputedLearningMemory == null ||
@@ -445,7 +445,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             {
                 for (int y = 0; y < _grid.Height; y++)
                 {
-                    _precomputedLearningMemory[x, y] = _obstacleMemory.GetObstacleCoefficient(x, y, _learningRate);
+                    _precomputedLearningMemory[x, y] = _learningMemory.GetObstacleCoefficient(x, y, _learningRate);
                 }
             }
 
@@ -926,7 +926,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             if (_learningMemoryCache.TryGetValue(key, out double cachedValue))
                 return cachedValue;
 
-            double value = _obstacleMemory?.GetObstacleCoefficient(position.X, position.Y, _learningRate) ?? 0;
+            double value = _learningMemory?.GetObstacleCoefficient(position.X, position.Y, _learningRate) ?? 0;
             _learningMemoryCache[key] = value;
             return value;
         }
@@ -1030,7 +1030,7 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
             if (disposing)
             {
                 _predictor?.Dispose();
-                _obstacleMemory?.Dispose();
+                _learningMemory?.Dispose();
                 _dataCollector?.Clear();
                 _obstacleCoefficientCache?.Clear();
                 _learningMemoryCache?.Clear();

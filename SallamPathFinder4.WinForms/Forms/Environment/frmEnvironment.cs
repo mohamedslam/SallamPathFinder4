@@ -80,6 +80,12 @@ namespace SallamPathFinder4.WinForms.Forms
             private RobotDefinition _currentRobot;
             private string _currentRobotPath;
         #endregion
+
+        #region Private Fields - Obstacle Visualization
+        private System.Windows.Forms.Timer _obstacleUpdateTimer;
+        private const int OBSTACLE_UPDATE_INTERVAL_MS = 500;  // Update every 500ms
+        #endregion
+
         #endregion
 
         #region Constructor
@@ -117,7 +123,9 @@ namespace SallamPathFinder4.WinForms.Forms
             InitializePanels();
             WireEvents();
             BindViewModel();
-            StartDetectionZoneUpdater();
+           // StartDetectionZoneUpdater();
+           // Start obstacle update timer
+           StartObstacleUpdateTimer();
         }
 
         private void ConfigureForm()
@@ -292,6 +300,39 @@ namespace SallamPathFinder4.WinForms.Forms
 
             algorithmSettingsPanel.StartRecordingRequested += OnStartRecording;
             algorithmSettingsPanel.StopRecordingRequested += OnStopRecording;
+
+            // NEW: Obstacle detection events
+            if (robotPanel != null)
+            {
+                // Find the buttons and wire them
+                var btnExport = robotPanel.Controls.Find("_btnExportObstacleLog", true).FirstOrDefault() as Button;
+                if (btnExport != null)
+                    btnExport.Click += OnExportObstacleLog;
+
+                var btnClear = robotPanel.Controls.Find("_btnClearObstacleMemory", true).FirstOrDefault() as Button;
+                if (btnClear != null)
+                    btnClear.Click += OnClearObstacleMemory;
+
+                var chkLearning = robotPanel.Controls.Find("_chkEnableLearning", true).FirstOrDefault() as CheckBox;
+                if (chkLearning != null)
+                    chkLearning.CheckedChanged += OnLearningEnabledChanged;
+
+                var chkAvoidance = robotPanel.Controls.Find("_chkEnableObstacleAvoidance", true).FirstOrDefault() as CheckBox;
+                if (chkAvoidance != null)
+                    chkAvoidance.CheckedChanged += OnObstacleAvoidanceEnabledChanged;
+
+                var btnApplyWait = robotPanel.Controls.Find("_btnApplyWaitTime", true).FirstOrDefault() as Button;
+                if (btnApplyWait != null)
+                    btnApplyWait.Click += OnApplyWaitTime;
+
+                var nudSafe = robotPanel.Controls.Find("_nudSafeDistance", true).FirstOrDefault() as NumericUpDown;
+                if (nudSafe != null)
+                    nudSafe.ValueChanged += OnSafeDistanceChanged;
+
+                var nudCritical = robotPanel.Controls.Find("_nudCriticalDistance", true).FirstOrDefault() as NumericUpDown;
+                if (nudCritical != null)
+                    nudCritical.ValueChanged += OnCriticalDistanceChanged;
+            }
         }
 
         private void UpdateAlgorithmSettings()
@@ -725,19 +766,19 @@ namespace SallamPathFinder4.WinForms.Forms
         #endregion
 
         #region Detection Zone
-        private void StartDetectionZoneUpdater()
-        {
-            _detectionZoneTimer = new System.Windows.Forms.Timer();
-            _detectionZoneTimer.Interval = DETECTION_ZONE_INTERVAL_MS;
-            _detectionZoneTimer.Tick += (s, e) => UpdateDetectionZone();
-            _detectionZoneTimer.Start();
-        }
+        //private void StartDetectionZoneUpdater()
+        //{
+        //    _detectionZoneTimer = new System.Windows.Forms.Timer();
+        //    _detectionZoneTimer.Interval = DETECTION_ZONE_INTERVAL_MS;
+        //    _detectionZoneTimer.Tick += (s, e) => UpdateDetectionZone();
+        //    _detectionZoneTimer.Start();
+        //}
 
         private void UpdateDetectionZone()
         {
             if (mapControl == null || _viewModel == null) return;
             var zoneCells = _viewModel.GetDetectionZoneCells();
-            mapControl.UpdateDetectionZone(zoneCells);
+          // mapControl.UpdateDetectionZone(zoneCells);
         }
 
         private void StopDetectionZoneUpdater()
@@ -747,75 +788,117 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         #endregion
 
-        #region Test Methods
-        private async Task TestAllAlgorithms()
+        #region Obstacle Detection Event Handlers
+
+        private async void OnExportObstacleLog(object sender, EventArgs e)
         {
-            var start = mapControl.RobotPosition;
-            var end = _viewModel.Goals.Count > 0 ? _viewModel.Goals[0].Location : new Point(50, 50);
-
-            lblStatus.Text = "🧪 Testing all algorithms...";
-            Application.DoEvents();
-
-            var results = await _viewModel.TestAllAlgorithmsAsync(start, end);
-
-            var resultMessage = "===== ALGORITHM TEST RESULTS =====\n\n";
-            foreach (var result in results)
-                resultMessage += result.ToString() + "\n";
-
-            var successful = results.Where(r => r.Success).ToList();
-            resultMessage += $"\n--- SUMMARY ---\n";
-            resultMessage += $"Successful: {successful.Count}/{results.Count}\n";
-
-            if (successful.Any())
+            try
             {
-                var fastest = successful.OrderBy(r => r.ComputationTimeMs).First();
-                var shortest = successful.OrderBy(r => r.PathLength).First();
-                resultMessage += $"Fastest: {fastest.AlgorithmName} ({fastest.ComputationTimeMs:F2}ms)\n";
-                resultMessage += $"Shortest Path: {shortest.AlgorithmName} ({shortest.PathLength} cells)";
-            }
+                using var sfd = new SaveFileDialog();
+                sfd.Filter = "CSV files (*.csv)|*.csv";
+                sfd.FileName = $"ObstacleLog_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
 
-            MessageBox.Show(resultMessage, "Algorithm Test Results", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            lblStatus.Text = "✅ Algorithm testing completed";
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    await _simulationService.ExportObstacleLogAsync(sfd.FileName);
+                    MessageBox.Show($"Obstacle log exported to:\n{sfd.FileName}", "Export Complete",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting obstacle log: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
-        private async Task TestSingleAlgorithm(AlgorithmType type)
+        private void OnClearObstacleMemory(object sender, EventArgs e)
         {
-            var start = mapControl.RobotPosition;
-            var end = _viewModel.Goals.Count > 0 ? _viewModel.Goals[0].Location : new Point(50, 50);
+            var result = MessageBox.Show(
+                "Clear all learning memory?\n\nThis will reset all learned obstacle patterns.",
+                "Confirm Clear",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
 
-            lblStatus.Text = $"🧪 Testing {type}...";
-            Application.DoEvents();
-
-            var result = await _viewModel.TestAlgorithmAsync(type, start, end);
-
-            var message = $"===== {type} TEST RESULTS =====\n\n";
-            message += $"Start: ({start.X},{start.Y})\n";
-            message += $"End: ({end.X},{end.Y})\n";
-            message += $"Success: {(result.Success ? "YES" : "NO")}\n";
-
-            if (result.Success)
+            if (result == DialogResult.Yes)
             {
-                message += $"Path Length: {result.PathLength} cells\n";
-                message += $"Computation Time: {result.ComputationTimeMs:F2} ms\n";
-                message += $"Nodes Explored: {result.NodesExplored}\n";
+                _simulationService.ClearLearningMemory();
+                MessageBox.Show("Learning memory cleared.", "Complete",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            else
-            {
-                message += $"Error: {result.ErrorMessage}\n";
-            }
-
-            MessageBox.Show(message, $"{type} Test Results", MessageBoxButtons.OK,
-                result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-
-            lblStatus.Text = $"✅ {type} testing completed";
         }
 
-        private void ClearTestResults()
+        private void OnLearningEnabledChanged(object sender, EventArgs e)
         {
-            mapControl.ClearPaths();
-            pathDisplayPanel?.ClearPath();
-            lblStatus.Text = "Test results cleared";
+            var chk = sender as CheckBox;
+            if (chk != null && _simulationService != null)
+            {
+                _simulationService.SetLearningEnabled(chk.Checked);
+            }
         }
+
+        private void OnObstacleAvoidanceEnabledChanged(object sender, EventArgs e)
+        {
+            // Toggle obstacle avoidance
+            var chk = sender as CheckBox;
+            if (chk != null && _simulationService != null)
+            {
+                // Implementation depends on how you want to handle this
+                System.Diagnostics.Debug.WriteLine($"Obstacle avoidance enabled: {chk.Checked}");
+            }
+        } 
+
+        private void OnSafeDistanceChanged(object sender, EventArgs e)
+        {
+            var nud = sender as NumericUpDown;
+            if (nud != null && _simulationService != null)
+            {
+                var nudCritical = robotPanel?.Controls.Find("_nudCriticalDistance", true).FirstOrDefault() as NumericUpDown;
+                double critical = nudCritical != null ? (double)nudCritical.Value : 10;
+                _simulationService.SetSafetyDistances((double)nud.Value, critical);  // ✅ cast here
+            }
+        }
+
+        private void OnCriticalDistanceChanged(object sender, EventArgs e)
+        {
+            var nud = sender as NumericUpDown;
+            if (nud != null && _simulationService != null)
+            {
+                var nudSafe = robotPanel?.Controls.Find("_nudSafeDistance", true).FirstOrDefault() as NumericUpDown;
+                double safe = nudSafe != null ? (double)nudSafe.Value : 30;
+                _simulationService.SetSafetyDistances(safe, (double)nud.Value);  // ✅ cast here
+            }
+        }
+
+        private void OnApplyWaitTime(object sender, EventArgs e)
+        {
+            if (robotPanel == null || _simulationService == null) return;
+
+            var cboType = robotPanel.Controls.Find("_cboObstacleType", true).FirstOrDefault() as ComboBox;
+            var nudWait = robotPanel.Controls.Find("_nudWaitTime", true).FirstOrDefault() as NumericUpDown;
+            var nudMaxWait = robotPanel.Controls.Find("_nudMaxWaitTime", true).FirstOrDefault() as NumericUpDown;
+
+            if (cboType != null && nudWait != null && nudMaxWait != null)
+            {
+                string typeName = cboType.SelectedItem?.ToString();
+                ObstacleType obstacleType = typeName switch
+                {
+                    "Child" => ObstacleType.Child,
+                    "Adult" => ObstacleType.Adult,
+                    "Animal" => ObstacleType.Animal,
+                    "OtherRobot" => ObstacleType.OtherRobot,
+                    "Equipment" => ObstacleType.Equipment,
+                    _ => ObstacleType.Equipment
+                };
+
+                // ✅ cast here
+                _simulationService.SetObstacleWaitTime(obstacleType, (double)nudWait.Value, (double)nudMaxWait.Value);
+
+                MessageBox.Show($"Wait time for {typeName} set to {nudWait.Value}s (max {nudMaxWait.Value}s)",
+                    "Settings Applied", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
         #endregion
 
         #region Dialog Methods
@@ -994,6 +1077,7 @@ namespace SallamPathFinder4.WinForms.Forms
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             StopDetectionZoneUpdater();
+            StopObstacleUpdateTimer();
             base.OnFormClosing(e);
         }
 
@@ -1250,6 +1334,86 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.Cursor = Cursors.Default;
             lblStatus.Text = "🟢 Operation cancelled. Ready";
         }
+
+        #region Obstacle Visualization Timer
+
+        /// <summary>
+        /// Starts the timer that updates obstacle visualization on the map
+        /// </summary>
+        private void StartObstacleUpdateTimer()
+        {
+            if (_obstacleUpdateTimer == null)
+            {
+                _obstacleUpdateTimer = new System.Windows.Forms.Timer();
+                _obstacleUpdateTimer.Interval = OBSTACLE_UPDATE_INTERVAL_MS;
+                _obstacleUpdateTimer.Tick += OnObstacleUpdateTimerTick;
+            }
+            _obstacleUpdateTimer.Start();
+            System.Diagnostics.Debug.WriteLine("[ObstacleUpdate] Timer started");
+        }
+
+        /// <summary>
+        /// Stops the obstacle update timer
+        /// </summary>
+        private void StopObstacleUpdateTimer()
+        {
+            if (_obstacleUpdateTimer != null)
+            {
+                _obstacleUpdateTimer.Stop();
+                _obstacleUpdateTimer.Dispose();
+                _obstacleUpdateTimer = null;
+                System.Diagnostics.Debug.WriteLine("[ObstacleUpdate] Timer stopped");
+            }
+        }
+
+        /// <summary>
+        /// Updates obstacle visualization on the map
+        /// </summary>
+        private void OnObstacleUpdateTimerTick(object sender, EventArgs e)
+        {
+            if (_simulationService == null || mapControl == null) return;
+
+            try
+            {
+                // Get active obstacles from simulation
+                var activeObstacles = _simulationService.GetActiveObstacles();
+                if (activeObstacles != null)
+                {
+                    mapControl.UpdateActiveObstacles(activeObstacles.ToList());
+                }
+
+                // Get hotspot risk levels from learning memory
+                var riskLevels = _simulationService.GetHotspotRiskLevels();
+                if (riskLevels != null)
+                {
+                    mapControl.UpdateHotspotRiskLevels(riskLevels);
+                }
+
+                // Update robot panel with wait state
+                var waitState = _simulationService.GetCurrentWaitState();
+                if (waitState != null && robotPanel != null)
+                {
+                    robotPanel.UpdateWaitStateDisplay(waitState);
+                }
+                // Update wait countdown display 
+                if (waitState != null && waitState.IsWaiting)
+                {
+                    mapControl.StartWaitCountdown(waitState.RemainingWaitTime, waitState.Location, waitState.Type);
+                    mapControl.UpdateWaitTime(waitState.RemainingWaitTime);
+                }
+                else
+                {
+                    mapControl.StopWaitCountdown();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating obstacles: {ex.Message}");
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region Obstacle Menu Methods

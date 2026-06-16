@@ -1648,7 +1648,7 @@ Goal Order: {result.GoalOrder}
 
             Point robotPos = _viewModel.RobotState.Position;
             var zoneCells = _viewModel.GetDetectionZoneCells();
-            _mapControl.UpdateDetectionZone(zoneCells);
+           // _mapControl.UpdateDetectionZone(zoneCells);
         }
         #endregion
 
