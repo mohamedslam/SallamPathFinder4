@@ -14,6 +14,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SallamPathFinder4.Tests", "SallamPathFinder4.Tests\SallamPathFinder4.Tests.csproj", "{14AF7038-502D-4549-B046-F7C3697B7E67}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExpirmentsData", "ExpirmentsData", "{BF1A6AB1-8E1C-4C3E-B3C4-2BA0DCB08B3C}"
+	ProjectSection(SolutionItems) = preProject
+		C:\Users\sp\Downloads\Expermint_15062026.pdf = C:\Users\sp\Downloads\Expermint_15062026.pdf
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
