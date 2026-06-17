@@ -9,6 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Algorithms.Base;
+using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
 using System.Drawing;
@@ -96,6 +97,10 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 currentNode.IsOpen = false;
                 currentNode.IsClosed = true;
 
+                // Current node visualization
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Current, (int)currentNode.F, (int)currentNode.G);
+                // Close node visualization
+                RaiseDebugEvent(currentNode.X, currentNode.Y, currentNode.X, currentNode.Y, PathFinderNodeType.Close, (int)currentNode.F, (int)currentNode.G);
                 if (currentNode.X == end.X && currentNode.Y == end.Y)
                 {
                     found = true;
@@ -132,6 +137,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         {
                             neighbor.IsOpen = true;
                             _openList.Add(neighbor);
+                            // Open node visualization
+                            RaiseDebugEvent(currentNode.X, currentNode.Y, nx, ny, PathFinderNodeType.Open, (int)neighbor.F, (int)neighbor.G);
                         }
                     }
                 }

@@ -215,9 +215,30 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
     _dgvResults.Columns.Add("AvgSpeed", "Speed");
     _dgvResults.Columns.Add("Success", "✓");
     _dgvResults.Columns.Add("HasScreenshot", "📷");
+    // ========== BATTERY STATISTICS COLUMNS ==========
+    _dgvResults.Columns.Add("InitialBattery", "Init Bat %");
+    _dgvResults.Columns.Add("FinalBattery", "Final Bat %");
+    _dgvResults.Columns.Add("ConsumedBattery", "Consumed %");
+    _dgvResults.Columns.Add("ChargingUnits", "Chg Units");
+    _dgvResults.Columns.Add("ChargingCycles", "Chg Cycles");
+    _dgvResults.Columns.Add("ChargingTime", "Chg Time (s)");
 
-    // screenshotPanel
-    screenshotPanel.BackColor = Color.FromArgb(248, 249, 250);
+    // ========== TIME STATISTICS COLUMNS ==========
+    _dgvResults.Columns.Add("TravelTime", "Travel (s)");
+    _dgvResults.Columns.Add("OverheadTime", "Overhead (s)");
+    _dgvResults.Columns.Add("TotalTime", "Total (s)");
+
+    // ========== PATH INFORMATION COLUMNS ==========
+    _dgvResults.Columns.Add("StartPoint", "Start");
+    _dgvResults.Columns.Add("EndPoint", "End");
+    _dgvResults.Columns.Add("GoalOrder", "Goal Order");
+
+    // اضبط عرض الأعمدة
+    _dgvResults.Columns["GoalOrder"].Width = 200;
+    _dgvResults.Columns["GoalOrder"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+
+            // screenshotPanel
+            screenshotPanel.BackColor = Color.FromArgb(248, 249, 250);
     screenshotPanel.BorderStyle = BorderStyle.FixedSingle;
     screenshotPanel.Controls.Add(lblScreenshotTitle);
     screenshotPanel.Controls.Add(_picInitial);

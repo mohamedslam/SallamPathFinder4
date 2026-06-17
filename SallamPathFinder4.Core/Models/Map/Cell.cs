@@ -9,7 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Enums;
-using SallamPathFinder4.Core.Models.Obstacles;
+using SallamPathFinder4.Core.Models.Obstacles; 
 #endregion
 
 namespace SallamPathFinder4.Core.Models.Map
@@ -179,8 +179,8 @@ namespace SallamPathFinder4.Core.Models.Map
                     break;
 
                 case MapElementType.Window:
-                    _isWalkable = true;
-                    _cost = _surfaceWeight * 1.5;
+                    _isWalkable = false;
+                    _cost = double.MaxValue;
                     break;
 
                 case MapElementType.Ramp:
@@ -227,7 +227,7 @@ namespace SallamPathFinder4.Core.Models.Map
                     _cost = _surfaceWeight;
                     break;
                 case MapElementType.Window:
-                    _cost = _surfaceWeight * 1.5;
+                    _cost = double.MaxValue;
                     break;
                 case MapElementType.Ramp:
                     double rampFactor = 1.0 + (_rampDifficulty / 100.0);
@@ -277,6 +277,44 @@ namespace SallamPathFinder4.Core.Models.Map
         {
             return $"Cell({X},{Y}) | Type: {_elementType} | Walkable: {_isWalkable} | Cost: {_cost:F2}";
         }
+        #endregion
+
+        #region Terrain Type Property
+
+        private TerrainType _terrainType = TerrainType.Normal;
+
+        /// <summary>
+        /// Gets or sets the terrain type (automatically updates SurfaceWeight)
+        /// </summary>
+        public TerrainType TerrainType
+        {
+            get => _terrainType;
+            set
+            {
+                _terrainType = value;
+                // Update SurfaceWeight based on terrain type
+                SurfaceWeight = GetSurfaceWeightForTerrain(value);
+            }
+        }
+
+        /// <summary>
+        /// Gets the default surface weight for a terrain type
+        /// </summary>
+        private byte GetSurfaceWeightForTerrain(TerrainType terrain)
+        {
+            return terrain switch
+            {
+                TerrainType.Normal => 10,
+                TerrainType.Rough => 25,
+                TerrainType.Wet => 18,
+                TerrainType.Sandy => 22,
+                TerrainType.Muddy => 35,
+                TerrainType.Rocky => 40,
+                TerrainType.Vegetation => 15,
+                _ => 10
+            };
+        }
+
         #endregion
     }
 }

@@ -33,7 +33,7 @@ namespace SallamPathFinder4.WinForms.Forms
         private SallamPathFinder4.WinForms.Controls.MapControl mapControl;
         private SallamPathFinder4.WinForms.Controls.RulerControl rulerTop;
         private SallamPathFinder4.WinForms.Controls.RulerControl rulerLeft;
-        private SallamPathFinder4.WinForms.Panels.RobotPanel robotPanel;
+        public  SallamPathFinder4.WinForms.Panels.RobotPanel robotPanel;
         private SallamPathFinder4.WinForms.Panels.AlgorithmSettingsPanel algorithmSettingsPanel;
         private SallamPathFinder4.WinForms.Panels.GoalsPanel goalsPanel;
         private SallamPathFinder4.WinForms.Panels.ParkingPanel parkingPanel;
@@ -45,18 +45,17 @@ namespace SallamPathFinder4.WinForms.Forms
         private System.Windows.Forms.MenuStrip mainMenuStrip;
         private System.Windows.Forms.ToolStrip toolStrip;
         private System.Windows.Forms.StatusStrip statusStrip;
-        private System.Windows.Forms.ToolStripDropDownButton experimentsMenu;
-        private System.Windows.Forms.ToolStripDropDownButton testMenu;
+        private System.Windows.Forms.ToolStripDropDownButton experimentsMenu; 
         private System.Windows.Forms.ToolStripDropDownButton obstacleMenu;
         #endregion
 
         #region Private Fields - Status Strip Items
-        private System.Windows.Forms.ToolStripStatusLabel lblStatus;
+        public  System.Windows.Forms.ToolStripStatusLabel lblStatus;
         private System.Windows.Forms.ToolStripStatusLabel lblMousePos;
         private System.Windows.Forms.ToolStripStatusLabel lblCellPos;
         private System.Windows.Forms.ToolStripStatusLabel lblRealPos;
         private System.Windows.Forms.ToolStripStatusLabel lblRobotPos;
-        private System.Windows.Forms.ToolStripStatusLabel lblBattery;
+        public  System.Windows.Forms.ToolStripStatusLabel lblBattery;
         private System.Windows.Forms.ToolStripStatusLabel lblAlgoTime;
         private System.Windows.Forms.ToolStripStatusLabel lblTravelTime;
         #endregion
@@ -76,8 +75,7 @@ namespace SallamPathFinder4.WinForms.Forms
         private System.Windows.Forms.ToolStripButton btnFindPath;
         private System.Windows.Forms.ToolStripDropDownButton mapMenu;
         #endregion
-
-        #region Constants
+         #region Constants
         private const int RIGHT_PANEL_WIDTH = 340;
         private const int RULER_SIZE = 30;
         private const int DEFAULT_CELL_SIZE = 30;
@@ -141,8 +139,29 @@ namespace SallamPathFinder4.WinForms.Forms
             this.showGridItem = showGridItem;
             this.showCoordsItem = showCoordsItem;
             // ========== ROBOT MENU ==========
-            var robotMenuItem = new ToolStripMenuItem("Robot");
+            var robotMenuItem = new ToolStripMenuItem("🤖 Robot");
+            robotMenuItem.DropDownItems.Add("Select Robot...", null, (s, e) => OpenRobotSelector());
+            robotMenuItem.DropDownItems.Add("Create New Robot...", null, (s, e) => CreateNewRobot());
+            robotMenuItem.DropDownItems.Add("Edit Current Robot...", null, (s, e) => EditCurrentRobot());
+            robotMenuItem.DropDownItems.Add(new ToolStripSeparator());
+            robotMenuItem.DropDownItems.Add("Robot Information", null, (s, e) => ShowRobotInfo());
             robotMenuItem.DropDownItems.Add("Robot Dashboard...", null, (s, e) => ShowDashboard());
+
+            // View menu - add separator and order goals option
+            var orderGoalsItem = new ToolStripMenuItem("Order Goals by Distance");
+            orderGoalsItem.ShortcutKeyDisplayString = "Ctrl+Shift+G";
+            orderGoalsItem.Click += (s, e) => ToggleOrderGoalsByDistance();
+            viewMenuItem.DropDownItems.Add(orderGoalsItem);
+
+            // In View menu, add:
+            var showLegendItem = new ToolStripMenuItem("Show Obstacle Legend");
+            showLegendItem.Checked = true;
+            showLegendItem.Click += (s, e) =>
+            {
+                mapControl.ShowLegend = showLegendItem.Checked;
+                showLegendItem.Checked = mapControl.ShowLegend;
+            };
+            viewMenuItem.DropDownItems.Add(showLegendItem);
 
             // ========== ADD MENUS TO MENUSTRIP ==========
             mainMenuStrip.Items.Add(fileMenuItem);
@@ -158,15 +177,7 @@ namespace SallamPathFinder4.WinForms.Forms
             experimentsMenu.DropDownItems.Add("Browse Experiments...", null, (s, e) => ShowExperimentBrowser());
             experimentsMenu.DropDownItems.Add("View Results...", null, (s, e) => _viewModel.ShowExperimentViewer());
 
-            var testMenu = new ToolStripDropDownButton("🧪 Test");
-            testMenu.DropDownItems.Add("Test All Algorithms", null, async (s, e) => await TestAllAlgorithms());
-            testMenu.DropDownItems.Add(new ToolStripSeparator());
-            testMenu.DropDownItems.Add("Test A* Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.AStar));
-            testMenu.DropDownItems.Add("Test SPPA Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.SPPA));
-            testMenu.DropDownItems.Add("Test SPPA-DL Only", null, async (s, e) => await TestSingleAlgorithm(AlgorithmType.SPPA_DL));
-            testMenu.DropDownItems.Add(new ToolStripSeparator());
-            testMenu.DropDownItems.Add("Clear Test Results", null, (s, e) => ClearTestResults());
-
+          
 
             // Add Dynamic Obstacles submenu
             var obstacleMenu = new ToolStripDropDownButton("🚧 Obstacles");
@@ -221,7 +232,6 @@ namespace SallamPathFinder4.WinForms.Forms
 
             toolStrip.Items.Add(btnFindPath);
             toolStrip.Items.Add(experimentsMenu);
-            toolStrip.Items.Add(testMenu);
             toolStrip.Items.Add(obstacleMenu);
             this.Controls.Add(toolStrip);
             this.Controls.Add(mainMenuStrip);
@@ -229,7 +239,7 @@ namespace SallamPathFinder4.WinForms.Forms
         }
         private void InitializeComponent()
         {
-            CreateMenuAndToolbar();
+   
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(frmEnvironment));
             tlpMapArea = new TableLayoutPanel();
             mapControl = new Controls.MapControl();
@@ -255,7 +265,7 @@ namespace SallamPathFinder4.WinForms.Forms
             SuspendLayout();
             // 
             // Table Layout Panel
-            this.tlpMapArea = new System.Windows.Forms.TableLayoutPanel();
+            // 
             this.tlpMapArea.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tlpMapArea.ColumnCount = 2;
             this.tlpMapArea.RowCount = 2;
@@ -294,7 +304,7 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.CurrentElement = MapElementType.Wall;
             mapControl.CurrentObstacleType = ObstacleType.Adult;
             mapControl.CurrentWeight = 1;
-            mapControl.DetectionZoneColor = Color.FromArgb(80, 52, 152, 219);
+           // mapControl.DetectionZoneColor = Color.FromArgb(80, 52, 152, 219);
             mapControl.Dock = DockStyle.Fill;
             mapControl.Location = new Point(899, 761);
             mapControl.MapGrid = null;
@@ -303,7 +313,7 @@ namespace SallamPathFinder4.WinForms.Forms
             mapControl.RobotPosition = new Point(10, 10);
             mapControl.ScaleCmPerCell = 0D;
             mapControl.ShowCoordinates = false;
-            mapControl.ShowDetectionZone = true;
+          //  mapControl.ShowDetectionZone = true;
             mapControl.ShowGrid = true;
             mapControl.ShowRobot = true;
             mapControl.Size = new Size(14, 14);

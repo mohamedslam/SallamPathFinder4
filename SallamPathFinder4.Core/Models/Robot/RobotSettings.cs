@@ -31,6 +31,7 @@ namespace SallamPathFinder4.Core.Models.Robot
         private const double DEFAULT_VIEW_ANGLE = 180.0;
         private const int DEFAULT_DETECTION_RANGE = 2;
         private const double DEFAULT_LEARNING_RATE = 2.0;
+
         #endregion
 
         #region Constructor
@@ -60,6 +61,11 @@ namespace SallamPathFinder4.Core.Models.Robot
             SaveMemoryOnEachDetection = true;
             ShowReplanningNotification = false;
             DetectionZoneColor = Color.FromArgb(80, 52, 152, 219);
+
+            // Dynamic Charging defaults
+            EnableDynamicCharging = DEFAULT_DYNAMIC_CHARGING_ENABLED;
+            ChargingTimeSeconds = DEFAULT_CHARGING_TIME_SECONDS;
+            SafetyMarginPercent = DEFAULT_SAFETY_MARGIN_PERCENT;
         }
         #endregion
 
@@ -150,7 +156,11 @@ namespace SallamPathFinder4.Core.Models.Robot
                 MemoryFilePath = this.MemoryFilePath,
                 SaveMemoryOnEachDetection = this.SaveMemoryOnEachDetection,
                 ShowReplanningNotification = this.ShowReplanningNotification,
-                DetectionZoneColor = this.DetectionZoneColor
+                DetectionZoneColor = this.DetectionZoneColor,
+                // Dynamic Charging
+                EnableDynamicCharging = this.EnableDynamicCharging,
+                ChargingTimeSeconds = this.ChargingTimeSeconds,
+                SafetyMarginPercent = this.SafetyMarginPercent
             };
         }
 
@@ -169,7 +179,40 @@ namespace SallamPathFinder4.Core.Models.Robot
             ViewAngleDegrees = System.Math.Max(45, System.Math.Min(360, ViewAngleDegrees));
             DetectionRangeCells = System.Math.Max(1, System.Math.Min(10, DetectionRangeCells));
             LearningRateAlpha = System.Math.Max(0.1, System.Math.Min(10, LearningRateAlpha));
+            // Validate charging settings
+            this.ChargingTimeSeconds = Math.Max(60, Math.Min(7200, this.ChargingTimeSeconds)); // 1 min to 2 hours
+            this.SafetyMarginPercent = Math.Max(5.0, Math.Min(20.0, this.SafetyMarginPercent)); // 5% to 20%
+
         }
         #endregion
+
+        #region Constants - Charging
+        private const double DEFAULT_SAFETY_MARGIN_PERCENT = 10.0;
+        private const int DEFAULT_CHARGING_TIME_SECONDS = 1800; // 30 دقيقة
+        private const bool DEFAULT_DYNAMIC_CHARGING_ENABLED = false;
+        #endregion
+
+        #region Properties - Dynamic Charging
+        /// <summary>
+        /// Enable/disable automatic dynamic charging
+        /// When disabled, robot stops and waits for user to replace battery
+        /// When enabled, robot automatically goes to nearest parking to charge
+        /// </summary>
+        public bool EnableDynamicCharging { get; set; }
+
+        /// <summary>
+        /// Charging time in seconds (user defined: minutes:seconds)
+        /// Default: 1800 seconds (30 minutes)
+        /// </summary>
+        public int ChargingTimeSeconds { get; set; }
+
+        /// <summary>
+        /// Safety margin percentage for battery (5-20%)
+        /// Robot will go to charge when remaining battery <= needed battery + safety margin
+        /// Default: 10%
+        /// </summary>
+        public double SafetyMarginPercent { get; set; }
+        #endregion
+
     }
 }

@@ -8,6 +8,7 @@
 #endregion
 
 #region Namespace Imports
+using SallamPathFinder4.Core.Models.Experiments;
 using SallamPathFinder4.WinForms.Forms.Shared;
 using System.Text.Json;
 #endregion
@@ -47,6 +48,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmLoadExperimentSettings
         #endregion
 
         #region Public Methods
+         
+
         /// <summary>
         /// Gets all saved settings files
         /// </summary>

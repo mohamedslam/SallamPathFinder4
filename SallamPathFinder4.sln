@@ -3,15 +3,20 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.10.35201.131
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.Core", "SallamPathFinder4.Core\SallamPathFinder4.Core.csproj", "{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SallamPathFinder4.Core", "SallamPathFinder4.Core\SallamPathFinder4.Core.csproj", "{E9ACC864-FD74-405E-91EC-27D2EFD27F1C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.Services", "SallamPathFinder4.Services\SallamPathFinder4.Services.csproj", "{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SallamPathFinder4.Services", "SallamPathFinder4.Services\SallamPathFinder4.Services.csproj", "{F69AF5B5-5EFF-4937-8F59-AEF9AEBE9D52}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.ML", "SallamPathFinder4.ML\SallamPathFinder4.ML.csproj", "{14B89073-EAA3-40C7-928C-37362704A64F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SallamPathFinder4.ML", "SallamPathFinder4.ML\SallamPathFinder4.ML.csproj", "{14B89073-EAA3-40C7-928C-37362704A64F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.WinForms", "SallamPathFinder4.WinForms\SallamPathFinder4.WinForms.csproj", "{C385675D-BC8E-4F48-BC68-FAF69CEF6179}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SallamPathFinder4.WinForms", "SallamPathFinder4.WinForms\SallamPathFinder4.WinForms.csproj", "{C385675D-BC8E-4F48-BC68-FAF69CEF6179}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SallamPathFinder4.Tests", "SallamPathFinder4.Tests\SallamPathFinder4.Tests.csproj", "{14AF7038-502D-4549-B046-F7C3697B7E67}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SallamPathFinder4.Tests", "SallamPathFinder4.Tests\SallamPathFinder4.Tests.csproj", "{14AF7038-502D-4549-B046-F7C3697B7E67}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExpirmentsData", "ExpirmentsData", "{BF1A6AB1-8E1C-4C3E-B3C4-2BA0DCB08B3C}"
+	ProjectSection(SolutionItems) = preProject
+		C:\Users\sp\Downloads\Expermint_15062026.pdf = C:\Users\sp\Downloads\Expermint_15062026.pdf
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

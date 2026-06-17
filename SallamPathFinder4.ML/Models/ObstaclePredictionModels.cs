@@ -76,6 +76,12 @@ namespace SallamPathFinder4.ML.Models
         /// <summary>Prediction confidence score (0-1)</summary>
         public float Probability { get; set; }
         #endregion
+        #region Prediction Outputs
+    
+
+        /// <summary>Model score (for confidence calculation)</summary>
+        public float Score { get; set; }  // 🔴 NEW - Add this
+        #endregion
     }
 
     #region Class Documentation

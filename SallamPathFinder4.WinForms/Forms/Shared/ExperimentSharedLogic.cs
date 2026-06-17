@@ -33,6 +33,11 @@ namespace SallamPathFinder4.WinForms.Forms.Shared
                 "DStar" => AlgorithmType.DStar,
                 "KNN" => AlgorithmType.KNN,
                 "BruteForce" => AlgorithmType.BruteForce,
+                "RRT" => AlgorithmType.RRT,
+                "PRM" => AlgorithmType.PRM,
+                "PSO" => AlgorithmType.PSO,
+                "GA" => AlgorithmType.GA,
+                "RRTStar" => AlgorithmType.RRTStar,
                 _ => AlgorithmType.AStar
             };
         }

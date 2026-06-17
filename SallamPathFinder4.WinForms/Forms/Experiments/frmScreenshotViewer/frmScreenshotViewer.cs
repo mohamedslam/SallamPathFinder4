@@ -38,6 +38,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmScreenshotViewer
         private bool _isPanning;
         private Image _currentImage;
         private string _currentImagePath;
+
+        private string _selectedImagePath;
+        private string _selectedImageType;
         #endregion
 
         #region Constructor
@@ -56,7 +59,21 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmScreenshotViewer
             WireEvents();
             LoadScreenshots();
         }
+
+        /// <summary>
+        /// Initializes a new instance of the screenshot viewer form with a specific image preselected
+        /// </summary>
+        /// <param name="resultItem">The experiment result item</param>
+        /// <param name="folderPath">The results folder path</param>
+        /// <param name="selectedImageType">The type of image to preselect (initial, path, completed)</param>
+        public frmScreenshotViewer(ExperimentResultItem resultItem, string folderPath, string selectedImageType)
+            : this(resultItem, folderPath)
+        {
+            SelectImageByType(selectedImageType);
+        }
+
         #endregion
+ 
 
         #region Private Methods - Initialization
         /// <summary>
@@ -80,6 +97,35 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmScreenshotViewer
             _picScreenshot.Paint += PicScreenshot_Paint;
 
             _lstImages.SelectedIndexChanged += LstImages_SelectedIndexChanged;
+        }
+
+        // <summary>
+        /// Selects an image by its type (initial, path, completed)
+        /// </summary>
+        /// <param name="imageType">The type of image to select</param>
+        public void SelectImageByType(string imageType)
+        {
+            if (string.IsNullOrEmpty(imageType) || _lstImages.Items.Count == 0) return;
+
+            int selectedIndex = -1;
+
+            switch (imageType.ToLower())
+            {
+                case "initial":
+                    selectedIndex = 0;
+                    break;
+                case "path":
+                    selectedIndex = 1;
+                    break;
+                case "completed":
+                    selectedIndex = 2;
+                    break;
+            }
+
+            if (selectedIndex >= 0 && selectedIndex < _lstImages.Items.Count)
+            {
+                _lstImages.SelectedIndex = selectedIndex;
+            }
         }
 
         /// <summary>
@@ -162,6 +208,8 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmScreenshotViewer
                 _lblErrorMessage.Visible = false;
             }
         }
+
+
         #endregion
 
         #region Private Methods - Image Loading

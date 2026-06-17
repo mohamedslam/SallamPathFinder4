@@ -1,28 +1,27 @@
 ﻿#region File Header
 /// <summary>
 /// File: frmExperimentResults.cs
-/// Description: Form to display experiment results with advanced features
+/// Description: Form to display experiment results with advanced battery and path statistics
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-07
+/// Date: 2026-04-19
 /// </summary>
 #endregion
 
 #region Namespace Imports
 using SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults.Core;
+using SallamPathFinder4.WinForms.Forms.Experiments.frmScreenshotViewer;
+using SallamPathFinder4.WinForms.Forms.Experiments.frmStatisticsViewer;
 using SallamPathFinder4.WinForms.Models;
+using System.Text;
 #endregion
 
 namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
 {
-    /// <summary>
-    /// Form for displaying and analyzing experiment results
-    /// </summary>
     public sealed partial class frmExperimentResults : Form
     {
         #region Constants
-        private const int FORM_WIDTH = 1300;
-        private const int FORM_HEIGHT = 750;
-        private const int SCREENSHOT_SIZE = 100;
+        private const int FORM_WIDTH = 1600;
+        private const int FORM_HEIGHT = 850;
         #endregion
 
         #region Private Fields
@@ -33,28 +32,45 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
         #endregion
 
         #region Constructor
-        /// <summary>
-        /// Initializes a new instance of the experiment results form
-        /// </summary>
-        /// <param name="results">List of experiment results to display</param>
-        /// <param name="folderPath">Path to the folder containing screenshots</param>
         public frmExperimentResults(List<ExperimentResultItem> results, string folderPath)
         {
-            _allResults = results ?? new List<ExperimentResultItem>();
-            _resultsFolderPath = folderPath ?? string.Empty;
-            _logic = new ExperimentResultsLogic();
+            System.Diagnostics.Debug.WriteLine("=== frmExperimentResults CONSTRUCTOR START ===");
+            System.Diagnostics.Debug.WriteLine($"Results count: {results?.Count ?? 0}");
+            System.Diagnostics.Debug.WriteLine($"Folder path: {folderPath}");
 
-            InitializeComponent();
-            WireEvents();
-            InitializeFilters();
-            ApplyFilters();
+            try
+            {
+                _allResults = results ?? new List<ExperimentResultItem>();
+                _resultsFolderPath = folderPath ?? string.Empty;
+                _logic = new ExperimentResultsLogic();
+
+                System.Diagnostics.Debug.WriteLine("Calling InitializeComponent...");
+                InitializeComponent();
+
+                System.Diagnostics.Debug.WriteLine("Calling WireEvents...");
+                WireEvents();
+
+                System.Diagnostics.Debug.WriteLine("Calling InitializeFilters...");
+                InitializeFilters();
+
+                System.Diagnostics.Debug.WriteLine("Calling SetupDataGridViewColumns...");
+                SetupDataGridViewColumns();
+
+                System.Diagnostics.Debug.WriteLine("Calling ApplyFilters...");
+                ApplyFilters();
+
+                System.Diagnostics.Debug.WriteLine("=== frmExperimentResults CONSTRUCTOR END ===");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EXCEPTION in constructor: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                throw;
+            }
         }
         #endregion
 
         #region Private Methods - Initialization
-        /// <summary>
-        /// Wires up all event handlers
-        /// </summary>
         private void WireEvents()
         {
             _cboAlgorithmFilter.SelectedIndexChanged += (s, e) => ApplyFilters();
@@ -68,71 +84,95 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
             _btnSaveReplay.Click += (s, e) => SaveReplay();
             _btnPlayReplay.Click += (s, e) => PlayReplay();
             _btnAdvancedStats.Click += (s, e) => ShowAdvancedStatistics();
-            _btnNewExperiment.Click += (s, e) => { this.DialogResult = DialogResult.Retry; this.Close(); };
+            _btnNewExperiment.Click += (s, e) => { DialogResult = DialogResult.Retry; Close(); };
             _btnClose.Click += (s, e) => Close();
             _dgvResults.CellClick += DgvResults_CellClick;
+            _dgvResults.CellDoubleClick += DgvResults_CellDoubleClick;
             _dgvResults.CellFormatting += DgvResults_CellFormatting;
         }
 
-        /// <summary>
-        /// Initializes filter dropdowns with available values
-        /// </summary>
+        private void SetupDataGridViewColumns()
+        {
+            _dgvResults.Columns.Clear();
+
+            // Basic columns
+            _dgvResults.Columns.Add("Id", "#");
+            _dgvResults.Columns.Add("Algorithm", "Algorithm");
+            _dgvResults.Columns.Add("Metric", "Metric");
+            _dgvResults.Columns.Add("Iteration", "Iter");
+            _dgvResults.Columns.Add("PathLength", "Length");
+            _dgvResults.Columns.Add("TimeMs", "Time (ms)");
+
+            // Battery columns
+            _dgvResults.Columns.Add("InitialBattery", "Init Bat %");
+            _dgvResults.Columns.Add("FinalBattery", "Final Bat %");
+            _dgvResults.Columns.Add("ConsumedBattery", "Consumed %");
+            _dgvResults.Columns.Add("ChargingUnits", "Chg Units");
+            _dgvResults.Columns.Add("ChargingCycles", "Chg Cycles");
+            _dgvResults.Columns.Add("ChargingTime", "Chg Time (s)");
+
+            // Time columns
+            _dgvResults.Columns.Add("TravelTime", "Travel (s)");
+            _dgvResults.Columns.Add("OverheadTime", "Overhead (s)");
+            _dgvResults.Columns.Add("TotalTime", "Total (s)");
+
+            // Path columns
+            _dgvResults.Columns.Add("StartPoint", "Start");
+            _dgvResults.Columns.Add("EndPoint", "End");
+            _dgvResults.Columns.Add("GoalOrder", "Goal Order");
+
+            // Error columns
+            _dgvResults.Columns.Add("Collisions", "Collisions");
+            _dgvResults.Columns.Add("Errors", "Errors");
+            _dgvResults.Columns.Add("Speed", "Speed");
+            _dgvResults.Columns.Add("Success", "✓");
+            _dgvResults.Columns.Add("HasScreenshot", "📷");
+
+            // Set column widths
+            _dgvResults.Columns["GoalOrder"].Width = 250;
+            _dgvResults.Columns["GoalOrder"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            _dgvResults.Columns["Algorithm"].Width = 100;
+            _dgvResults.Columns["Metric"].Width = 100;
+        }
+
         private void InitializeFilters()
         {
-            // Algorithm filter
             var algorithms = _allResults.Select(r => r.Algorithm).Distinct().OrderBy(a => a).ToList();
-            foreach (var algo in algorithms)
-            {
-                _cboAlgorithmFilter.Items.Add(algo);
-            }
+            _cboAlgorithmFilter.Items.Clear();
+            _cboAlgorithmFilter.Items.Add("All Algorithms");
+            foreach (var algo in algorithms) _cboAlgorithmFilter.Items.Add(algo);
             _cboAlgorithmFilter.SelectedIndex = 0;
 
-            // Metric filter
             var metrics = _allResults.Select(r => r.Metric).Distinct().OrderBy(m => m).ToList();
-            foreach (var metric in metrics)
-            {
-                _cboMetricFilter.Items.Add(metric);
-            }
+            _cboMetricFilter.Items.Clear();
+            _cboMetricFilter.Items.Add("All Metrics");
+            foreach (var metric in metrics) _cboMetricFilter.Items.Add(metric);
             _cboMetricFilter.SelectedIndex = 0;
         }
 
-        /// <summary>
-        /// Applies all active filters to the results
-        /// </summary>
         private void ApplyFilters()
         {
-            var filtered = _allResults.AsEnumerable();
+            System.Diagnostics.Debug.WriteLine($"ApplyFilters: _allResults.Count = {_allResults?.Count ?? 0}");
 
-            string algorithmFilter = _cboAlgorithmFilter.SelectedItem?.ToString();
-            if (algorithmFilter != null && algorithmFilter != "All Algorithms")
-                filtered = filtered.Where(r => r.Algorithm == algorithmFilter);
-
-            string metricFilter = _cboMetricFilter.SelectedItem?.ToString();
-            if (metricFilter != null && metricFilter != "All Metrics")
-                filtered = filtered.Where(r => r.Metric == metricFilter);
-
-            string resultFilter = _cboResultFilter.SelectedItem?.ToString();
-            if (resultFilter == "Success Only")
-                filtered = filtered.Where(r => r.Success);
-            else if (resultFilter == "Failure Only")
-                filtered = filtered.Where(r => !r.Success);
-
-            string searchText = _txtSearch.Text.ToLower();
-            if (!string.IsNullOrWhiteSpace(searchText))
+            if (_allResults == null || _allResults.Count == 0)
             {
-                filtered = filtered.Where(r =>
-                    r.Algorithm.ToLower().Contains(searchText) ||
-                    r.Metric.ToLower().Contains(searchText) ||
-                    r.Iteration.ToString().Contains(searchText));
+                System.Diagnostics.Debug.WriteLine("ApplyFilters: No results to filter");
+                _dgvResults.Rows.Clear();
+                _lblStatistics.Text = "No results available.";
+                return;
             }
 
-            DisplayResults(filtered.ToList());
-            UpdateStatistics(filtered.ToList());
-        }
+            var filtered = _allResults.AsEnumerable();
 
-        /// <summary>
-        /// Displays results in the data grid view
-        /// </summary>
+            // ... باقي الفلاتر ...
+
+            var filteredList = filtered.ToList();
+            System.Diagnostics.Debug.WriteLine($"ApplyFilters: Filtered to {filteredList.Count} results");
+
+            DisplayResults(filteredList);
+            UpdateStatistics(filteredList);
+        }
+ 
         private void DisplayResults(List<ExperimentResultItem> results)
         {
             _dgvResults.Rows.Clear();
@@ -142,8 +182,9 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
             {
                 if (r == null) continue;
 
-                bool hasScreenshot = !string.IsNullOrEmpty(r.ScreenshotPath) && File.Exists(r.ScreenshotPath);
-                string avgSpeed = r.AverageActualSpeed > 0 ? $"{r.AverageActualSpeed:F1}" : "N/A";
+                bool hasScreenshot = (!string.IsNullOrEmpty(r.InitialScreenshotPath) && File.Exists(r.InitialScreenshotPath)) ||
+                                    (!string.IsNullOrEmpty(r.PathScreenshotPath) && File.Exists(r.PathScreenshotPath)) ||
+                                    (!string.IsNullOrEmpty(r.CompletedScreenshotPath) && File.Exists(r.CompletedScreenshotPath));
 
                 _dgvResults.Rows.Add(
                     id++,
@@ -152,10 +193,21 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
                     r.Iteration,
                     r.PathLength,
                     r.ComputationTimeMs.ToString("F2"),
-                    r.RemainingBattery.ToString("F1"),
+                    r.InitialBatteryPercent.ToString("F1"),
+                    r.FinalBatteryPercent.ToString("F1"),
+                    r.TotalBatteryConsumedPercent.ToString("F1"),
+                    r.TotalChargingUnits.ToString("F2"),
+                    r.TotalChargingCycles,
+                    r.TotalChargingTimeSeconds.ToString("F0"),
+                    r.TotalTravelTimeSeconds.ToString("F2"),
+                    r.TotalOverheadTimeSeconds.ToString("F2"),
+                    r.TotalTimeSeconds.ToString("F2"),
+                    $"({r.StartPointUsed.X},{r.StartPointUsed.Y})",
+                    $"({r.EndPointReached.X},{r.EndPointReached.Y})",
+                    r.GoalOrder?.Length > 40 ? r.GoalOrder.Substring(0, 40) + "..." : r.GoalOrder ?? "-",
                     r.CollisionCount,
                     r.InvalidMoveCount,
-                    avgSpeed,
+                    r.AverageActualSpeed.ToString("F1"),
                     r.Success ? "✓" : "✗",
                     hasScreenshot ? "📷" : ""
                 );
@@ -168,9 +220,6 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
             }
         }
 
-        /// <summary>
-        /// Updates the statistics display
-        /// </summary>
         private void UpdateStatistics(List<ExperimentResultItem> results)
         {
             int total = results.Count;
@@ -178,25 +227,19 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
             double successRate = total > 0 ? (double)successCount / total * 100 : 0;
             double avgTime = results.Any() ? results.Average(r => r.ComputationTimeMs) : 0;
             double avgLength = results.Any() ? results.Average(r => (double)r.PathLength) : 0;
-            double avgBattery = results.Any() ? results.Average(r => r.RemainingBattery) : 0;
+            double avgFinalBattery = results.Any() ? results.Average(r => r.FinalBatteryPercent) : 0;
+            double avgChargingUnits = results.Any() ? results.Average(r => r.TotalChargingUnits) : 0;
+            double avgTotalTime = results.Any() ? results.Average(r => r.TotalTimeSeconds) : 0;
             double avgCollisions = results.Any() ? results.Average(r => r.CollisionCount) : 0;
-
-            var bestAlgorithm = results
-                .Where(r => r.Success)
-                .GroupBy(r => r.Algorithm)
-                .Select(g => new { Algorithm = g.Key, AvgTime = g.Average(r => r.ComputationTimeMs) })
-                .OrderBy(a => a.AvgTime)
-                .FirstOrDefault();
 
             _lblStatistics.Text = $"📊 Total: {total} | ✅ Success: {successCount} ({successRate:F1}%) | " +
                                  $"⏱️ Avg Time: {avgTime:F2} ms | 📏 Avg Length: {avgLength:F0} | " +
-                                 $"🔋 Battery: {avgBattery:F1}% | 💥 Collisions: {avgCollisions:F1} | " +
-                                 $"🏆 Best: {(bestAlgorithm?.Algorithm ?? "N/A")}";
+                                 $"🔋 Avg Final Battery: {avgFinalBattery:F1}% | " +
+                                 $"⚡ Avg Charging Units: {avgChargingUnits:F2} | " +
+                                 $"⏰ Avg Total Time: {avgTotalTime:F0}s | " +
+                                 $"💥 Avg Collisions: {avgCollisions:F1}";
         }
 
-        /// <summary>
-        /// Clears all filters and refreshes the display
-        /// </summary>
         private void ClearFilters()
         {
             _cboAlgorithmFilter.SelectedIndex = 0;
@@ -208,22 +251,10 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
         #endregion
 
         #region Event Handlers
-        /// <summary>
-        /// Handles cell click to load screenshots for selected result
-        /// </summary>
         private void DgvResults_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
-
-            string algorithm = _dgvResults.Rows[e.RowIndex].Cells["Algorithm"].Value?.ToString();
-            string metric = _dgvResults.Rows[e.RowIndex].Cells["Metric"].Value?.ToString();
-            int iteration = int.Parse(_dgvResults.Rows[e.RowIndex].Cells["Iteration"].Value?.ToString() ?? "0");
-
-            _selectedResult = _allResults.FirstOrDefault(r =>
-                r.Algorithm == algorithm &&
-                r.Metric == metric &&
-                r.Iteration == iteration);
-
+            _selectedResult = GetResultFromRow(e.RowIndex);
             if (_selectedResult != null)
             {
                 LoadScreenshots();
@@ -231,75 +262,341 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
             }
         }
 
-        /// <summary>
-        /// Handles cell formatting for success column
-        /// </summary>
+        private void DgvResults_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            var selected = GetResultFromRow(e.RowIndex);
+            if (selected != null) ShowFullPathDetails(selected);
+        }
+
         private void DgvResults_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
             if (e.RowIndex < 0) return;
-
-            var successColumn = _dgvResults.Columns["Success"];
-            if (successColumn == null || e.ColumnIndex != successColumn.Index) return;
-
-            if (e.ColumnIndex == _dgvResults.Columns["Success"].Index)
+            if (_dgvResults.Columns["Success"] != null && e.ColumnIndex == _dgvResults.Columns["Success"].Index)
             {
                 e.CellStyle.ForeColor = e.Value?.ToString() == "✓" ? Color.Green : Color.Red;
                 e.CellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
             }
         }
 
-        /// <summary>
-        /// Loads screenshots for the selected result
-        /// </summary>
-        private void LoadScreenshots()
+        private ExperimentResultItem GetResultFromRow(int rowIndex)
         {
-            string basePath = Path.Combine(_resultsFolderPath, "Screenshots", _selectedResult.Algorithm);
+            string algorithm = _dgvResults.Rows[rowIndex].Cells["Algorithm"].Value?.ToString();
+            string metric = _dgvResults.Rows[rowIndex].Cells["Metric"].Value?.ToString();
+            int iteration = int.Parse(_dgvResults.Rows[rowIndex].Cells["Iteration"].Value?.ToString() ?? "0");
 
-            string initialPath = Path.Combine(basePath,
-                $"{_selectedResult.Algorithm}_{_selectedResult.Metric}_Initial_Iter{_selectedResult.Iteration}.png");
+            return _allResults.FirstOrDefault(r => r.Algorithm == algorithm && r.Metric == metric && r.Iteration == iteration);
+        }
+        #endregion
 
-            string pathPath = Path.Combine(basePath,
-                $"{_selectedResult.Algorithm}_{_selectedResult.Metric}_Path_Iter{_selectedResult.Iteration}.png");
+        #region Private Methods - Display
+        private void ShowFullPathDetails(ExperimentResultItem result)
+        {
+            // ========== 1. التحقق من صحة البيانات ==========
+            if (result == null)
+            {
+                MessageBox.Show("No result data available.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
-            string completedPath = Path.Combine(basePath,
-                $"{_selectedResult.Algorithm}_{_selectedResult.Metric}_Completed_Iter{_selectedResult.Iteration}.png");
+            // التحقق من وجود نقاط المسار
+            bool hasPathData = result.Path != null && result.Path.Count > 0;
 
-            if (File.Exists(initialPath))
-                _picInitial.Image = System.Drawing.Image.FromFile(initialPath);
+            // ========== 2. إنشاء النافذة ==========
+            var detailsForm = new Form
+            {
+                Text = $"Path Details - {result.Algorithm} - Iter {result.Iteration}",
+                Size = new Size(800, 650),
+                StartPosition = FormStartPosition.CenterParent,
+                BackColor = Color.White,
+                MinimizeBox = true,
+                MaximizeBox = true
+            };
 
-            if (File.Exists(pathPath))
-                _picPath.Image = System.Drawing.Image.FromFile(pathPath);
+            // ========== 3. Split Container ==========
+            var splitContainer = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                SplitterDistance = 280,
+                SplitterWidth = 3
+            };
+            splitContainer.Panel1.BackColor = Color.FromArgb(248, 249, 250);
+            splitContainer.Panel2.BackColor = Color.White;
+            // ========== 4. اللوحة اليمنى - معلومات المسار ==========
+       
 
-            if (File.Exists(completedPath))
-                _picCompleted.Image = System.Drawing.Image.FromFile(completedPath);
+            var infoText = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                Font = new Font("Segoe UI", 9),
+                BackColor = Color.FromArgb(248, 249, 250),
+                BorderStyle = BorderStyle.None
+            };
+
+            infoText.Text = GetFormattedResultDetails(result, hasPathData);
+            splitContainer.Panel1.Controls.Add(infoText);
+
+            // ========== 5. اللوحة اليسرى - قائمة نقاط المسار ==========
+            var pathPanel = new Panel
+            {
+                Width = 400,
+                Dock = DockStyle.Fill,
+                Padding = new Padding(10)
+            };
+
+            //// عنوان اللوحة
+            var titleLabel = new Label
+            {
+                Text = hasPathData ? $"📍 PATH POINTS ({result.Path.Count} cells)" : "⚠️ NO PATH DATA AVAILABLE",
+                Dock = DockStyle.Bottom,
+                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                Height = 35,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = hasPathData ? Color.FromArgb(46, 204, 113) : Color.FromArgb(231, 76, 60)
+            };
+            pathPanel.Controls.Add(titleLabel);
+            // قائمة نقاط المسار
+            var pathList = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                Font = new Font("Consolas", 9),
+                IntegralHeight = true,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.White
+            };
+            pathList.TopIndex= 0;
+            pathList.BringToFront();
+
+            if (hasPathData)
+            {
+                // عرض جميع نقاط المسار مع تمييز البداية والنهاية
+                for (int i = 0; i < result.Path.Count; i++)
+                {
+                    var point = result.Path[i];
+                    string prefix;
+
+                    if (i == 0)
+                    {
+                        prefix = "🏁 START";
+                    }
+                    else if (i == result.Path.Count - 1)
+                    {
+                        prefix = "🏆 GOAL";
+                    }
+                    else
+                    {
+                        prefix = "📍 STEP";
+                    }
+
+                    string displayText = $"{prefix} {i + 1,4}: ({point.X,3}, {point.Y,3})";
+                    pathList.Items.Add(displayText);
+                  
+                }
+
+                
+                // إضافة إحصائية في نهاية القائمة
+                pathList.Items.Add("");
+                pathList.Items.Add($"📐 Total Steps: {result.Path.Count - 1}");
+
+                // حساب المسافة التقريبية (Manhattan)
+                double totalDistance = 0;
+                for (int i = 1; i < result.Path.Count; i++)
+                {
+                    var prev = result.Path[i - 1];
+                    var curr = result.Path[i];
+                    totalDistance += Math.Abs(curr.X - prev.X) + Math.Abs(curr.Y - prev.Y);
+                }
+                pathList.Items.Add($"📏 Estimated Distance: {totalDistance} cells");
+            }
+            else
+            {
+                pathList.Items.Add("╔══════════════════════════════════════════════════════════════╗");
+                pathList.Items.Add("║                         WARNING                              ║");
+                pathList.Items.Add("╠══════════════════════════════════════════════════════════════╣");
+                pathList.Items.Add("║  No path data is available for this experiment.              ║");
+                pathList.Items.Add("║                                                              ║");
+                pathList.Items.Add("║  Possible reasons:                                           ║");
+                pathList.Items.Add("║  • The experiment failed to find a valid path                ║");
+                pathList.Items.Add("║  • Path data was not recorded properly                       ║");
+                pathList.Items.Add("║  • The algorithm did not complete successfully               ║");
+                pathList.Items.Add("╚══════════════════════════════════════════════════════════════╝");
+            }
+
+            pathPanel.Controls.Add(pathList);
+            splitContainer.Panel2.Controls.Add(pathPanel);
+
+            // ========== 6. إضافة الأزرار السفلية ==========
+            var buttonPanel = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 45,
+                BackColor = Color.FromArgb(240, 242, 245)
+            };
+
+            var btnClose = new Button
+            {
+                Text = "Close",
+                Location = new Point(detailsForm.Width - 85, 8),
+                Size = new Size(75, 30),
+                BackColor = Color.FromArgb(149, 165, 166),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            btnClose.Click += (s, e) => detailsForm.Close();
+
+            var btnCopyPath = new Button
+            {
+                Text = "Copy Path",
+                Location = new Point(10, 8),
+                Size = new Size(85, 30),
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Enabled = hasPathData
+            };
+            btnCopyPath.Click += (s, e) =>
+            {
+                if (hasPathData)
+                {
+                    string pathText = string.Join(Environment.NewLine,
+                        result.Path.Select((p, i) => $"{i + 1}: ({p.X}, {p.Y})"));
+                    Clipboard.SetText(pathText);
+                    MessageBox.Show("Path copied to clipboard!", "Success",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            };
+
+            buttonPanel.Controls.Add(btnClose);
+            buttonPanel.Controls.Add(btnCopyPath);
+
+            detailsForm.Controls.Add(splitContainer);
+            detailsForm.Controls.Add(buttonPanel);
+
+            // ضبط موضع زر Close بعد تحميل النافذة
+            detailsForm.Shown += (s, e) =>
+            {
+                btnClose.Location = new Point(detailsForm.ClientSize.Width - 85, 8);
+                btnCopyPath.Location = new Point(10, 8);
+            };
+
+            detailsForm.Resize += (s, e) =>
+            {
+                btnClose.Location = new Point(detailsForm.ClientSize.Width - 85, 8);
+            };
+
+            detailsForm.ShowDialog();
         }
 
         /// <summary>
-        /// Updates the details panel with selected result information
+        /// تنسيق معلومات النتيجة بشكل جميل
         /// </summary>
+        private string GetFormattedResultDetails(ExperimentResultItem result, bool hasPathData)
+        {
+            return $@"═══════════════════════════════════════════════════════════════
+                    PATH DETAILS
+═══════════════════════════════════════════════════════════════
+
+┌─ BASIC INFORMATION ─────────────────────────────────────────┐
+│ Algorithm:        {result.Algorithm,-35} │
+│ Metric:           {result.Metric,-35} │
+│ Iteration:        {result.Iteration,-35} │
+│ Success:          {(result.Success ? "✓ Yes" : "✗ No"),-35} │
+│ Path Data:        {(hasPathData ? $"✓ Available ({result.Path.Count} points)" : "✗ Not available"),-35} │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+┌─ BATTERY STATISTICS ────────────────────────────────────────┐
+│ Initial Battery:    {result.InitialBatteryPercent,-30:F1}% │
+│ Final Battery:      {result.FinalBatteryPercent,-30:F1}% │
+│ Total Consumed:     {result.TotalBatteryConsumedPercent,-30:F1}% │
+│ Charging Units:     {result.TotalChargingUnits,-30:F2} │
+│ Charging Cycles:    {result.TotalChargingCycles,-30} │
+│ Charging Time:      {result.TotalChargingTimeSeconds,-30:F0} sec │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+┌─ TIME STATISTICS ───────────────────────────────────────────┐
+│ Travel Time:        {result.TotalTravelTimeSeconds,-30:F2} sec │
+│ Computation Time:   {result.ComputationTimeMs,-30:F2} ms │
+│ Total Time:         {result.TotalTimeSeconds,-30:F2} sec │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+┌─ PATH INFORMATION ──────────────────────────────────────────┐
+│ Path Length:        {result.PathLength,-30} cells │
+│ Start Point:        ({result.StartPointUsed.X},{result.StartPointUsed.Y}) │
+│ End Point:          ({result.EndPointReached.X},{result.EndPointReached.Y}) │
+└─────────────────────────────────────────────────────────────┘
+
+{new string('─', 63)}
+Goal Order: {result.GoalOrder}
+
+═══════════════════════════════════════════════════════════════
+";
+        }
+        /// <summary>
+        /// تنسيق معلومات النتيجة بشكل جميل
+        /// </summary>
+ 
+        private void LoadScreenshots()
+        {
+            if (_selectedResult == null) return;
+
+            string basePath = Path.Combine(_resultsFolderPath, "Screenshots", _selectedResult.Algorithm);
+
+            TryLoadImage(_picInitial, _selectedResult.InitialScreenshotPath);
+            TryLoadImage(_picPath, _selectedResult.PathScreenshotPath);
+            TryLoadImage(_picCompleted, _selectedResult.CompletedScreenshotPath);
+        }
+
+        private void TryLoadImage(PictureBox pictureBox, string path)
+        {
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            {
+                try { pictureBox.Image = Image.FromFile(path); }
+                catch { pictureBox.Image = null; }
+            }
+            else pictureBox.Image = null;
+        }
+
         private void UpdateDetailsPanel()
         {
             if (_selectedResult == null) return;
 
             _lblDetails.Text =
-                $"📋 DETAILS\n\n" +
-                $"Algorithm: {_selectedResult.Algorithm}\n" +
-                $"Metric: {_selectedResult.Metric}\n" +
-                $"Iteration: {_selectedResult.Iteration}\n" +
-                $"Success: {(_selectedResult.Success ? "✓ Yes" : "✗ No")}\n" +
-                $"Path Length: {_selectedResult.PathLength} cells\n" +
-                $"Time: {_selectedResult.ComputationTimeMs:F2} ms\n" +
-                $"Battery: {_selectedResult.RemainingBattery:F1}%\n" +
-                $"Collisions: {_selectedResult.CollisionCount}\n" +
-                $"Errors: {_selectedResult.InvalidMoveCount}\n" +
-                $"Avg Speed: {(_selectedResult.AverageActualSpeed > 0 ? $"{_selectedResult.AverageActualSpeed:F1} cm/s" : "N/A")}";
+                $"═══════════════════════════════════\n" +
+                $"           EXPERIMENT DETAILS\n" +
+                $"═══════════════════════════════════\n\n" +
+                $"Algorithm:        {_selectedResult.Algorithm}\n" +
+                $"Metric:           {_selectedResult.Metric}\n" +
+                $"Iteration:        {_selectedResult.Iteration}\n" +
+                $"Success:          {(_selectedResult.Success ? "✓ Yes" : "✗ No")}\n\n" +
+                $"───────────────────────────────────\n" +
+                $"BATTERY STATISTICS\n" +
+                $"───────────────────────────────────\n" +
+                _selectedResult.GetBatteryStatsText() + "\n\n" +
+                $"───────────────────────────────────\n" +
+                $"TIME STATISTICS\n" +
+                $"───────────────────────────────────\n" +
+                _selectedResult.GetTimeStatsText() + "\n\n" +
+                $"───────────────────────────────────\n" +
+                $"PATH INFORMATION\n" +
+                $"───────────────────────────────────\n" +
+                _selectedResult.GetPathInfoText() + "\n\n" +
+                $"───────────────────────────────────\n" +
+                $"COLLISION STATISTICS\n" +
+                $"───────────────────────────────────\n" +
+                $"Collisions:       {_selectedResult.CollisionCount}\n" +
+                $"Invalid Moves:    {_selectedResult.InvalidMoveCount}\n" +
+                $"Avg Speed:        {(_selectedResult.AverageActualSpeed > 0 ? $"{_selectedResult.AverageActualSpeed:F1} cm/s" : "N/A")}";
         }
         #endregion
 
         #region Export Methods
-        /// <summary>
-        /// Exports results to CSV file
-        /// </summary>
         private void ExportToCSV()
         {
             using var sfd = new SaveFileDialog();
@@ -310,136 +607,68 @@ namespace SallamPathFinder4.WinForms.Forms.Experiments.frmExperimentResults
             {
                 try
                 {
-                    _logic.ExportToCsv(_allResults, sfd.FileName);
-                    MessageBox.Show($"Exported to:\n{sfd.FileName}", "Export Complete",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    using var writer = new StreamWriter(sfd.FileName, false, Encoding.UTF8);
+                    writer.WriteLine("Algorithm,Metric,Iteration,Success,PathLength,TimeMs," +
+                        "InitialBattery%,FinalBattery%,TotalConsumed%,ChargingUnits,ChargingCycles,ChargingTimeSec," +
+                        "TravelTimeSec,OverheadTimeSec,TotalTimeSec," +
+                        "StartX,StartY,EndX,EndY,GoalOrder," +
+                        "Collisions,Errors,AvgSpeed,ErrorMessage");
+
+                    foreach (var r in _allResults)
+                    {
+                        writer.WriteLine($"{r.Algorithm},{r.Metric},{r.Iteration},{r.Success},{r.PathLength},{r.ComputationTimeMs:F2}," +
+                            $"{r.InitialBatteryPercent:F1},{r.FinalBatteryPercent:F1},{r.TotalBatteryConsumedPercent:F1}," +
+                            $"{r.TotalChargingUnits:F2},{r.TotalChargingCycles},{r.TotalChargingTimeSeconds:F0}," +
+                            $"{r.TotalTravelTimeSeconds:F2},{r.TotalOverheadTimeSeconds:F2},{r.TotalTimeSeconds:F2}," +
+                            $"{r.StartPointUsed.X},{r.StartPointUsed.Y},{r.EndPointReached.X},{r.EndPointReached.Y}," +
+                            $"\"{r.GoalOrder?.Replace("\"", "\"\"")}\"," +
+                            $"{r.CollisionCount},{r.InvalidMoveCount},{r.AverageActualSpeed:F1}," +
+                            $"\"{r.ErrorMessage?.Replace("\"", "\"\"")}\"");
+                    }
+
+                    MessageBox.Show($"Exported to:\n{sfd.FileName}", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error: {ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                catch (Exception ex) { MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             }
         }
 
-        /// <summary>
-        /// Exports results to Excel (CSV format)
-        /// </summary>
         private void ExportToExcel() => ExportToCSV();
-
-        /// <summary>
-        /// Exports results to HTML for PDF printing
-        /// </summary>
-        private void ExportToPDF()
+        private void ExportToPDF() => ExportToCSV();
+        private void SaveReplay() { }
+        private void PlayReplay() { }
+        private void ShowAdvancedStatistics()
         {
-            using var sfd = new SaveFileDialog();
-            sfd.Filter = "HTML files (*.html)|*.html";
-            sfd.FileName = $"Experiment_Results_{DateTime.Now:yyyyMMdd_HHmmss}.html";
-
-            if (sfd.ShowDialog() == DialogResult.OK)
-            {
-                try
-                {
-                    _logic.ExportToHtml(_allResults, sfd.FileName);
-                    MessageBox.Show($"Exported to:\n{sfd.FileName}", "Export Complete",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error: {ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+            var statsViewer = new  frmStatisticsViewer.frmStatisticsViewer(_allResults);
+            statsViewer.ShowDialog();
         }
+        #endregion
 
-        /// <summary>
-        /// Saves replay for selected result
-        /// </summary>
-        private void SaveReplay()
+        #region Picture Double-Click Handlers
+        private void PicInitial_DoubleClick(object sender, EventArgs e) => ShowScreenshot("initial");
+        private void PicPath_DoubleClick(object sender, EventArgs e) => ShowScreenshot("path");
+        private void PicCompleted_DoubleClick(object sender, EventArgs e) => ShowScreenshot("completed");
+
+        private void ShowScreenshot(string imageType)
         {
-            if (_selectedResult == null)
+            if (_selectedResult == null) return;
+
+            string imagePath = imageType switch
             {
-                MessageBox.Show("Please select a result first.", "Save Replay",
+                "initial" => _selectedResult.InitialScreenshotPath,
+                "path" => _selectedResult.PathScreenshotPath,
+                "completed" => _selectedResult.CompletedScreenshotPath,
+                _ => null
+            };
+
+            if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath))
+            {
+                MessageBox.Show($"No {imageType} screenshot available.", "Information",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            using var sfd = new SaveFileDialog();
-            sfd.Filter = "Replay files (*.sreplay)|*.sreplay";
-            sfd.FileName = $"Replay_{_selectedResult.Algorithm}_{_selectedResult.Iteration}.sreplay";
-
-            if (sfd.ShowDialog() == DialogResult.OK)
-            {
-                MessageBox.Show($"Replay saved to:\n{sfd.FileName}", "Save Replay",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        /// <summary>
-        /// Plays a saved replay
-        /// </summary>
-        private void PlayReplay()
-        {
-            using var ofd = new OpenFileDialog();
-            ofd.Filter = "Replay files (*.sreplay)|*.sreplay";
-            ofd.Title = "Select Replay File";
-
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-                MessageBox.Show($"Loading replay from:\n{ofd.FileName}", "Play Replay",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        /// <summary>
-        /// Shows advanced statistics viewer
-        /// </summary>
-        private void ShowAdvancedStatistics()
-        {
-            var statsViewer = new frmStatisticsViewer.frmStatisticsViewer(_allResults);
-            statsViewer.ShowDialog();
-        }
-
-        private void PicInitial_DoubleClick(object sender, EventArgs e)
-        {
-            if (!string.IsNullOrEmpty(_selectedResult?.InitialScreenshotPath) && File.Exists(_selectedResult.InitialScreenshotPath))
-            {
-                var viewer = new Experiments.frmScreenshotViewer.frmScreenshotViewer(_selectedResult, _resultsFolderPath);
-                viewer.ShowDialog();
-            }
-            else
-            {
-                MessageBox.Show("No initial screenshot available.", "Information",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        private void PicPath_DoubleClick(object sender, EventArgs e)
-        {
-            if (!string.IsNullOrEmpty(_selectedResult?.PathScreenshotPath) && File.Exists(_selectedResult.PathScreenshotPath))
-            {
-                var viewer = new Experiments.frmScreenshotViewer.frmScreenshotViewer(_selectedResult, _resultsFolderPath);
-                viewer.ShowDialog();
-            }
-            else
-            {
-                MessageBox.Show("No path screenshot available.", "Information",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        private void PicCompleted_DoubleClick(object sender, EventArgs e)
-        {
-            if (!string.IsNullOrEmpty(_selectedResult?.CompletedScreenshotPath) && File.Exists(_selectedResult.CompletedScreenshotPath))
-            {
-                var viewer = new Experiments.frmScreenshotViewer.frmScreenshotViewer(_selectedResult, _resultsFolderPath);
-                viewer.ShowDialog();
-            }
-            else
-            {
-                MessageBox.Show("No completed screenshot available.", "Information",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            var viewer = new frmScreenshotViewer.frmScreenshotViewer(_selectedResult, _resultsFolderPath, imageType);
+            viewer.ShowDialog();
         }
         #endregion
     }

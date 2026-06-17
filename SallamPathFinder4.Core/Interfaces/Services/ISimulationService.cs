@@ -9,6 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Enums;
+using SallamPathFinder4.Core.Models.Obstacles;
 using SallamPathFinder4.Core.Models.Path;
 using SallamPathFinder4.Core.Models.Robot;
 using System.Drawing;
@@ -78,11 +79,13 @@ namespace SallamPathFinder4.Core.Interfaces.Services
 
         /// <summary>Gets cells within detection zone for visualization</summary>
         List<Point> GetDetectionZoneCells(Point robotPos, float robotAngle);
+        void SetRobotSpeedFromSettings(double speedCmPerSec);
+        void SetRobotDimensions(double widthCm, double lengthCm); 
         #endregion
 
         #region Events
         /// <summary>Event raised when robot moves to a new cell</summary>
-        event Action<Point, float> RobotMoved;
+        event Action< Point, float,double > RobotMoved;
 
         /// <summary>Event raised when robot collides with an obstacle</summary>
         event Action<ObstacleData, Point> ObstacleCollision;
@@ -103,8 +106,60 @@ namespace SallamPathFinder4.Core.Interfaces.Services
         /// </summary>
         event Action<int> GoalReached;  // int = goal index
 
+        // ========== NEW: Obstacle Detection Methods ==========
 
+        /// <summary>
+        /// Sets whether learning is enabled
+        /// </summary>
+        void SetLearningEnabled(bool enabled);
+
+        /// <summary>
+        /// Sets wait times for a specific obstacle type
+        /// </summary>
+        void SetObstacleWaitTime(ObstacleType type, double waitTimeSeconds, double maxWaitTimeSeconds);
+
+        /// <summary>
+        /// Sets safe and critical distances for obstacle detection
+        /// </summary>
+        void SetSafetyDistances(double safeDistanceCm, double criticalDistanceCm);
+
+        /// <summary>
+        /// Exports obstacle log to file
+        /// </summary>
+        Task ExportObstacleLogAsync(string filePath = null);
+
+        /// <summary>
+        /// Clears learning memory
+        /// </summary>
+        void ClearLearningMemory();
+
+        /// <summary>
+        /// Clears obstacle log
+        /// </summary>
+        void ClearObstacleLog();
+
+        /// <summary>
+        /// Gets obstacle log statistics
+        /// </summary>
+        ObstacleLogStatistics GetObstacleLogStatistics();
 
         #endregion
+
+        // ==========  Get Active Obstacles ==========
+
+        /// <summary>
+        /// Gets the list of currently active detected obstacles
+        /// </summary>
+        IReadOnlyList<DetectedObstacle> GetActiveObstacles();
+
+        /// <summary>
+        /// Gets hotspot risk levels for all cells
+        /// </summary>
+        Dictionary<Point, double> GetHotspotRiskLevels();
+
+        /// <summary>
+        /// Gets the current wait state (if robot is waiting for an obstacle)
+        /// </summary>
+        ObstacleWaitState GetCurrentWaitState();
     }
 }

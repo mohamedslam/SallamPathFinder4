@@ -3,7 +3,7 @@
 /// File: RulerControl.cs
 /// Description: Professional ruler control for map measurement
 /// Author: Mohamed ElSayed Sallam
-/// Date: 2026-04-04
+/// Date: 2026-04-28
 /// </summary>
 #endregion
 
@@ -23,33 +23,35 @@ namespace SallamPathFinder4.WinForms.Controls
         #endregion
 
         #region Constants
-        private const int TICK_LONG = 15;
-        private const int TICK_MEDIUM = 10;
-        private const int TICK_SHORT = 5;
+        private const int TICK_LONG = 20;
+        private const int TICK_MEDIUM = 15;
+        private const int TICK_SHORT = 8;
         #endregion
-
         #region Private Fields
         private RulerOrientation _orientation;
         private float _scale;
         private int _cellSize;
         private int _gridSize;
-        #endregion
+        private int _visibleStart;      // بداية المنطقة المرئية (بالخلايا)
+        private int _visibleEnd;        // نهاية المنطقة المرئية (بالخلايا)
+        private float _zoomLevel;       // مستوى التكبير
+        #endregion 
 
         #region Constructor
         public RulerControl(RulerOrientation orientation)
         {
             _orientation = orientation;
             _scale = 1.0f;
-            _cellSize = 20;
+            _cellSize = 30;
             _gridSize = 100;
 
             this.BackColor = Color.FromArgb(240, 242, 245);
             this.DoubleBuffered = true;
 
             if (orientation == RulerOrientation.Horizontal)
-                this.Height = 28;
+                this.Height = 80;
             else
-                this.Width = 28;
+                this.Width = 80;
         }
         #endregion
 
@@ -80,80 +82,226 @@ namespace SallamPathFinder4.WinForms.Controls
 
             Graphics g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
 
-            using var pen = new Pen(Color.FromArgb(120, 120, 120), 1);
-            using var font = new Font("Consolas", 7);
-            using var textBrush = new SolidBrush(Color.FromArgb(60, 60, 60));
+            int scaledCellSize = (int)(_cellSize * _scale);
+            if (scaledCellSize <= 0) return;
 
             if (_orientation == RulerOrientation.Horizontal)
             {
-                DrawHorizontalRuler(g, pen, font, textBrush);
+                DrawHorizontalRuler(g, scaledCellSize);
             }
             else
             {
-                DrawVerticalRuler(g, pen, font, textBrush);
+                DrawVerticalRuler(g, scaledCellSize);
+            }
+        }
+        #endregion
+        #region Public Methods
+        /// <summary>
+        /// تحديث المسطرة بناءً على المنطقة المرئية من الخريطة
+        /// </summary>
+        /// <param name="visibleStart">أول خلية مرئية</param>
+        /// <param name="visibleEnd">آخر خلية مرئية</param>
+        /// <param name="zoomLevel">مستوى التكبير الحالي</param>
+        public void UpdateVisibleRange(int visibleStart, int visibleEnd, float zoomLevel)
+        {
+            _visibleStart = visibleStart;
+            _visibleEnd = visibleEnd;
+            _zoomLevel = zoomLevel;
+            Invalidate();
+        }
+        #endregion
+        #region Private Methods - Horizontal Ruler
+        private void DrawHorizontalRuler(Graphics g, int scaledCellSize)
+        {
+            int centerY = this.Height / 2;
+
+            // الخطوة 1: رسم الأرقام أولاً
+            DrawHorizontalNumbers(g, scaledCellSize, centerY);
+
+            // الخطوة 2: رسم الخطوط فوق الأرقام
+            DrawHorizontalLines(g, scaledCellSize, centerY);
+        }
+
+        private void DrawHorizontalNumbers(Graphics g, int scaledCellSize, int centerY)
+        {
+            using (var font = new Font("Arial", 10, FontStyle.Bold))
+            using (var brush = new SolidBrush(Color.Black))
+            {
+                // المنطقة المرئية
+                int startX = Math.Max(0, _visibleStart);
+                int endX = Math.Min(_gridSize, _visibleEnd);
+
+                // 🔴 الفاصل بين الأرقام (كل 10 خلايا = 10 سم)
+                int step = 10;  // ثابت: كل 10 خلايا
+
+                // 🔴 أول رقم يجب أن يكون 0 أو مضاعف 10
+                int firstX = 0;
+                if (startX > 0)
+                {
+                    firstX = ((startX + step - 1) / step) * step;
+                }
+
+                for (int x = firstX; x <= endX; x += step)
+                {
+                    if (x < 0) continue;
+
+                    // موقع الرسم على المسطرة
+                    int posX = (int)((x - _visibleStart) * scaledCellSize);
+                    if (posX < -50 || posX > this.Width + 50) continue;
+
+                    // 🔴 المسافة بالسنتيمتر (وليس رقم الخلية)
+                    double distanceCm = x * _scale;
+                    string text = distanceCm.ToString("F0");
+
+                    SizeF textSize = g.MeasureString(text, font);
+                    float textX = posX - textSize.Width / 2;
+                    float textY = centerY - textSize.Height / 2;
+
+                    using (var backBrush = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(backBrush, textX - 2, textY - 2, textSize.Width + 4, textSize.Height + 4);
+                    }
+
+                    g.DrawString(text, font, brush, textX, textY);
+                }
+            }
+        }
+        private void DrawHorizontalLines(Graphics g, int scaledCellSize, int centerY)
+        {
+            using (var pen = new Pen(Color.Black, 1))
+            {
+                int startX = Math.Max(0, _visibleStart);
+                int endX = Math.Min(_gridSize, _visibleEnd);
+
+                float firstCellOffset = (_visibleStart - startX) * scaledCellSize;
+
+                for (int x = startX; x <= endX; x++)
+                {
+                    int posX = (int)((x - _visibleStart) * scaledCellSize - firstCellOffset);
+                    if (posX < -50 || posX > this.Width + 50) continue;
+
+                    if (x % 10 == 0)
+                    {
+                        g.DrawLine(pen, posX, 0, posX, centerY - 5);
+                        g.DrawLine(pen, posX, centerY + 5, posX, this.Height);
+                    }
+                    else if (x % 5 == 0)
+                    {
+                        g.DrawLine(pen, posX, 0, posX, TICK_MEDIUM);
+                    }
+                    else
+                    {
+                        g.DrawLine(pen, posX, this.Height - TICK_SHORT, posX, this.Height);
+                    }
+                }
             }
         }
         #endregion
 
-        #region Private Methods
-        private void DrawHorizontalRuler(Graphics g, Pen pen, Font font, Brush textBrush)
+        #region Private Methods - Vertical Ruler
+        private void DrawVerticalRuler(Graphics g, int scaledCellSize)
         {
-            int scaledCellSize = (int)(_cellSize * _scale);
+            int centerX = this.Width / 2;
 
-            for (int x = 0; x <= _gridSize; x++)
+            // الخطوة 1: رسم الأرقام أولاً
+            DrawVerticalNumbers(g, scaledCellSize, centerX);
+
+            // الخطوة 2: رسم الخطوط فوق الأرقام
+            DrawVerticalLines(g, scaledCellSize, centerX);
+        }
+
+        private void DrawVerticalNumbers(Graphics g, int scaledCellSize, int centerX)
+        {
+            using (var font = new Font("Arial", 10, FontStyle.Bold))
+            using (var brush = new SolidBrush(Color.Black))
             {
-                int posX = x * scaledCellSize;
-                if (posX > this.Width) break;
+                int startY = Math.Max(0, _visibleStart);
+                int endY = Math.Min(_gridSize, _visibleEnd);
 
-                if (x % 10 == 0)
+                int step = 10;  // كل 10 خلايا
+
+                int firstY = 0;
+                if (startY > 0)
                 {
-                    g.DrawLine(pen, posX, 0, posX, TICK_LONG);
+                    firstY = ((startY + step - 1) / step) * step;
+                }
 
-                    double cm = x * _scale;
-                    string text = cm.ToString("0.#");
+                for (int y = firstY; y <= endY; y += step)
+                {
+                    if (y < 0) continue;
+
+                    int posY = (int)((y - _visibleStart) * scaledCellSize);
+                    if (posY < -50 || posY > this.Height + 50) continue;
+
+                    double distanceCm = y * _scale;
+                    string text = distanceCm.ToString("F0");
+
                     SizeF textSize = g.MeasureString(text, font);
-                    g.DrawString(text, font, textBrush, posX - textSize.Width / 2, TICK_LONG + 2);
+                    float textX = centerX - textSize.Width / 2;
+                    float textY = posY - textSize.Height / 2;
+
+                    using (var backBrush = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(backBrush, textX - 2, textY - 2, textSize.Width + 4, textSize.Height + 4);
+                    }
+
+                    g.DrawString(text, font, brush, textX, textY);
                 }
-                else if (x % 5 == 0)
+            }
+        }
+        private void DrawVerticalLines(Graphics g, int scaledCellSize, int centerX)
+        {
+            using (var pen = new Pen(Color.Black, 1))
+            {
+                int startY = Math.Max(0, _visibleStart);
+                int endY = Math.Min(_gridSize, _visibleEnd);
+
+                float firstCellOffset = (_visibleStart - startY) * scaledCellSize;
+
+                for (int y = startY; y <= endY; y++)
                 {
-                    g.DrawLine(pen, posX, 0, posX, TICK_MEDIUM);
-                }
-                else
-                {
-                    g.DrawLine(pen, posX, this.Height - TICK_SHORT, posX, this.Height);
+                    int posY = (int)((y - _visibleStart) * scaledCellSize - firstCellOffset);
+                    if (posY < -50 || posY > this.Height + 50) continue;
+
+                    if (y % 10 == 0)
+                    {
+                        g.DrawLine(pen, 0, posY, centerX - 5, posY);
+                        g.DrawLine(pen, centerX + 5, posY, this.Width, posY);
+                    }
+                    else if (y % 5 == 0)
+                    {
+                        g.DrawLine(pen, 0, posY, TICK_MEDIUM, posY);
+                    }
+                    else
+                    {
+                        g.DrawLine(pen, this.Width - TICK_SHORT, posY, this.Width, posY);
+                    }
                 }
             }
         }
 
-        private void DrawVerticalRuler(Graphics g, Pen pen, Font font, Brush textBrush)
-        {
-            int scaledCellSize = (int)(_cellSize * _scale);
-
-            for (int y = 0; y <= _gridSize; y++)
-            {
-                int posY = y * scaledCellSize;
-                if (posY > this.Height) break;
-
-                if (y % 10 == 0)
-                {
-                    g.DrawLine(pen, 0, posY, TICK_LONG, posY);
-
-                    double cm = y * _scale;
-                    string text = cm.ToString("0.#");
-                    SizeF textSize = g.MeasureString(text, font);
-                    g.DrawString(text, font, textBrush, TICK_LONG + 2, posY - textSize.Height / 2);
-                }
-                else if (y % 5 == 0)
-                {
-                    g.DrawLine(pen, 0, posY, TICK_MEDIUM, posY);
-                }
-                else
-                {
-                    g.DrawLine(pen, this.Width - TICK_SHORT, posY, this.Width, posY);
-                }
-            }
-        }
+        /// <summary>
+        /// حساب الفاصل بين الأرقام بناءً على حجم الخلية المعروضة
+        /// </summary>
+        /// <param name="scaledCellSize">حجم الخلية بالبكسل بعد التكبير</param>
+        /// <returns>الفاصل بين الأرقام (عدد الخلايا بين كل رقمين)</returns>
+     private int CalculateStep(int scaledCellSize)
+{
+    // الفاصل بين الأرقام بالسنتيمتر = 10 × مستوى التكبير
+    double stepCm = 10 * _scale;
+    
+    // الفاصل بالبكسل = scaledCellSize × مستوى التكبير
+    int stepPx = (int)(scaledCellSize * _scale);
+    
+    // ولكن بما أن scaledCellSize يحتوي أصلاً على _scale،
+    // والتباعد يجب أن يكون stepPx بكسل بين كل 10 سم
+    if (stepPx < 20) return 20;      // تصغير: كل 20 خلية
+    if (stepPx < 40) return 10;      // عادي: كل 10 خلايا
+    if (stepPx < 80) return 5;       // تكبير: كل 5 خلايا
+    return 1;                         // تكبير عالي: كل خلية
+}
         #endregion
     }
 }

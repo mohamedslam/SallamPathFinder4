@@ -36,6 +36,20 @@ namespace SallamPathFinder4.Core.Models.Path
             Color = color;
             IsReturnPath = isReturnPath;
         }
+
+        /// <summary>
+        /// Initializes a new colored path with full styling options
+        /// </summary>
+        public ColoredPath(IEnumerable<PathNode> nodes, Color color, PathType type, int thickness, bool isDashed = false)
+        {
+            Nodes = nodes?.ToList().AsReadOnly() ?? new List<PathNode>().AsReadOnly();
+            Color = color;
+            Type = type;
+            Thickness = thickness;
+            IsDashed = isDashed;
+            IsReturnPath = (type == PathType.Return);
+        }
+         
         #endregion
 
         #region Properties
@@ -50,6 +64,23 @@ namespace SallamPathFinder4.Core.Models.Path
 
         /// <summary>Length of the path in cells</summary>
         public int Length => Nodes.Count;
+
+            #region Properties - Path Styling
+            /// <summary>
+            /// Type of path (Normal, Return, Charging)
+            /// </summary>
+            public PathType Type { get; set; }
+
+            /// <summary>
+            /// Thickness of the path line in pixels
+            /// </summary>
+            public int Thickness { get; set; }
+
+            /// <summary>
+            /// Whether the path should be drawn as dashed line
+            /// </summary>
+            public bool IsDashed { get; set; }
+            #endregion
         #endregion
 
         #region Public Methods
@@ -59,6 +90,32 @@ namespace SallamPathFinder4.Core.Models.Path
         public static ColoredPath Empty()
         {
             return new ColoredPath(null, Color.Transparent, false);
+        }
+        #endregion
+
+        #region Static Factory Methods
+        /// <summary>
+        /// Creates a normal path (Gold, thickness 4)
+        /// </summary>
+        public static ColoredPath CreateNormalPath(IEnumerable<PathNode> nodes)
+        {
+            return new ColoredPath(nodes, Color.Gold, PathType.Normal, 4, false);
+        }
+
+        /// <summary>
+        /// Creates a return path to parking (Green, thickness 2, dashed)
+        /// </summary>
+        public static ColoredPath CreateReturnPath(IEnumerable<PathNode> nodes)
+        {
+            return new ColoredPath(nodes, Color.Green, PathType.Return, 2, true);
+        }
+
+        /// <summary>
+        /// Creates a charging path (LightBlue, thickness 4)
+        /// </summary>
+        public static ColoredPath CreateChargingPath(IEnumerable<PathNode> nodes)
+        {
+            return new ColoredPath(nodes, Color.LightBlue, PathType.Charging, 4, false);
         }
         #endregion
 

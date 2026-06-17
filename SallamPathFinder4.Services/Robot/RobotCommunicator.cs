@@ -155,7 +155,7 @@ namespace SallamPathFinder4.Services.Robot
         /// <inheritdoc/>
         public async Task<SensorData> RequestSensorDataAsync()
         {
-            await SendCommandAsync(RobotCommand.GetSensorData);
+            await SendCommandAsync(new RobotCommand(CommandID.RequestSensors));
 
             // Return empty data for now - actual data comes from event
             return new SensorData();
@@ -164,7 +164,7 @@ namespace SallamPathFinder4.Services.Robot
         /// <inheritdoc/>
         public async Task<System.Drawing.Image> RequestCameraFrameAsync()
         {
-            await SendCommandAsync(RobotCommand.StartCamera);
+            await SendCommandAsync(new RobotCommand(CommandID.StartVideo));
 
             // Return null for now - actual frame comes from event
             return null;
@@ -270,7 +270,7 @@ namespace SallamPathFinder4.Services.Robot
             {
                 byte[] imageBytes = Convert.FromBase64String(imageBase64.GetString());
                 using var ms = new MemoryStream(imageBytes);
-                var image = System.Drawing.Image.FromStream(ms);
+                var image =  Image.FromStream(ms);
                 CameraFrameReceived?.Invoke(image);
             }
         }
@@ -298,7 +298,7 @@ namespace SallamPathFinder4.Services.Robot
             try
             {
                 using var ms = new MemoryStream(data);
-                var image = System.Drawing.Image.FromStream(ms);
+                var image =  Image.FromStream(ms);
                 CameraFrameReceived?.Invoke(image);
             }
             catch (ArgumentException)

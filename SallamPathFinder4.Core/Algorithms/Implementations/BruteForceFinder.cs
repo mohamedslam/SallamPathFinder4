@@ -9,6 +9,7 @@
 
 #region Namespace Imports
 using SallamPathFinder4.Core.Algorithms.Base;
+using SallamPathFinder4.Core.Enums;
 using SallamPathFinder4.Core.Models.Map;
 using SallamPathFinder4.Core.Models.Path;
 using System.Drawing;
@@ -87,6 +88,8 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                 while (queue.Count > 0 && iterations < _maxIterations && !ShouldStop())
                 {
                     var current = queue.Dequeue();
+                    // Current node visualization
+                    RaiseDebugEvent(current.X, current.Y, current.X, current.Y, PathFinderNodeType.Current, 0, current.Depth);
                     iterations++;
 
                     if (current.X == end.X && current.Y == end.Y)
@@ -118,13 +121,24 @@ namespace SallamPathFinder4.Core.Algorithms.Implementations
                         if (current.Path.Any(p => p.X == nx && p.Y == ny)) continue;
 
                         queue.Enqueue(new NodeState(nx, ny, current.Path, current.Depth + 1));
+                        // Open node visualization
+                        RaiseDebugEvent(current.X, current.Y, nx, ny, PathFinderNodeType.Open, 0, current.Depth + 1);
                     }
+                    // Close node visualization
+                    RaiseDebugEvent(current.X, current.Y, current.X, current.Y, PathFinderNodeType.Close, 0, current.Depth);
                 }
 
                 stopwatch.Stop();
 
                 if (bestPath.Count > 0)
-                    return new PathResult(bestPath, stopwatch.Elapsed.TotalSeconds, iterations);
+                {
+                    // Path visualization
+                    foreach (var node in bestPath)
+                    {
+                        RaiseDebugEvent(node.X, node.Y, node.X, node.Y, PathFinderNodeType.Path, 0, 0);
+                    }
+                    return new PathResult(bestPath, stopwatch.Elapsed.TotalSeconds, iterations); 
+                }
 
                 return PathResult.Fail("No path found", stopwatch.Elapsed.TotalSeconds);
             }

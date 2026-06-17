@@ -38,6 +38,16 @@ namespace SallamPathFinder4.Core.Interfaces.Algorithms
     #endregion
     public interface IPathFinder
     {
+        /// <summary>
+        /// تفعيل/إيقاف تصور عملية البحث
+        /// </summary>
+        bool EnableVisualization { get; set; }
+
+        /// <summary>
+        /// سرعة العرض بالمللي ثانية
+        /// </summary>
+        int SpeedDelayMs { get; set; }
+
         #region Control Methods
         /// <summary>Stops the current pathfinding operation</summary>
         void Stop();
@@ -46,8 +56,12 @@ namespace SallamPathFinder4.Core.Interfaces.Algorithms
         void Pause();
 
         /// <summary>Resumes a paused pathfinding operation</summary>
-        void Resume();
-
+        void ResumeSearch();
+        /// <summary>
+        /// إيقاف البحث مؤقتاً
+        /// </summary>
+        void PauseSearch();
+         
         /// <summary>Gets whether the algorithm is stopped</summary>
         bool IsStopped { get; }
         #endregion
